@@ -53,3 +53,7 @@ Core/Src/stm32h7xx_it.c
 Core/Src/system_stm32h7xx.c
 Debug
 Release
+
+# cmake build directory
+build
+.vscode
