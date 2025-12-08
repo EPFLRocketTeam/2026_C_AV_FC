@@ -5,6 +5,7 @@ SET(CMAKE_CXX_FLAGS "-g -Wall -Werror -std=c++17")
 
 option(ENABLE_COVERAGE "Enable code coverage instrumentation (requires gcov/lcov)" OFF)
 find_program(VALGRIND_EXECUTABLE NAMES valgrind)
+add_compile_definitions(UNIT_TEST_ENV)
 
 if (ENABLE_COVERAGE)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-arcs -ftest-coverage -O0")
@@ -36,12 +37,18 @@ endif()
 ###################### FLIGHT COMPUTER ######################
 #############################################################
 
+# Add your source files here
+# e.g. Drivers/X/Impl/X_mock.cpp
 SET(FC_SOURCE_FILES
     Application/Data/data.cpp
     Application/main.cpp)
+
 add_library(flight_computer STATIC ${FC_SOURCE_FILES})
 target_link_libraries(flight_computer PRIVATE gcov)
 target_include_directories(flight_computer PUBLIC .)
+
+# Add includes here
+# For example target_include_directories(flight_computer PUBLIC Drivers/X)
 
 #############################################################
 ######################## GOOGLE TEST ########################
