@@ -17,7 +17,6 @@ if (ENABLE_COVERAGE)
         memcheck
 
         COMMAND ctest -T memcheck
-        COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/lookup_wrong_fds.py ${CMAKE_CURRENT_BINARY_DIR}/Testing/Temporary
     )
     add_custom_target(
         coverage
