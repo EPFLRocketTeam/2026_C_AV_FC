@@ -6,9 +6,10 @@
  */
 
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
+#include "main.h"
 #include <cstdio>
 
-UART_HandleTypeDef serial_huart;
+
 
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 

@@ -42,6 +42,8 @@ endif()
 SET(FC_SOURCE_FILES
     Application/Data/data.cpp
     Application/main.cpp
+    Drivers/UBX_GPS/ubx_gps_interface.cpp
+    Drivers/STM32HAL/stm32hal.cpp
     )
 
 add_library(flight_computer STATIC ${FC_SOURCE_FILES})
@@ -50,6 +52,7 @@ target_include_directories(flight_computer PUBLIC .)
 
 # Add includes here
 # For example target_include_directories(flight_computer PUBLIC Drivers/X)
+
 
 #############################################################
 ######################## GOOGLE TEST ########################
