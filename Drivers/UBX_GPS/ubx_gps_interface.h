@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "stm32hal.h"
+#include "../STM32HAL/stm32hal.h"
 
 // ============================================================================
 // CONSTANTS & SCALING FACTORS

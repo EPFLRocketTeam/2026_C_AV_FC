@@ -413,3 +413,4 @@ void UbxGpsInterface::parseBasicFix(const uint8_t *payload,
   data->hAcc = getU4(p);
   p += 4;
 
+}
