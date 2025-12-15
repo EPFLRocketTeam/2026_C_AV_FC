@@ -41,7 +41,10 @@ endif()
 # e.g. Drivers/X/Impl/X_mock.cpp
 SET(FC_SOURCE_FILES
     Application/Data/data.cpp
-    Application/main.cpp)
+    Application/main.cpp
+    
+    Drivers/STM32HAL/Simulations/stm32sim_gpio.cpp
+    Drivers/STM32HAL/Simulations/stm32sim_spi.cpp)
 
 add_library(flight_computer STATIC ${FC_SOURCE_FILES})
 target_link_libraries(flight_computer PRIVATE gcov)
@@ -76,3 +79,4 @@ function(create_test test_name test_file)
 endfunction()
 
 add_subdirectory(Application/Tests)
+add_subdirectory(Drivers/STM32HAL/Tests)
