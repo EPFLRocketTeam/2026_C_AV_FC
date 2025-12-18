@@ -42,7 +42,8 @@ endif()
 SET(FC_SOURCE_FILES
     Application/Data/data.cpp
     Application/main.cpp
-    
+    Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp
+    Drivers/STM32HAL/stm32hal.cpp
     Drivers/STM32HAL/Simulations/stm32sim_gpio.cpp
     Drivers/STM32HAL/Simulations/stm32sim_spi.cpp)
 
@@ -52,6 +53,7 @@ target_include_directories(flight_computer PUBLIC .)
 
 # Add includes here
 # For example target_include_directories(flight_computer PUBLIC Drivers/X)
+
 
 #############################################################
 ######################## GOOGLE TEST ########################
@@ -79,4 +81,5 @@ function(create_test test_name test_file)
 endfunction()
 
 add_subdirectory(Application/Tests)
+add_subdirectory(Drivers/UBX_GPS/Tests)
 add_subdirectory(Drivers/STM32HAL/Tests)
