@@ -90,6 +90,7 @@ namespace MockHAL {
             // numSV (1 byte)
             0x08,
             // lon (4 bytes) - 8.542278 degrees = 85422780 * 1e-7
+			// 0x05, 0x09, 0x72, 0x2C,
             0x2C, 0x72, 0x09, 0x05,
             // lat (4 bytes) - 47.376888 degrees = 473768880 * 1e-7
             0x60, 0xE6, 0x3A, 0x02,

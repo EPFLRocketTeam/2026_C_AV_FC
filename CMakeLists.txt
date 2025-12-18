@@ -42,9 +42,9 @@ endif()
 SET(FC_SOURCE_FILES
     Application/Data/data.cpp
     Application/main.cpp
-    Drivers/UBX_GPS/ubx_gps_interface.cpp
+    Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp
     Drivers/STM32HAL/stm32hal.cpp
-    )
+)
 
 add_library(flight_computer STATIC ${FC_SOURCE_FILES})
 target_link_libraries(flight_computer PRIVATE gcov)
@@ -80,3 +80,4 @@ function(create_test test_name test_file)
 endfunction()
 
 add_subdirectory(Application/Tests)
+add_subdirectory(Drivers/UBX_GPS/Tests)

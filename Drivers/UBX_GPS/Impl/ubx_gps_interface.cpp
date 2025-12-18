@@ -1,4 +1,4 @@
-#include "ubx_gps_interface.h"
+#include "../ubx_gps_interface.h"
 #include <cstring>
 #include <cstdlib>
 
@@ -125,6 +125,7 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
         break;
 
       case STATE_CK_A:
+
         if (rx_byte == ck_a_calc) {
           step = STATE_CK_B;
         } else {
@@ -369,7 +370,6 @@ void UbxGpsInterface::parsePvt(const uint8_t *payload, GpsPvtData *data) {
 void UbxGpsInterface::parseBasicFix(const uint8_t *payload,
                                     GpsBasicFixData *data) {
   const uint8_t *p = payload;
-
   // Skip to validity flags (offset 11)
   p += 11;
 
