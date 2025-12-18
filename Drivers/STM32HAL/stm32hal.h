@@ -12,7 +12,13 @@
  *  to be just an integer so that it is can be
  *  used in the interfaces of the drivers.
  */
-// using UART_HandleTypeDef = int;
+
+/* General Purpose Definitions */
+#include "Drivers/STM32HAL/Simulations/stm32sim_def.hpp"
+/* General Purpose Input / Output */
+#include "Drivers/STM32HAL/Simulations/stm32sim_gpio.hpp"
+/* Serial Peripheral Interface */
+#include "Drivers/STM32HAL/Simulations/stm32sim_spi.hpp"
 
 #include <stdint.h>
 #include <vector>
