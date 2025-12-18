@@ -37,13 +37,7 @@ typedef struct {
 // Global UART handle used in tests
 extern UART_HandleTypeDef huart2;
 
-typedef enum
-{
-  HAL_OK,
-  HAL_ERROR,
-  HAL_BUSY,
-  HAL_TIMEOUT,
-} HAL_StatusTypeDef;
+
 // Mock HAL functions
 HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size, uint32_t Timeout);
 HAL_StatusTypeDef HAL_UART_Receive(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size, uint32_t Timeout);
