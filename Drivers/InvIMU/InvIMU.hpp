@@ -1,7 +1,6 @@
 #pragma once
 
 #include "InvIMU.h"
-#include "stm32hal.h" // Abstraction for STM32 HAL types
 #include <cstring>
 
 
