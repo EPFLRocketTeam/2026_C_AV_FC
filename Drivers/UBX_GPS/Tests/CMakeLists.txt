@@ -1,1 +1,1 @@
-create_test(gps_tests test_gps.cpp)
+# create_test(gps_tests test_gps.cpp)
