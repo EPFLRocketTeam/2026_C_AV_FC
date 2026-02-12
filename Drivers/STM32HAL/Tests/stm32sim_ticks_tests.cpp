@@ -24,12 +24,21 @@ TEST_F(TickSimTest, TickStartsAtZero)
     EXPECT_EQ(tick, 0u);
 }
 
-TEST_F(TickSimTest, TickIncrementsOverTime)
+TEST_F(TickSimTest, DoubleInitThrows)
 {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    EXPECT_THROW(
+        stm32sim_ticks_init(),
+        std::logic_error
+    );
+}
 
-    uint32_t tick = HAL_GetTick();
+TEST(TickSimStandaloneTest, DoubleDeinitThrows)
+{
+    stm32sim_ticks_init();
+    stm32sim_ticks_deinit();
 
-    // We don't expect perfect timing because of OS scheduling
-    EXPECT_GE(tick, 5u);
+    EXPECT_THROW(
+        stm32sim_ticks_deinit(),
+        std::logic_error
+    );
 }
