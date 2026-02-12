@@ -44,8 +44,10 @@ SET(FC_SOURCE_FILES
     Application/main.cpp
     Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp
     # Drivers/STM32HAL/stm32hal.cpp
+    Drivers/STM32HAL/Interfaces/mock_uart.cpp
     Drivers/STM32HAL/Simulations/stm32sim_gpio.cpp
     Drivers/STM32HAL/Simulations/stm32sim_spi.cpp
+    Drivers/STM32HAL/Simulations/stm32sim_ticks.cpp
     Drivers/STM32HAL/Simulations/stm32sim_uart.cpp
 )
 

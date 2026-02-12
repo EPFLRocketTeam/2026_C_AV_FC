@@ -24,8 +24,6 @@ typedef struct {
 // Mock HAL functions
 HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size, uint32_t Timeout);
 HAL_StatusTypeDef HAL_UART_Receive(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size, uint32_t Timeout);
-uint32_t HAL_GetTick(void);
-void HAL_Delay(uint32_t Delay);
 
 /** Internal Interface to setup the SPI simulator */
 namespace SIMULATOR_NAMESPACE::uart {

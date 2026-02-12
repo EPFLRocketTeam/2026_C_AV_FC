@@ -99,3 +99,4 @@ HAL_StatusTypeDef HAL_UART_Receive(
 
     return params.onReceive(params.deviceData, pData, Size, Timeout);
 }
+
