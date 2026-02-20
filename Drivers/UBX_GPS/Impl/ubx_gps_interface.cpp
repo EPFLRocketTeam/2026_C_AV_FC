@@ -1,6 +1,7 @@
 #include "../ubx_gps_interface.h"
 #include <cstring>
 #include <cstdlib>
+#include <stdio.h>
 
 
 // ============================================================================
@@ -44,6 +45,22 @@ GpsStatus UbxGpsInterface::setRate(uint16_t period_ms) {
   return writeCfgVal16(CFG_KEY_RATE_MEAS, period_ms);
 }
 
+void printPayload(const uint8_t *payload, size_t payloadLen) {
+  printf("Payload (%zu bytes):\n\r", payloadLen);
+
+  for (size_t i = 0; i < payloadLen; ++i) {
+    printf("%02X ", payload[i]);
+    //printf("%c ", payload[i]);
+    if ((i + 1) % 16 == 0) {
+      printf("\r\n");
+    }
+  }
+
+  if (payloadLen % 16 != 0) {
+    printf("\n\r");
+  }
+}
+
 GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
                                   uint32_t timeout_ms) {
   uint32_t start_tick = HAL_GetTick();
@@ -54,7 +71,9 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
   uint8_t payload_buf[UBX_NAV_PVT_PAYLOAD_LEN];
   uint16_t payload_idx = 0;
   uint8_t ck_a_calc = 0, ck_b_calc = 0;
-
+#ifdef DEBUG_MODE
+  uint8_t header_part[4];
+#endif
   while ((HAL_GetTick() - start_tick) < timeout_ms) {
 
     // Read 1 byte at a time
@@ -63,20 +82,33 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
 
       switch (step) {
       case STATE_SYNC_1:
-        if (rx_byte == UBX_SYNC_CHAR_1)
+        if (rx_byte == UBX_SYNC_CHAR_1) {
           step = STATE_SYNC_2;
+#ifdef DEBUG_MODE
+          header_part[0] = rx_byte;
+#endif
+        }
         break;
 
       case STATE_SYNC_2:
-        if (rx_byte == UBX_SYNC_CHAR_2)
+    	  // printf("header second: %02X \r\n", rx_byte);
+        if (rx_byte == UBX_SYNC_CHAR_2) {
           step = STATE_CLASS;
+#ifdef DEBUG_MODE
+          header_part[1] = rx_byte;
+#endif
+        }
         else
           step = STATE_SYNC_1;
         break;
 
       case STATE_CLASS:
+    	 // printf("State class: %02X \r\n", rx_byte);
         if (rx_byte == UBX_CLASS_NAV) {
           step = STATE_ID;
+#ifdef DEBUG_MODE
+          header_part[2] = rx_byte;
+#endif
           ck_a_calc = rx_byte;
           ck_b_calc = rx_byte;
         } else {
@@ -85,8 +117,12 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
         break;
 
       case STATE_ID:
+    	  //printf("State id: %02X \r\n", rx_byte);
         if (rx_byte == UBX_ID_NAV_PVT) {
           step = STATE_LEN_LSB;
+#ifdef DEBUG_MODE
+          header_part[3] = rx_byte;
+#endif
           ck_a_calc += rx_byte;
           ck_b_calc += ck_a_calc;
         } else {
@@ -136,6 +172,9 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
       case STATE_CK_B:
         if (rx_byte == ck_b_calc) {
           // --- SUCCESS ---
+#ifdef DEBUG_MODE
+        	printPayload(header_part, 4);
+#endif
           parseBasicFix(payload_buf, pvt_data);
           return GpsStatus::OK;
         }
@@ -367,9 +406,13 @@ void UbxGpsInterface::parsePvt(const uint8_t *payload, GpsPvtData *data) {
   p += 2;
 }
 
+
 void UbxGpsInterface::parseBasicFix(const uint8_t *payload,
                                     GpsBasicFixData *data) {
   const uint8_t *p = payload;
+#ifdef DEBUG_MODE
+  printPayload(payload, 92);
+#endif
   // Skip to validity flags (offset 11)
   p += 11;
 
