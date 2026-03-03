@@ -15,3 +15,31 @@ Data DataManager::read () {
 void DataManager::setState (State state) {
     globalData.state = state;
 }
+
+StateStore::StateStore()
+: state_(State::INIT)
+{}
+
+void StateStore::set(const State& value)
+{
+    state_ = value;
+}
+
+const State& StateStore::get() const
+{
+    return state_;
+}
+
+GpsStore::GpsStore()
+: data_{} {}
+
+
+void GpsStore::set(const GpsBasicFixData& value)
+{
+    data_ = value;
+}
+
+const GpsBasicFixData& GpsStore::get() const
+{
+    return data_;
+}
