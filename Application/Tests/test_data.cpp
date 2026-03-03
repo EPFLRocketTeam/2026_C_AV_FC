@@ -8,9 +8,9 @@ using namespace flight_computer;
 TEST(ApplicationData, TestAvState) {
     EXPECT_EQ( DataManager::read().state, INIT );
 
-    DataManager::setState( ERRORGROUND );
+    DataManager::setState( ABORT_ON_GROUND );
     
-    EXPECT_EQ( DataManager::read().state, ERRORGROUND );
+    EXPECT_EQ( DataManager::read().state, ABORT_ON_GROUND );
 }
 
 TEST(StateStoreTest, DefaultStateIsInit)
@@ -23,11 +23,11 @@ TEST(StateStoreTest, SetAndGetState)
 {
     StateStore store;
 
-    store.set(State::ERRORGROUND);
-    EXPECT_EQ(store.get(), State::ERRORGROUND);
+    store.set(State::ABORT_ON_GROUND);
+    EXPECT_EQ(store.get(), State::ABORT_ON_GROUND);
 
-    store.set(State::READY);
-    EXPECT_EQ(store.get(), State::READY);
+    store.set(State::PRESSURIZATION);
+    EXPECT_EQ(store.get(), State::PRESSURIZATION);
 }
 
 //
@@ -132,7 +132,7 @@ TEST(GOATStoreTest, CreateResetsStores)
     goat.init();
 
     // Modify values first
-    goat.stateStore.set(State::ERRORGROUND);
+    goat.stateStore.set(State::ABORT_ON_GROUND);
 
     GpsBasicFixData fix{};
     fix.lat = 111;
