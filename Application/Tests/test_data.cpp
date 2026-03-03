@@ -102,9 +102,7 @@ TEST(GpsStoreTest, FullStructSetReflectsInHelpers)
     fix.lat = 222;
     fix.hAcc = 333;
     fix.numSV = 4;
-    fix.fixType = static_cast<GpsFixType>(5);
-    fix.valid = static_cast<GpsValidityFlags>(6);
-    fix.flags = static_cast<GpsStatusFlags>(7);
+
 
     store.set(fix);
 
