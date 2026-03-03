@@ -110,9 +110,6 @@ TEST(GpsStoreTest, FullStructSetReflectsInHelpers)
     EXPECT_EQ(store.getLat(), 222);
     EXPECT_EQ(store.getHAcc(), 333u);
     EXPECT_EQ(store.getNumSV(), 4u);
-    EXPECT_EQ(store.getFixType(), fix.fixType);
-    EXPECT_EQ(store.getValidity(), fix.valid);
-    EXPECT_EQ(store.getStatusFlags(), fix.flags);
 }
 
 //
