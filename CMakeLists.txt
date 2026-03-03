@@ -42,6 +42,7 @@ endif()
 SET(FC_SOURCE_FILES
     Application/Data/data.cpp
     Application/main.cpp
+    Application/gps_store.cpp
     Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp
     # Drivers/STM32HAL/stm32hal.cpp
     Drivers/STM32HAL/Interfaces/mock_uart.cpp
