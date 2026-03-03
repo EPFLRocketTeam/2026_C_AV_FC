@@ -65,6 +65,63 @@ TEST(GpsStoreTest, SetAndGetGpsData)
     EXPECT_EQ(result.numSV, 10);
 }
 
+TEST(GpsStoreTest, HelperSettersAndGettersWork)
+{
+    GpsStore store;
+
+    // Set all fields individually
+    store.setLon(123456789);
+    store.setLat(987654321);
+    store.setHAcc(42);
+    store.setNumSV(10);
+
+    // Use dummy values for enum/flags (adapt if needed)
+    GpsFixType fixType = static_cast<GpsFixType>(1);
+    GpsValidityFlags validity = static_cast<GpsValidityFlags>(2);
+    GpsStatusFlags flags = static_cast<GpsStatusFlags>(3);
+
+    store.setFixType(fixType);
+    store.setValidity(validity);
+    store.setStatusFlags(flags);
+
+    // Check all getters
+    EXPECT_EQ(store.getLon(), 123456789);
+    EXPECT_EQ(store.getLat(), 987654321);
+    EXPECT_EQ(store.getHAcc(), 42u);
+    EXPECT_EQ(store.getNumSV(), 10u);
+    EXPECT_EQ(store.getFixType(), fixType);
+    EXPECT_EQ(store.getValidity(), validity);
+    EXPECT_EQ(store.getStatusFlags(), flags);
+}
+
+//
+// ✅ Full Struct Set + Helper Get Consistency
+//
+
+TEST(GpsStoreTest, FullStructSetReflectsInHelpers)
+{
+    GpsStore store;
+
+    GpsBasicFixData fix{};
+    fix.lon = 111;
+    fix.lat = 222;
+    fix.hAcc = 333;
+    fix.numSV = 4;
+    fix.fixType = static_cast<GpsFixType>(5);
+    fix.valid = static_cast<GpsValidityFlags>(6);
+    fix.flags = static_cast<GpsStatusFlags>(7);
+
+    store.set(fix);
+
+    EXPECT_EQ(store.getLon(), 111);
+    EXPECT_EQ(store.getLat(), 222);
+    EXPECT_EQ(store.getHAcc(), 333u);
+    EXPECT_EQ(store.getNumSV(), 4u);
+    EXPECT_EQ(store.getFixType(), fix.fixType);
+    EXPECT_EQ(store.getValidity(), fix.valid);
+    EXPECT_EQ(store.getStatusFlags(), fix.flags);
+}
+
 //
 // ✅ GOATStore Tests
 //

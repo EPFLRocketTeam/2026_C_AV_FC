@@ -34,6 +34,27 @@ namespace flight_computer {
 	    void set(const GpsBasicFixData& value) override;
 	    const GpsBasicFixData& get() const override;
 
+	    void setLon(int32_t lon);
+		int32_t getLon() const;
+
+		void setLat(int32_t lat);
+		int32_t getLat() const;
+
+		void setHAcc(uint32_t hAcc);
+		uint32_t getHAcc() const;
+
+		void setNumSV(uint8_t numSV);
+		uint8_t getNumSV() const;
+
+		void setFixType(GpsFixType type);
+		GpsFixType getFixType() const;
+
+		void setValidity(GpsValidityFlags valid);
+		GpsValidityFlags getValidity() const;
+
+		void setStatusFlags(GpsStatusFlags flags);
+		GpsStatusFlags getStatusFlags() const;
+
 	private:
 	    GpsBasicFixData data_;
 	};

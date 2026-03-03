@@ -29,17 +29,3 @@ const State& StateStore::get() const
 {
     return state_;
 }
-
-GpsStore::GpsStore()
-: data_{} {}
-
-
-void GpsStore::set(const GpsBasicFixData& value)
-{
-    data_ = value;
-}
-
-const GpsBasicFixData& GpsStore::get() const
-{
-    return data_;
-}
