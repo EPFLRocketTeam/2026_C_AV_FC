@@ -13,7 +13,7 @@ void GpsStore::set(const GpsBasicFixData& value)
     data_ = value;
 }
 
-const GpsBasicFixData& GpsStore::get() const
+GpsBasicFixData GpsStore::get() const
 {
     return data_;
 }

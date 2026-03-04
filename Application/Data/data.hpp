@@ -13,7 +13,7 @@ namespace flight_computer {
 		virtual ~IStore() = default;
 
 		virtual void set(const T& value) = 0;
-		virtual const T& get() const = 0;
+		virtual T get() const = 0;
 	};
 
 	class StateStore : public IStore<State> {
@@ -21,10 +21,16 @@ namespace flight_computer {
 	    StateStore();
 
 	    void set(const State& value) override;
-	    const State& get() const override;
+	    State get() const override;
+
 
 	private:
 	    State state_;
+	};
+
+	struct DataDump {
+	    State av_state;
+	    GpsBasicFixData gps_state;
 	};
 
 	class GpsStore : public IStore<GpsBasicFixData> {
@@ -32,7 +38,7 @@ namespace flight_computer {
 		GpsStore();
 
 	    void set(const GpsBasicFixData& value) override;
-	    const GpsBasicFixData& get() const override;
+	    GpsBasicFixData get() const override;
 
 	    void setLon(int32_t lon);
 		int32_t getLon() const;
@@ -60,14 +66,13 @@ namespace flight_computer {
 	};
 
 
-	struct GOATStore {
+	class GOATStore {
+		GOATStore();
+
 	    StateStore stateStore;
 	    GpsStore   gpsStore;
 
-	    void init() {
-	        stateStore = StateStore{};
-	        gpsStore   = GpsStore{};
-	    }
+	    DataDump get() const;
 	};
 
 

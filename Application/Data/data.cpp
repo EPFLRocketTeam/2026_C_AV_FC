@@ -25,7 +25,19 @@ void StateStore::set(const State& value)
     state_ = value;
 }
 
-const State& StateStore::get() const
+State StateStore::get() const
 {
     return state_;
+}
+
+GOATStore::GOATStore() {
+	stateStore = StateStore{};
+	gpsStore   = GpsStore{};
+}
+
+DataDump GOATStore::get() const {
+    return {
+        stateStore.get(),
+        gpsStore.get(),
+    };
 }
