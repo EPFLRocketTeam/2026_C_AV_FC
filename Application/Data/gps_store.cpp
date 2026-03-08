@@ -1,4 +1,5 @@
 #include "Application/Data/data.hpp"
+#include "Drivers/UBX_GPS/ubx_gps_interface.h"
 
 using namespace flight_computer;
 
@@ -13,7 +14,7 @@ void GpsStore::set(const GpsBasicFixData& value)
     data_ = value;
 }
 
-GpsBasicFixData GpsStore::get() const
+const GpsBasicFixData& GpsStore::get() const
 {
     return data_;
 }
@@ -88,4 +89,9 @@ void GpsStore::setStatusFlags(GpsStatusFlags flags)
 GpsStatusFlags GpsStore::getStatusFlags() const
 {
     return data_.flags;
+}
+
+GpsBasicFixData* GpsStore::get_ref() 
+{
+    return &data_;
 }

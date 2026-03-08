@@ -92,47 +92,105 @@ TEST(GpsStoreTest, HelperSettersAndGettersWork)
 //
 // ✅ Full Struct Set + Helper Get Consistency
 //
-
-TEST(GpsStoreTest, FullStructSetReflectsInHelpers)
+TEST(GpsStoreTest, SetterAndGetterVerification)
 {
     GpsStore store;
 
-    GpsBasicFixData fix{};
-    fix.lon = 111;
-    fix.lat = 222;
-    fix.hAcc = 333;
-    fix.numSV = 4;
+    // Test int32_t fields
+    store.setLon(123456789);
+    store.setLat(-987654321);
+    EXPECT_EQ(store.getLon(), 123456789);
+    EXPECT_EQ(store.getLat(), -987654321);
 
+    // Test uint32_t field
+    store.setHAcc(4294967295u);
+    EXPECT_EQ(store.getHAcc(), 4294967295u);
 
-    store.set(fix);
+    // Test uint8_t field
+    store.setNumSV(255);
+    EXPECT_EQ(store.getNumSV(), 255);
 
-    EXPECT_EQ(store.getLon(), 111);
-    EXPECT_EQ(store.getLat(), 222);
-    EXPECT_EQ(store.getHAcc(), 333u);
-    EXPECT_EQ(store.getNumSV(), 4u);
+    // Test GpsValidityFlags
+    GpsValidityFlags vFlags = {true, false, true, false};
+    store.setValidity(vFlags);
+    GpsValidityFlags vResult = store.getValidity();
+    EXPECT_TRUE(vResult.validDate);
+    EXPECT_FALSE(vResult.validTime);
+    EXPECT_TRUE(vResult.fullyResolved);
+    EXPECT_FALSE(vResult.validMag);
+
+    GpsStatusFlags sFlags = {
+        true,           // gnssFixOK
+        false,          // diffSoln
+        GpsPowerSaveMode::NOT_ACTIVE, 
+        true,           // headVehValid
+        GpsCarrierPhaseStatus::NONE 
+    };
+    store.setStatusFlags(sFlags);
+    GpsStatusFlags sResult = store.getStatusFlags();
+    EXPECT_TRUE(sResult.gnssFixOK);
+    EXPECT_FALSE(sResult.diffSoln);
+    EXPECT_TRUE(sResult.headVehValid);
+    EXPECT_EQ(sResult.psmState, GpsPowerSaveMode::NOT_ACTIVE);
+    EXPECT_EQ(sResult.carrSoln, GpsCarrierPhaseStatus::NONE);
+}
+
+TEST(GpsStoreTest, BoundaryValueTesting)
+{
+    GpsStore store;
+
+    // 1. Test Int32 boundaries
+    int32_t max_int = std::numeric_limits<int32_t>::max();
+    int32_t min_int = std::numeric_limits<int32_t>::min();
+
+    store.setLon(max_int);
+    EXPECT_EQ(store.getLon(), max_int);
+    
+    store.setLat(min_int);
+    EXPECT_EQ(store.getLat(), min_int);
+
+    // 2. Test Uint32 boundaries
+    uint32_t max_uint32 = std::numeric_limits<uint32_t>::max();
+    store.setHAcc(max_uint32);
+    EXPECT_EQ(store.getHAcc(), max_uint32);
+
+    // 3. Test Uint8 boundaries
+    uint8_t max_uint8 = std::numeric_limits<uint8_t>::max();
+    store.setNumSV(max_uint8);
+    EXPECT_EQ(store.getNumSV(), max_uint8);
 }
 
 //
 // ✅ GOATStore Tests
 //
 
-TEST(GOATStoreTest, CreateResetsStores)
+TEST(GOATStoreTest, LiveDataDumpIntegrity)
 {
     GOATStore goat;
-    goat.init();
 
-    // Modify values first
-    goat.stateStore.set(State::ABORT_ON_GROUND);
+    // 1. Setup initial state
+    goat.stateStore.set(State::ARMED);
+    
+    GpsBasicFixData initialFix{};
+    initialFix.lat = 500;
+    initialFix.lon = 600;
+    goat.gpsStore.set(initialFix);
 
-    GpsBasicFixData fix{};
-    fix.lat = 111;
-    goat.gpsStore.set(fix);
+    // 2. Retrieve "Live" dump
+    const DataDump& dump = goat.get();
 
-    // Reset
-    goat.init();
+    // Verify initial values via the dump
+    EXPECT_EQ(*dump.av_state, State::ARMED);
+    EXPECT_EQ(dump.gps_state->lat, 500);
+    EXPECT_EQ(dump.gps_state->lon, 600);
 
-    EXPECT_EQ(goat.stateStore.get(), State::INIT);
-    EXPECT_EQ(goat.gpsStore.get().lat, 0);
+    // 3. Mutate the stores directly and verify the dump sees the change
+    // This confirms the "Live Reference" behavior
+    goat.stateStore.set(State::IGNITION);
+    goat.gpsStore.get_ref()->lat = 999;
+
+    EXPECT_EQ(*dump.av_state, State::IGNITION);
+    EXPECT_EQ(dump.gps_state->lat, 999);
 }
 
 
