@@ -4,20 +4,8 @@
 using namespace flight_computer;
 
 GpsStore::GpsStore()
-: data_{}
-{}
+{data_ = {};}
 
-// --------- Interface globale ---------
-
-void GpsStore::set(const GpsBasicFixData& value)
-{
-    data_ = value;
-}
-
-const GpsBasicFixData& GpsStore::get() const
-{
-    return data_;
-}
 
 // --------- Helpers par champ ---------
 
@@ -89,9 +77,4 @@ void GpsStore::setStatusFlags(GpsStatusFlags flags)
 GpsStatusFlags GpsStore::getStatusFlags() const
 {
     return data_.flags;
-}
-
-GpsBasicFixData* GpsStore::get_ref() 
-{
-    return &data_;
 }

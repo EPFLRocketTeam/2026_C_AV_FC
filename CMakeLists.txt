@@ -42,7 +42,17 @@ endif()
 SET(FC_SOURCE_FILES
     Application/Data/data.cpp
     Application/main.cpp
+    Application/Data/Stores/NavSensorsStore.cpp
+    Application/Data/Stores/SensStatusStore.cpp
+    Application/Data/Stores/PropSensorsStore.cpp
+    Application/Data/Stores/ValvesStore.cpp
+    Application/Data/Stores/NavigationDataStore.cpp
+    Application/Data/Stores/EventStore.cpp
+    Application/Data/Stores/BatteriesStore.cpp
+    Application/Data/Stores/CamsRecordingStore.cpp
+    Application/Data/Stores/UplinkCmdStore.cpp
     Application/Data/gps_store.cpp
+
     Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp
     # Drivers/STM32HAL/stm32hal.cpp
     Drivers/STM32HAL/Interfaces/mock_uart.cpp
