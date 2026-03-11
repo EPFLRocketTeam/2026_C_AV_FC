@@ -469,6 +469,8 @@ public:
 
 struct DataDump {
   State av_state;
+  uint32_t av_timestamp;
+  float av_fc_temp;
   GpsBasicFixData gps_state;
   SensStatus sensStatus;
   PropSensors propSensors;
