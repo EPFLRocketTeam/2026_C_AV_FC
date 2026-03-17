@@ -119,6 +119,7 @@ struct PropSensors {
     double    fuel_inj_cooling_temperature;
     double    LOX_inj_temperature;
     double    chamber_temperature;
+    uint32_t  PR_state;
 
     PropSensors();
 };
