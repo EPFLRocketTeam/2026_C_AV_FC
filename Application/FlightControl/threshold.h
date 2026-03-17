@@ -1,0 +1,7 @@
+#ifndef THRESHOLDS_H
+#define THRESHOLDS_H
+
+#define MAX_PRESSURE_TANK 100
+#define MIN_PRESSURE_TANK 0
+
+#endif //THRESHOLDS_H

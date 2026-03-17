@@ -3,65 +3,53 @@
 
 using namespace flight_computer;
 
-Data::Data () {
-    state = State::INIT;
-}
+Data::Data() { state = State::INIT; }
 
 static Data globalData = Data();
 
-Data DataManager::read () {
-    return globalData;
-}
-void DataManager::setState (State state) {
-    globalData.state = state;
-}
+Data DataManager::read() { return globalData; }
+void DataManager::setState(State state) { globalData.state = state; }
 
-StateStore::StateStore()
-{
-    data_ = State::INIT;
-}
+StateStore::StateStore() { data_ = State::INIT; }
 
 GOATStore::GOATStore() {
-	stateStore = StateStore{};
-	gpsStore   = GpsStore{};
-	sensStatusStore = SensStatusStore{};
-	propSensorsStore = PropSensorsStore{};
-	valvesStore = ValvesStore{};
-	navigationDataStore = NavigationDataStore{};
-	eventStore = EventStore{};
-	batteriesStore = BatteriesStore{};
-	camsRecordingStore = CamsRecordingStore{};
-	uplinkCmdStore = UplinkCmdStore{};
+  stateStore = StateStore{};
+  gpsStore = GpsStore{};
+  sensStatusStore = SensStatusStore{};
+  propSensorsStore = PropSensorsStore{};
+  valvesStore = ValvesStore{};
+  navigationDataStore = NavigationDataStore{};
+  eventStore = EventStore{};
+  batteriesStore = BatteriesStore{};
+  camsRecordingStore = CamsRecordingStore{};
+  uplinkCmdStore = UplinkCmdStore{};
 }
 
-const DataDump& GOATStore::get() const {
-    data_.av_state = stateStore.get();
-    data_.gps_state = gpsStore.get();
-    data_.sensStatus = sensStatusStore.get();
-    data_.propSensors = propSensorsStore.get();
-    data_.valves = valvesStore.get();
-    data_.navigationData = navigationDataStore.get();
-    data_.event = eventStore.get();
-    data_.batteries = batteriesStore.get();
-    data_.camsRecording = camsRecordingStore.get();
-    data_.uplinkCmd = uplinkCmdStore.get();
-    return data_;
+const DataDump &GOATStore::get() const {
+  data_.av_state = stateStore.get();
+  data_.gps_state = gpsStore.get();
+  data_.sensStatus = sensStatusStore.get();
+  data_.propSensors = propSensorsStore.get();
+  data_.valves = valvesStore.get();
+  data_.navigationData = navigationDataStore.get();
+  data_.event = eventStore.get();
+  data_.batteries = batteriesStore.get();
+  data_.camsRecording = camsRecordingStore.get();
+  data_.uplinkCmd = uplinkCmdStore.get();
+  return data_;
 }
 
-void GOATStore::set(const DataDump& value) {
-        stateStore.set(value.av_state);
-        gpsStore.set(value.gps_state);
-        sensStatusStore.set(value.sensStatus);
-        propSensorsStore.set(value.propSensors);
-        valvesStore.set(value.valves);
-        navigationDataStore.set(value.navigationData);
-        eventStore.set(value.event);
-        batteriesStore.set(value.batteries);
-        camsRecordingStore.set(value.camsRecording);
-        uplinkCmdStore.set(value.uplinkCmd);
+void GOATStore::set(const DataDump &value) {
+  stateStore.set(value.av_state);
+  gpsStore.set(value.gps_state);
+  sensStatusStore.set(value.sensStatus);
+  propSensorsStore.set(value.propSensors);
+  valvesStore.set(value.valves);
+  navigationDataStore.set(value.navigationData);
+  eventStore.set(value.event);
+  batteriesStore.set(value.batteries);
+  camsRecordingStore.set(value.camsRecording);
+  uplinkCmdStore.set(value.uplinkCmd);
 }
 
-DataDump* GOATStore::get_ref() 
-{
-    return &data_;
-}
+DataDump *GOATStore::get_ref() { return &data_; }

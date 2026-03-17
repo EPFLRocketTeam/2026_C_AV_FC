@@ -97,8 +97,14 @@ struct NavSensors {
 
 struct PropSensors {
     double    N2_pressure;
+    double    N2_pressure_mean; // TODO: Update data store
+
     double    fuel_pressure;
+    double    fuel_pressure_mean; // TODO: Update data store
+
     double    LOX_pressure;
+    double    LOX_pressure_mean; // TODO: Update data store
+
     double    igniter_pressure;
     double    LOX_inj_pressure;
     double    fuel_inj_pressure;
@@ -113,7 +119,6 @@ struct PropSensors {
     double    fuel_inj_cooling_temperature;
     double    LOX_inj_temperature;
     double    chamber_temperature;
-    uint32_t  PR_state;
 
     PropSensors();
 };
@@ -415,6 +420,14 @@ struct Event {
     bool ignition_failed;
     bool catastrophic_failure;
 
+    // NEW 
+    bool timer_launch_delay; // TODO: update the store
+    bool vertical_acc_hold; // TODO: update the store
+    bool burn_max_duration; // TODO: update the store
+    bool ascent_max_duration; // TODO: update the store
+    bool descent_max_duration; // TODO: update the store
+
+
     Event();
 };
 
@@ -527,6 +540,10 @@ public:
   void set(const DataDump &value);
   const DataDump &get() const;
   DataDump *get_ref();
+  static inline GOATStore& get_instance() {
+        static GOATStore instance;
+        return instance;
+    }
 
 private:
   mutable DataDump data_;
