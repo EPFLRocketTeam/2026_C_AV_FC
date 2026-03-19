@@ -48,9 +48,11 @@ SET(FC_SOURCE_FILES
     Application/Data/Stores/ValvesStore.cpp
     Application/Data/Stores/NavigationDataStore.cpp
     Application/Data/Stores/EventStore.cpp
+    Application/Data/Stores/FlightEventTimersStore.cpp
     Application/Data/Stores/BatteriesStore.cpp
     Application/Data/Stores/CamsRecordingStore.cpp
     Application/Data/Stores/UplinkCmdStore.cpp
+    Application/Data/Stores/VehiculeOverviewStore.cpp
     Application/Data/gps_store.cpp
 
     Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp

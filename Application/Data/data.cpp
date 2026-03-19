@@ -3,19 +3,14 @@
 
 using namespace flight_computer;
 
-Data::Data() { state = State::INIT; }
-
-static Data globalData = Data();
-
-Data DataManager::read() { return globalData; }
-void DataManager::setState(State state) { globalData.state = state; }
-
 StateStore::StateStore() { data_ = State::INIT; }
 
 GOATStore::GOATStore() {
   stateStore = StateStore{};
   gpsStore = GpsStore{};
   sensStatusStore = SensStatusStore{};
+  vehiculeOverviewStore = VehiculeOverviewStore{};
+  flightEventTimersStore = FlightEventTimersStore{};
   propSensorsStore = PropSensorsStore{};
   valvesStore = ValvesStore{};
   navigationDataStore = NavigationDataStore{};
@@ -29,6 +24,8 @@ const DataDump &GOATStore::get() const {
   data_.av_state = stateStore.get();
   data_.gps_state = gpsStore.get();
   data_.sensStatus = sensStatusStore.get();
+  data_.flightEventTimers = flightEventTimersStore.get();
+  data_.vehiculeOverview = vehiculeOverviewStore.get();
   data_.propSensors = propSensorsStore.get();
   data_.valves = valvesStore.get();
   data_.navigationData = navigationDataStore.get();
@@ -43,6 +40,7 @@ void GOATStore::set(const DataDump &value) {
   stateStore.set(value.av_state);
   gpsStore.set(value.gps_state);
   sensStatusStore.set(value.sensStatus);
+  flightEventTimersStore.set(value.flightEventTimers);
   propSensorsStore.set(value.propSensors);
   valvesStore.set(value.valves);
   navigationDataStore.set(value.navigationData);
