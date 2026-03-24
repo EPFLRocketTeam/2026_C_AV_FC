@@ -59,7 +59,7 @@ SET(FC_SOURCE_FILES
     Drivers/STM32HAL/Simulations/stm32sim_gpio.cpp
     Drivers/STM32HAL/Simulations/stm32sim_spi.cpp
 
-    Drivers/InvIMU/Impl/InvIMU_mock.cpp)
+    Drivers/InvIMU/Impl/InvIMU_mock.cpp
     Drivers/STM32HAL/Simulations/stm32sim_ticks.cpp
     Drivers/STM32HAL/Simulations/stm32sim_uart.cpp
 )
