@@ -58,6 +58,8 @@ SET(FC_SOURCE_FILES
     Drivers/STM32HAL/Interfaces/mock_uart.cpp
     Drivers/STM32HAL/Simulations/stm32sim_gpio.cpp
     Drivers/STM32HAL/Simulations/stm32sim_spi.cpp
+
+    Drivers/InvIMU/Impl/InvIMU_mock.cpp
     Drivers/STM32HAL/Simulations/stm32sim_ticks.cpp
     Drivers/STM32HAL/Simulations/stm32sim_uart.cpp
 )
@@ -98,3 +100,5 @@ endfunction()
 add_subdirectory(Application/Tests)
 add_subdirectory(Drivers/UBX_GPS/Tests)
 add_subdirectory(Drivers/STM32HAL/Tests)
+add_subdirectory(Drivers/InvIMU/Tests)
+
