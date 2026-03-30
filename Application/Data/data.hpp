@@ -199,12 +199,40 @@ struct UplinkCmd {
   UplinkCmd();
 };
 
+/**
+ * @brief Generic base class for all data stores.
+ *
+ * Provides a simple, uniform interface to store, retrieve, and reference
+ * a single value of type T. Concrete store classes derive from this
+ * template to add domain-specific accessors on top of these primitives.
+ *
+ * @tparam T The type of the value held by this store.
+ */
 template <typename T> class IStore {
 public:
   virtual ~IStore() = default;
 
+  /**
+   * @brief Overwrite the stored value with a copy of @p value.
+   * @param value New value to store.
+   */
   inline void set(const T &value) { data_ = value; };
+
+  /**
+   * @brief Return a const reference to the currently stored value.
+   * @return Const reference to the internal data.
+   */
   inline const T &get() const { return data_; };
+
+  /**
+   * @brief Return a mutable pointer to the internally stored value.
+   *
+   * Useful when an external subsystem needs to write directly into the
+   * store without going through a copy (e.g. passing the address to a
+   * driver that fills the struct in-place).
+   *
+   * @return Pointer to the internal data.
+   */
   inline T *get_ref() { return &data_; };
 
 protected:

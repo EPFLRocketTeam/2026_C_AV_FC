@@ -54,6 +54,7 @@ SET(FC_SOURCE_FILES
     Application/Data/Stores/UplinkCmdStore.cpp
     Application/Data/Stores/VehiculeOverviewStore.cpp
     Application/Data/gps_store.cpp
+    Application/FlightControl/av_state.cpp
 
     Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp
     # Drivers/STM32HAL/stm32hal.cpp

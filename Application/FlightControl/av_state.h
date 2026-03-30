@@ -24,9 +24,27 @@ public:
     explicit AvState();
     // destructor
     ~AvState();
-    // this function allows to get the current state of the FSM
+    /**
+     * @brief Return the FSM's current state.
+     * @return The active @c State enum value.
+     */
     State getCurrentState();
+
+    /**
+     * @brief Evaluate the current sensor/event snapshot and advance the FSM.
+     *
+     * Calls the appropriate @c fromXxx() transition function for the active
+     * state, then stores the resulting state as the new current state.
+     *
+     * @param dump Snapshot of all avionics data at the current tick.
+     */
     void update(const DataDump &dump);
+
+    /**
+     * @brief Convert a @c State enum value to a human-readable string.
+     * @param state The state to convert.
+     * @return String representation of @p state (e.g. @c "BURN", @c "ASCENT").
+     */
     std::string stateToString(State state);
 
 private:
