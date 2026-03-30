@@ -4,8 +4,11 @@ using namespace flight_computer;
 
 PropSensors::PropSensors()
 :   N2_pressure(0.0),
+    N2_pressure_mean(0.0),
     fuel_pressure(0.0),
+    fuel_pressure_mean(0.0),
     LOX_pressure(0.0),
+    LOX_pressure_mean(0.0),
     igniter_pressure(0.0),
     LOX_inj_pressure(0.0),
     fuel_inj_pressure(0.0),

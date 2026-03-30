@@ -6,13 +6,6 @@
 
 using namespace flight_computer;
 
-TEST(ApplicationData, TestAvState) {
-    EXPECT_EQ( DataManager::read().state, INIT );
-
-    DataManager::setState( ABORT_ON_GROUND );
-    
-    EXPECT_EQ( DataManager::read().state, ABORT_ON_GROUND );
-}
 
 TEST(StateStoreTest, DefaultStateIsInit)
 {
