@@ -64,7 +64,12 @@ const osThreadAttr_t defaultTask_attributes = {
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* USER CODE BEGIN PV */
-
+osThreadId_t kalmanTaskHandle;
+const osThreadAttr_t kalmanTask_attributes = {
+  .name = "kalmanTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -79,6 +84,7 @@ static void MX_SPI6_Init(void);
 static void MX_UART7_Init(void);
 static void MX_I2C4_Init(void);
 void StartDefaultTask(void *argument);
+void StartKalmanTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -152,6 +158,7 @@ int main(void)
   /* Create the thread(s) */
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  kalmanTaskHandle = osThreadNew(StartKalmanTask, NULL, &kalmanTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -173,7 +180,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	mainLoop();
+	// mainLoop();
   }
   /* USER CODE END 3 */
 }
@@ -691,7 +698,18 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void StartKalmanTask(void *argument)
+{
+  /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+	 osDelay(1);
+  }
+  /* USER CODE END 5 */
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -709,7 +727,7 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+	 mainLoop();
   }
   /* USER CODE END 5 */
 }
