@@ -15,8 +15,8 @@
  *
  */
 
-#include "imu/inv_imu_edmp.h"
-#include "imu/inv_imu_edmp_defs.h"
+#include "inv_imu_edmp.h"
+#include "inv_imu_edmp_defs.h"
 
 #define EDMP_ROM_START_ADDR_IRQ0 EDMP_ROM_BASE
 #define EDMP_ROM_START_ADDR_IRQ1 (EDMP_ROM_BASE + 0x04)

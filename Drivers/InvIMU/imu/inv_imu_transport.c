@@ -15,8 +15,8 @@
  *
  */
 
-#include "imu/inv_imu_transport.h"
-#include "imu/inv_imu_defs.h"
+#include "inv_imu_transport.h"
+#include "inv_imu_defs.h"
 
 /* Static function definition */
 

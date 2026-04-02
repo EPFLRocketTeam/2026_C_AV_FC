@@ -1,4 +1,4 @@
-#include "InvIMU.hpp"
+#include "Drivers/InvIMU/InvIMU.hpp"
 #include <stdio.h>
 
 // Registers used for manual SPI access

@@ -15,8 +15,8 @@
  *
  */
 
-#include "imu/inv_imu_selftest.h"
-#include "imu/inv_imu_edmp.h"
+#include "inv_imu_selftest.h"
+#include "inv_imu_edmp.h"
 
 /* Static functions definition */
 static int set_selftest_parameters(inv_imu_device_t *                   s,

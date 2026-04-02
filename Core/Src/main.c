@@ -70,6 +70,10 @@ const osThreadAttr_t kalmanTask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+
+osMutexId_t imuData1MutexHandle;
+osMutexId_t imuData2MutexHandle;
+osMutexId_t imuData3MutexHandle;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -141,6 +145,9 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
+  imuData1MutexHandle = osMutexNew(NULL);
+  imuData2MutexHandle = osMutexNew(NULL);
+  imuData3MutexHandle = osMutexNew(NULL);
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -706,7 +713,9 @@ void StartKalmanTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-	 osDelay(1);
+
+	  osThreadFlagsWait(0x0001U, osFlagsWaitAny, osWaitForever);
+
   }
   /* USER CODE END 5 */
 }

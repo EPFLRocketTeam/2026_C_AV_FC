@@ -32,10 +32,10 @@ extern "C" {
 #include <stdint.h>
 
 /* Include device definition */
-#include "imu/inv_imu.h"
+#include "inv_imu.h"
 
 /* Include regmap (le = little endian, be = big endian) */
-#include "imu/inv_imu_regmap_le.h"
+#include "inv_imu_regmap_le.h"
 /* #include "imu/inv_imu_regmap_be.h" */
 
 /* Error/Success codes */

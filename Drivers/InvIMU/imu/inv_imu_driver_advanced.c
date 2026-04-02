@@ -15,7 +15,7 @@
  *
  */
 
-#include "imu/inv_imu_driver_advanced.h"
+#include "inv_imu_driver_advanced.h"
 
 /* Static functions */
 static int configure_serial_interface(inv_imu_device_t *s);

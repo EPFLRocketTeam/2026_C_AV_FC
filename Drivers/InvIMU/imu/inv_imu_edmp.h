@@ -29,8 +29,8 @@
 extern "C" {
 #endif
 
-#include "imu/inv_imu_driver.h"
-#include "imu/inv_imu_edmp_memmap.h"
+#include "inv_imu_driver.h"
+#include "inv_imu_edmp_memmap.h"
 
 #include <stdint.h>
 #include <string.h>

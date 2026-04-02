@@ -15,8 +15,8 @@
  *
  */
 
-#include "imu/inv_imu_driver.h"
-#include "imu/inv_imu_version.h"
+#include "inv_imu_driver.h"
+#include "inv_imu_version.h"
 
 void inv_imu_sleep_us(inv_imu_device_t *s, uint32_t us)
 {

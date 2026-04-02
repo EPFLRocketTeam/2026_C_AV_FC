@@ -81,9 +81,10 @@ class Module {
      *
      * @param drivers  C-array of exactly N DriverT pointers.
      */
-    explicit Module(DriverT *(&drivers)[N]) {
+    explicit Module(DriverT *(&drivers)[N], BufferT *(&buffers)[N]) {
         for (size_t i = 0; i < N; ++i) {
             drivers_[i] = drivers[i];
+            buffers_[i] = buffers[i];
         }
     }
 
@@ -123,7 +124,7 @@ class Module {
 
   protected:
     DriverT *drivers_[N]{};  ///< Non-owning pointers to the N driver instances.
-    BufferT  buffers_[N]{};  ///< In-place data buffers, one per driver.
+    BufferT  *buffers_[N]{};
 
     /** Compile-time constant exposing N to subclasses (for loop bounds). */
     static constexpr size_t kNumSensors = N;

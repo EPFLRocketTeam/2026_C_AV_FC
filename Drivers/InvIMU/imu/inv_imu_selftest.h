@@ -27,7 +27,7 @@
 
 #include <stdint.h>
 
-#include "imu/inv_imu_driver_advanced.h"
+#include "inv_imu_driver_advanced.h"
 
 #ifdef __cplusplus
 extern "C" {

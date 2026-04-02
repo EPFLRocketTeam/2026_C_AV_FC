@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-#include "imu/inv_imu_driver.h"
+#include "inv_imu_driver.h"
 
 #include <stdint.h>
 #include <string.h>
