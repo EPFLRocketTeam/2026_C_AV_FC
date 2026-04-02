@@ -34,6 +34,29 @@ endif()
 
 
 #############################################################
+#################### FREERTOS POSIX PORT ####################
+#############################################################
+
+include(FetchContent)
+
+set(FREERTOS_PORT "GCC_POSIX" CACHE STRING "" FORCE)
+set(FREERTOS_HEAP "3" CACHE STRING "" FORCE)
+
+# Must be defined before FetchContent_MakeAvailable(freertos_kernel)
+add_library(freertos_config INTERFACE)
+target_include_directories(freertos_config SYSTEM INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/STM32HAL/Simulations/FreeRTOSConfig_host"
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+FetchContent_Declare(
+    freertos_kernel
+    GIT_REPOSITORY https://github.com/FreeRTOS/FreeRTOS-Kernel.git
+    GIT_TAG        V11.1.0
+)
+FetchContent_MakeAvailable(freertos_kernel)
+
+#############################################################
 ###################### FLIGHT COMPUTER ######################
 #############################################################
 
@@ -69,8 +92,17 @@ SET(FC_SOURCE_FILES
 )
 
 add_library(flight_computer STATIC ${FC_SOURCE_FILES})
-target_link_libraries(flight_computer PRIVATE gcov)
-target_include_directories(flight_computer PUBLIC .)
+target_link_libraries(flight_computer PRIVATE
+    freertos_kernel
+    freertos_kernel_port
+    pthread
+    gcov
+)
+target_include_directories(flight_computer PUBLIC
+    # FreeRTOSConfig_host must come first so its cmsis_os.h shadows the STM32 one
+    Drivers/STM32HAL/Simulations/FreeRTOSConfig_host
+    .
+)
 
 # Add includes here
 # For example target_include_directories(flight_computer PUBLIC Drivers/X)
@@ -79,8 +111,6 @@ target_include_directories(flight_computer PUBLIC .)
 #############################################################
 ######################## GOOGLE TEST ########################
 #############################################################
-
-include(FetchContent)
 
 FetchContent_Declare(
     googletest

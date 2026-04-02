@@ -1,11 +1,13 @@
-extern "C" {
-#include "Application/main.h"
+// Core/Inc/main.h includes stm32hal.h which pulls in C++ headers —
+// include it outside extern "C" (it has its own C++ guards).
 #include "Core/Inc/main.h"
-#include "Drivers/InvIMU/InvIMU.h"
-}
-
 #include "cmsis_os.h"
 #include "Modules/imu_modlue.hpp"
+
+extern "C" {
+#include "Application/main.h"
+#include "Drivers/InvIMU/InvIMU.h"
+}
 #include "Drivers/InvIMU/InvIMU.hpp"
 
 extern SPI_HandleTypeDef hspi1;

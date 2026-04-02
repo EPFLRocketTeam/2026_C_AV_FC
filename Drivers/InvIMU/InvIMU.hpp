@@ -2,7 +2,7 @@
 
 #include "InvIMU.h"
 #include <cstring>
-#include "stm32h7xx_hal.h" //
+#include "Drivers/STM32HAL/stm32hal.h"
 
 // ======================================================================
 // MODEL SELECTION & TDK INCLUDES

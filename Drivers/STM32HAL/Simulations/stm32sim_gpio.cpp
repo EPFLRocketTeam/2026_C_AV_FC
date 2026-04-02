@@ -6,6 +6,16 @@
 
 USING_SIMULATOR_NAMESPACE;
 
+/** Simulated GPIO port instances */
+GPIO_TypeDef SIM_GPIOA = {0, "GPIOA"};
+GPIO_TypeDef SIM_GPIOB = {1, "GPIOB"};
+GPIO_TypeDef SIM_GPIOC = {2, "GPIOC"};
+GPIO_TypeDef SIM_GPIOD = {3, "GPIOD"};
+GPIO_TypeDef SIM_GPIOE = {4, "GPIOE"};
+GPIO_TypeDef SIM_GPIOF = {5, "GPIOF"};
+GPIO_TypeDef SIM_GPIOG = {6, "GPIOG"};
+GPIO_TypeDef SIM_GPIOH = {7, "GPIOH"};
+
 namespace SIMULATOR_NAMESPACE::gpio::extdata {
     std::map<uint32_t, GPIO_PinState> pinStates;
 };

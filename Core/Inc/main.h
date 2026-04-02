@@ -22,12 +22,13 @@
 #ifndef __MAIN_H
 #define __MAIN_H
 
+/* Includes ------------------------------------------------------------------*/
+/* stm32hal.h includes C++ headers in UNIT_TEST_ENV — must be outside extern "C" */
+#include "Drivers/STM32HAL/stm32hal.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* Includes ------------------------------------------------------------------*/
-#include "stm32h7xx_hal.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
