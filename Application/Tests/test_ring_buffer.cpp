@@ -343,3 +343,59 @@ TEST(RingBufferClear, BulkGetOnClearedBufferReturnsZero) {
     int out[4] = {};
     EXPECT_EQ(buf.get(out, 4), 0u);
 }
+
+// =============================================================================
+// Pop interface
+// =============================================================================
+
+TEST(RingBufferPop, PopReturnsFalseWhenEmpty) {
+    RingBuffer<int, 4> buf;
+    int out = 0;
+    EXPECT_FALSE(buf.pop(out));
+    EXPECT_EQ(buf.size(), 0u);
+}
+
+TEST(RingBufferPop, PopRemovesOldestElement) {
+    RingBuffer<int, 4> buf;
+    buf.append(10);
+    buf.append(20);
+    buf.append(30);
+
+    int out = 0;
+    EXPECT_TRUE(buf.pop(out));
+    EXPECT_EQ(out, 10);
+    EXPECT_EQ(buf.size(), 2u);
+    EXPECT_EQ(*buf.get(0), 20);
+}
+
+TEST(RingBufferPop, BulkPopReturnsElementsInOrder) {
+    RingBuffer<int, 5> buf;
+    for (int i = 1; i <= 5; ++i) {
+        buf.append(i);
+    }
+
+    int out[3] = {};
+    const size_t popped = buf.pop(out, 3);
+
+    EXPECT_EQ(popped, 3u);
+    EXPECT_EQ(out[0], 1);
+    EXPECT_EQ(out[1], 2);
+    EXPECT_EQ(out[2], 3);
+    EXPECT_EQ(buf.size(), 2u);
+    EXPECT_EQ(*buf.get(0), 4);
+    EXPECT_EQ(*buf.get(1), 5);
+}
+
+TEST(RingBufferPop, BulkPopClampsToCurrentSize) {
+    RingBuffer<int, 3> buf;
+    buf.append(7);
+    buf.append(8);
+
+    int out[5] = {};
+    const size_t popped = buf.pop(out, 5);
+
+    EXPECT_EQ(popped, 2u);
+    EXPECT_EQ(out[0], 7);
+    EXPECT_EQ(out[1], 8);
+    EXPECT_TRUE(buf.empty());
+}

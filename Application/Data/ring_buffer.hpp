@@ -47,6 +47,23 @@ class RingBuffer {
         return &buffer_[(head_ + index) % N];
     }
 
+    /**
+     * @brief Pop the oldest element.
+     *
+     * @param out Receives the oldest value when the call succeeds.
+     * @return true when an element was popped, false when the buffer is empty.
+     */
+    bool pop(T &out) {
+        if (size_ == 0) {
+            return false;
+        }
+
+        out = buffer_[head_];
+        head_ = (head_ + 1) % N;
+        --size_;
+        return true;
+    }
+
     // -------------------------------------------------------------------------
     // Bulk interface
     // -------------------------------------------------------------------------
@@ -74,6 +91,22 @@ class RingBuffer {
         const size_t count = (n < size_) ? n : size_;
         for (size_t i = 0; i < count; ++i) {
             out[i] = buffer_[(head_ + i) % N];
+        }
+        return count;
+    }
+
+    /**
+     * @brief Pop up to n oldest elements into out[0..count-1].
+     *
+     * @return Number of elements actually removed from the buffer.
+     */
+    size_t pop(T *out, size_t n) {
+        size_t count = 0;
+        while (count < n && size_ > 0) {
+            out[count] = buffer_[head_];
+            head_ = (head_ + 1) % N;
+            --size_;
+            ++count;
         }
         return count;
     }

@@ -6,7 +6,7 @@
 #include "Drivers/InvIMU/InvIMU.h"
 
 using namespace flight_computer;
-using namespace Drivers::InvIMU;
+using Drivers::InvIMU::IMUData;
 
 
 TEST(StateStoreTest, DefaultStateIsInit)
