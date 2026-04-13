@@ -713,11 +713,11 @@ void StartKalmanTask(void *argument)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
-  kalman_loop();
   for(;;)
   {
 
 	  osThreadFlagsWait(0x0001U, osFlagsWaitAny, osWaitForever);
+	  kalman_loop();
 
   }
   /* USER CODE END 5 */
