@@ -89,9 +89,25 @@ SET(FC_SOURCE_FILES
     Drivers/InvIMU/Impl/InvIMU_mock.cpp
     Drivers/STM32HAL/Simulations/stm32sim_ticks.cpp
     Drivers/STM32HAL/Simulations/stm32sim_uart.cpp
+
+    # Kalman core (P0 compile integration baseline)
+    Application/Kalman/kalman/eskf_core.cpp
+    Application/Kalman/kalman/eskf_yieldable.cpp
+    Application/Kalman/kalman/shadow_filter.cpp
+    Application/Kalman/kalman/eskf_math.cpp
+    Application/Kalman/kalman/eskf_logger.cpp
+    Application/Kalman/kalman/preprocessor/virtual_imu.cpp
+    Application/Kalman/kalman/preprocessor/virtual_baro.cpp
+    Application/Kalman/kalman/preprocessor/virtual_compass.cpp
+    Application/Kalman/kalman/preprocessor/pressure_altitude.cpp
 )
 
 add_library(flight_computer STATIC ${FC_SOURCE_FILES})
+target_compile_definitions(flight_computer PUBLIC
+    APP_TARGET_NATIVE=1
+    APP_TARGET_TEENSY=0
+    APP_TARGET_ESP32=0
+)
 target_link_libraries(flight_computer PRIVATE
     freertos_kernel
     freertos_kernel_port
@@ -102,6 +118,8 @@ target_include_directories(flight_computer PUBLIC
     # FreeRTOSConfig_host must come first so its cmsis_os.h shadows the STM32 one
     Drivers/STM32HAL/Simulations/FreeRTOSConfig_host
     .
+    Application/Kalman
+    ThirdParty/ArduinoEigen-0.3.2
 )
 
 # Add includes here
