@@ -39,8 +39,8 @@ public:
 
   bool init() override {
     for (size_t i = 0; i < kNumSensors; ++i) {
-      if (drivers_[i]->init()) {
-        printf("Error starting imu %zu \n", i);
+      if (!drivers_[i]->init()) {
+        printf("Error starting imu %zu\n", i);
         return false;
       }
     }
@@ -48,18 +48,35 @@ public:
   }
   void update(uint32_t tick_ms) override {
     flight_computer::GOATStore& g = flight_computer::GOATStore::get_instance();
+    (void)tick_ms;
+    produced_since_last_update_ = 0;
     for (size_t i = 0; i < kNumSensors; ++i) {
       drivers_[i]->tick();
       IMUData frame{};
       osMutexId_t lock = getImuLock(i);
+      if (lock == nullptr) {
+        continue;
+      }
       osMutexAcquire(lock, osWaitForever);
-      while (drivers_[i]->getFrame(frame))
+      while (drivers_[i]->getFrame(frame)) {
         buffers_[i]->append(frame);
-      g.navSensorStore.set_imu(i, frame);
+        g.navSensorStore.set_imu(i, frame);
+        ++produced_since_last_update_;
+      }
       osMutexRelease(lock);
     }
   }
+
+  size_t takeProducedCount() {
+    const size_t produced = produced_since_last_update_;
+    produced_since_last_update_ = 0;
+    return produced;
+  }
+
   const RingBuffer<IMUData, 100> &getBuffer(size_t i) const {
     return *buffers_[i];
   }
+
+private:
+  size_t produced_since_last_update_ = 0;
 };

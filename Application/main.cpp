@@ -25,15 +25,23 @@ RingBuffer<GpsBasicFixData, 100> gpsData;
 
 
 void mainLoop() {
-    Config imu_cfg{};
-    imu_cfg.hspi = &hspi1;
-    imu_cfg.cs_port = BMI4_NSS_GPIO_Port;
-    imu_cfg.cs_pin = BMI4_NSS_Pin;
-    imu_cfg.use_dwt_timestamps = false;
+    Config imu_cfg1{};
+    imu_cfg1.hspi = &hspi1;
+    imu_cfg1.cs_port = BMI4_NSS_GPIO_Port;
+    imu_cfg1.cs_pin = BMI4_NSS_Pin;
+    imu_cfg1.use_dwt_timestamps = false;
 
-    InvIMU_STM32 invImu1(imu_cfg);
-    InvIMU_STM32 invImu2(imu_cfg);
-    InvIMU_STM32 invImu3(imu_cfg);
+    Config imu_cfg2 = imu_cfg1;
+    imu_cfg2.cs_port = BMI3_NSS_GPIO_Port;
+    imu_cfg2.cs_pin = BMI3_NSS_Pin;
+
+    Config imu_cfg3 = imu_cfg1;
+    imu_cfg3.cs_port = BMI2_NSS_GPIO_Port;
+    imu_cfg3.cs_pin = BMI2_NSS_Pin;
+
+    InvIMU_STM32 invImu1(imu_cfg1);
+    InvIMU_STM32 invImu2(imu_cfg2);
+    InvIMU_STM32 invImu3(imu_cfg3);
 
     InvIMU_Interface* invArr[] = {&invImu1, &invImu2, &invImu3};
     RingBuffer<IMUData, 100>* ringArr[] = {&imuData1, &imuData2, &imuData3};
@@ -57,11 +65,11 @@ void mainLoop() {
     uint32_t startTick = HAL_GetTick();
     uint32_t currTick;
     while (1) {
-    	currTick = startTick - HAL_GetTick();
+	currTick = HAL_GetTick() - startTick;
     	imuModule.update(currTick);
     	gpsModule.update(currTick);
-    	if (imuData1.size() == 100) {
-    		osThreadFlagsSet(kalmanTaskHandle, 0x0001U);
-    	}
+        if (imuModule.takeProducedCount() > 0) {
+            osThreadFlagsSet(kalmanTaskHandle, 0x0001U);
+        }
     }
 }
