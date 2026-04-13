@@ -78,6 +78,7 @@ SET(FC_SOURCE_FILES
     Application/Data/Stores/CamsRecordingStore.cpp
     Application/Data/Stores/UplinkCmdStore.cpp
     Application/Data/gps_store.cpp
+    Application/Kalman/kalman_lifecycle.cpp
     
 
     Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp

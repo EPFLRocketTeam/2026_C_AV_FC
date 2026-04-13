@@ -1,6 +1,7 @@
 #include "av_state.h"
 #include "Application/Data/data.hpp"
 #include "Application/FlightControl/threshold.h"
+#include "Application/Kalman/kalman_lifecycle.h"
 #include <iostream>
 
 AvState::AvState() { this->currentState = State::INIT; }
@@ -204,6 +205,8 @@ State AvState::fromAbortInFlight(DataDump const &dump) {
 }
 
 void AvState::update(const DataDump &dump) {
+  const State previous_state = currentState;
+
   switch (currentState) {
   case State::INIT:
     currentState = fromInit(dump);
@@ -243,6 +246,15 @@ void AvState::update(const DataDump &dump) {
     break;
   default:
     currentState = State::ABORT_ON_GROUND;
+  }
+
+  if (currentState != previous_state) {
+    kalman_on_state_change(static_cast<uint32_t>(currentState));
+
+    // Liftoff contract: first in-flight state reached by this FSM is BURN.
+    if (currentState == State::BURN) {
+      kalman_on_liftoff(dump.av_timestamp);
+    }
   }
 }
 std::string AvState::stateToString(State state) {
