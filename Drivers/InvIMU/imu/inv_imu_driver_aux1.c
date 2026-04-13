@@ -15,7 +15,7 @@
  *
  */
 
-#include "inv_imu_driver_aux1.h"
+#include "imu/inv_imu_driver_aux1.h"
 
 #if INV_IMU_AUX1_SUPPORTED
 

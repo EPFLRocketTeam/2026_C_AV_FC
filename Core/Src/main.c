@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Application/main.h"
+#include "Application/Kalman/kalman_process.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,6 +56,7 @@ SPI_HandleTypeDef hspi6;
 
 UART_HandleTypeDef huart7;
 UART_HandleTypeDef huart1;
+
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -711,6 +713,7 @@ void StartKalmanTask(void *argument)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
+  kalman_loop();
   for(;;)
   {
 

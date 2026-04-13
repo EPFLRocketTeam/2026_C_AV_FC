@@ -13,9 +13,11 @@ extern "C" {
 extern SPI_HandleTypeDef hspi1;
 extern osThreadId_t kalmanTaskHandle;
 
-static RingBuffer<IMUData, 100> imuData1;
-static RingBuffer<IMUData, 100> imuData2;
-static RingBuffer<IMUData, 100> imuData3;
+
+RingBuffer<IMUData, 100> imuData1;
+RingBuffer<IMUData, 100> imuData2;
+RingBuffer<IMUData, 100> imuData3;
+
 
 void mainLoop() {
     Config imu_cfg{};
