@@ -3,6 +3,10 @@
 #include "cmsis_os.h"
 #include "Application/Kalman/kalman_lifecycle.h"
 #include "Application/Kalman/AppLayer/eskf_estimator.hpp"
+#include "Application/Kalman/AppLayer/apogee_hub.hpp"
+#include "Application/Kalman/AppLayer/apogee_factory.hpp"
+#include "Application/Kalman/AppLayer/output_bridge.hpp"
+#include "Application/Kalman/kalman_health.hpp"
 #include "Application/Data/fsm.hpp"
 #include "Application/Data/data.hpp"
 #include "Application/Modules/imu_modlue.hpp"
@@ -30,9 +34,15 @@ namespace {
 
 struct KalmanRuntime {
 	app::EskfEstimator estimator;
+	app::ApogeeHub apogee_hub;
+	bool apogee_ready = false;
+	bool apogee_detected = false;
+	uint32_t liftoff_ms = 0;
 	bool initialized = false;
 	uint64_t last_imu_ts_us[3] = {0, 0, 0};
 	flight_computer::State last_state = flight_computer::State::INIT;
+	flight_computer::Vector3 last_body_accel_mps2{};
+	KalmanHealthSnapshot health{};
 	float last_baro_pressure_pa = std::numeric_limits<float>::quiet_NaN();
 	float last_baro_temp_c = std::numeric_limits<float>::quiet_NaN();
 	uint64_t last_baro_ts_us = 0;
@@ -49,6 +59,16 @@ struct KalmanRuntime {
 
 		estimator.reset();
 		estimator.configureReplaySensorCounts(3, 0);
+		if (!apogee_ready) {
+			const int idx = apogee_hub.addAlgorithm(app::createConsensusApogeeDetector());
+			apogee_hub.setPrimary(idx);
+			apogee_ready = true;
+		}
+		KalmanHealthStore::instance().reset();
+		health = KalmanHealthSnapshot{};
+		liftoff_ms = 0;
+		apogee_detected = false;
+		last_body_accel_mps2 = {};
 		last_state = flight_computer::State::INIT;
 		initialized = true;
 	}
@@ -79,12 +99,19 @@ struct KalmanRuntime {
 			last_gps_hacc = std::numeric_limits<uint32_t>::max();
 			last_gps_numsv = 0;
 			last_gps_ts_us = 0;
+			liftoff_ms = 0;
+			apogee_detected = false;
+			last_body_accel_mps2 = {};
+			KalmanHealthStore::instance().reset();
 		}
 	}
 
 	void onLiftoff(uint32_t liftoff_ms) {
 		initIfNeeded();
+		this->liftoff_ms = liftoff_ms;
 		estimator.onLiftoff(liftoff_ms);
+		apogee_hub.arm(liftoff_ms);
+		apogee_detected = false;
 	}
 
 	static app::ImuSample convertImuSample(const IMUData &sample) {
@@ -130,11 +157,55 @@ struct KalmanRuntime {
 		batch.slot = 0xFF;
 
 		estimator.processImuBatch(batch);
+
+		last_body_accel_mps2.x = sample.accel_x;
+		last_body_accel_mps2.y = sample.accel_y;
+		last_body_accel_mps2.z = sample.accel_z;
+		health.imu_samples_consumed += 1;
 	}
 
 	void onTick(uint64_t now_us) {
 		initIfNeeded();
 		estimator.onTick(now_us);
+
+		const app::EstimatorOutput output = estimator.output();
+		const bool eskf_diverged = estimator.isEskfDiverged();
+		auto &goat = flight_computer::GOATStore::get_instance();
+
+		const auto nav = app::mapEstimatorToNavigation(
+			output,
+			goat.navigationDataStore.get_baro(),
+			last_body_accel_mps2);
+		goat.navigationDataStore.set(nav);
+
+		auto event = goat.eventStore.get();
+		if (eskf_diverged) {
+			event.catastrophic_failure = true;
+		}
+
+		if (!apogee_detected && liftoff_ms > 0) {
+			const uint32_t now_ms = static_cast<uint32_t>(now_us / 1000ULL);
+			const app::ApogeeInput input = app::buildApogeeInput(
+				output,
+				eskf_diverged,
+				last_state,
+				static_cast<float>(last_body_accel_mps2.x),
+				liftoff_ms,
+				now_ms);
+
+			const app::ApogeeDecision decision = apogee_hub.update(now_ms, input);
+			if (decision.triggered) {
+				apogee_detected = true;
+				event.apogee_detected = true;
+			}
+		}
+
+		goat.eventStore.set(event);
+
+		health.diverged = eskf_diverged;
+		health.altitude_valid = output.altitude_valid;
+		health.velocity_valid = output.velocity_valid;
+		KalmanHealthStore::instance().set(health);
 	}
 
 	void ingestBaroFromStore(const flight_computer::bmp3_data &baro,
@@ -163,6 +234,7 @@ struct KalmanRuntime {
 		sample.source = 0;
 
 		estimator.processBaroSample(sample);
+		health.baro_updates += 1;
 
 		last_baro_pressure_pa = pressure_pa;
 		last_baro_temp_c = temp_c;
@@ -209,6 +281,7 @@ struct KalmanRuntime {
 		}
 
 		estimator.processGpsSample(sample);
+		health.gps_updates += 1;
 
 		last_gps_lat = gps.lat;
 		last_gps_lon = gps.lon;

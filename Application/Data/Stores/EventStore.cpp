@@ -15,7 +15,12 @@ Event::Event()
     seperated(false),
     chute_unreefed(false),
     ignition_failed(false),
-    catastrophic_failure(false)
+    catastrophic_failure(false),
+    timer_launch_delay(false),
+    cut_off_detected(false),
+    apogee_detected(false),
+    touchdown_detected(false),
+    vertical_acc_hold(false)
 {}
 
 EventStore::EventStore() {}

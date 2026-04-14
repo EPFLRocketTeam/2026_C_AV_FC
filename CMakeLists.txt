@@ -85,6 +85,8 @@ SET(FC_SOURCE_FILES
     Application/Kalman/AppLayer/state_estimator.cpp
     Application/Kalman/AppLayer/descent_nav_filter.cpp
     Application/Kalman/AppLayer/eskf_estimator.cpp
+    Application/Kalman/AppLayer/output_bridge.cpp
+    Application/Kalman/kalman_health.cpp
     
 
     Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp
