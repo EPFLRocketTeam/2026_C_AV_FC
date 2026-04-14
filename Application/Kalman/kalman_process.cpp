@@ -4,6 +4,7 @@
 #include "Application/Kalman/kalman_lifecycle.h"
 #include "Application/Kalman/AppLayer/eskf_estimator.hpp"
 #include "Application/Data/fsm.hpp"
+#include "Application/Data/data.hpp"
 #include "Application/Modules/imu_modlue.hpp"
 
 extern "C" {
@@ -14,6 +15,8 @@ extern "C" {
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 
 extern osMutexId_t imuData1MutexHandle;
 extern osMutexId_t imuData2MutexHandle;
@@ -30,6 +33,14 @@ struct KalmanRuntime {
 	bool initialized = false;
 	uint64_t last_imu_ts_us[3] = {0, 0, 0};
 	flight_computer::State last_state = flight_computer::State::INIT;
+	float last_baro_pressure_pa = std::numeric_limits<float>::quiet_NaN();
+	float last_baro_temp_c = std::numeric_limits<float>::quiet_NaN();
+	uint64_t last_baro_ts_us = 0;
+	int32_t last_gps_lat = std::numeric_limits<int32_t>::min();
+	int32_t last_gps_lon = std::numeric_limits<int32_t>::min();
+	uint32_t last_gps_hacc = std::numeric_limits<uint32_t>::max();
+	uint8_t last_gps_numsv = 0;
+	uint64_t last_gps_ts_us = 0;
 
 	void initIfNeeded() {
 		if (initialized) {
@@ -60,6 +71,14 @@ struct KalmanRuntime {
 			last_imu_ts_us[0] = 0;
 			last_imu_ts_us[1] = 0;
 			last_imu_ts_us[2] = 0;
+			last_baro_pressure_pa = std::numeric_limits<float>::quiet_NaN();
+			last_baro_temp_c = std::numeric_limits<float>::quiet_NaN();
+			last_baro_ts_us = 0;
+			last_gps_lat = std::numeric_limits<int32_t>::min();
+			last_gps_lon = std::numeric_limits<int32_t>::min();
+			last_gps_hacc = std::numeric_limits<uint32_t>::max();
+			last_gps_numsv = 0;
+			last_gps_ts_us = 0;
 		}
 	}
 
@@ -117,6 +136,92 @@ struct KalmanRuntime {
 		initIfNeeded();
 		estimator.onTick(now_us);
 	}
+
+	void ingestBaroFromStore(const flight_computer::bmp3_data &baro,
+							 uint64_t now_us) {
+		if (!std::isfinite(baro.pressure) || baro.pressure <= 1000.0) {
+			return;
+		}
+
+		const float pressure_pa = static_cast<float>(baro.pressure);
+		const float temp_c = static_cast<float>(baro.temperature);
+		const bool changed =
+			!std::isfinite(last_baro_pressure_pa) ||
+			std::fabs(pressure_pa - last_baro_pressure_pa) > 0.05f ||
+			std::fabs(temp_c - last_baro_temp_c) > 0.01f;
+
+		if (!changed && (now_us - last_baro_ts_us) < 20000ULL) {
+			return;
+		}
+
+		estimator.onBaroTrigger(now_us);
+
+		app::BaroSample sample{};
+		sample.pressurePa = pressure_pa;
+		sample.temperatureC = temp_c;
+		sample.timestamp_us = now_us;
+		sample.source = 0;
+
+		estimator.processBaroSample(sample);
+
+		last_baro_pressure_pa = pressure_pa;
+		last_baro_temp_c = temp_c;
+		last_baro_ts_us = now_us;
+	}
+
+	void ingestGpsFromStore(const flight_computer::DataDump &dump,
+							uint64_t now_us) {
+		const auto &gps = dump.gps_state;
+		const bool valid_time = gps.valid.validTime;
+		const bool fix_ok =
+			(static_cast<uint8_t>(gps.fixType) >=
+			 static_cast<uint8_t>(GpsFixType::FIX_2D)) &&
+			gps.flags.gnssFixOK;
+		if (!valid_time || !fix_ok) {
+			return;
+		}
+
+		const bool changed =
+			gps.lat != last_gps_lat || gps.lon != last_gps_lon ||
+			gps.hAcc != last_gps_hacc || gps.numSV != last_gps_numsv;
+
+		if (!changed && (now_us - last_gps_ts_us) < 200000ULL) {
+			return;
+		}
+
+		app::sensors::gnss::GnssSample sample{};
+		sample.valid = true;
+		sample.fix_type = static_cast<uint8_t>(gps.fixType);
+		sample.num_sv = gps.numSV;
+		sample.flags = gps.flags.gnssFixOK ? 1U : 0U;
+		sample.timestamp_us = now_us;
+		sample.pps_timestamp_us = now_us;
+		sample.itow_ms = static_cast<uint32_t>(now_us / 1000ULL);
+		sample.lat_deg7 = gps.lat;
+		sample.lon_deg7 = gps.lon;
+		sample.h_acc_mm = gps.hAcc;
+		sample.v_acc_mm = gps.hAcc * 2U;
+		sample.s_acc_mms = std::max<uint32_t>(gps.hAcc, 500U);
+
+		if (std::isfinite(dump.navigationData.altitude)) {
+			sample.alt_msl_mm = static_cast<int32_t>(
+				dump.navigationData.altitude * 1000.0);
+		}
+
+		estimator.processGpsSample(sample);
+
+		last_gps_lat = gps.lat;
+		last_gps_lon = gps.lon;
+		last_gps_hacc = gps.hAcc;
+		last_gps_numsv = gps.numSV;
+		last_gps_ts_us = now_us;
+	}
+
+	void ingestAidingFromStore(const flight_computer::DataDump &dump,
+						   uint64_t now_us) {
+		ingestBaroFromStore(dump.navigationData.baro, now_us);
+		ingestGpsFromStore(dump, now_us);
+	}
 };
 
 KalmanRuntime &runtime() {
@@ -163,6 +268,11 @@ int kalman_loop() {
 	if (latest_imu_ts == 0) {
 		latest_imu_ts = static_cast<uint64_t>(HAL_GetTick()) * 1000ULL;
 	}
+
+	const flight_computer::DataDump &dump =
+		flight_computer::GOATStore::get_instance().get();
+	kalman.ingestAidingFromStore(dump, latest_imu_ts);
+
 	kalman.onTick(latest_imu_ts);
 
 	return drained;
