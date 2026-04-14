@@ -78,7 +78,13 @@ SET(FC_SOURCE_FILES
     Application/Data/Stores/CamsRecordingStore.cpp
     Application/Data/Stores/UplinkCmdStore.cpp
     Application/Data/gps_store.cpp
+    Application/Kalman/kalman_process.cpp
     Application/Kalman/kalman_lifecycle.cpp
+    Application/Kalman/AppLayer/apogee_hub.cpp
+    Application/Kalman/AppLayer/consensus_apogee.cpp
+    Application/Kalman/AppLayer/state_estimator.cpp
+    Application/Kalman/AppLayer/descent_nav_filter.cpp
+    Application/Kalman/AppLayer/eskf_estimator.cpp
     
 
     Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp

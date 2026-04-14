@@ -106,3 +106,22 @@ TEST(KalmanLifecycleHooks, StateHookTracksTransitionsAfterLiftoff) {
     ASSERT_EQ(fsm.getCurrentState(), State::ASCENT);
     EXPECT_EQ(kalman_current_state(), static_cast<uint32_t>(State::ASCENT));
 }
+
+TEST(KalmanLifecycleHooks, LiftoffIsOneShotUntilResetToInit) {
+    kalman_reset_lifecycle();
+
+    kalman_on_liftoff(100);
+    kalman_on_liftoff(200);
+
+    uint32_t liftoff_ms = 0;
+    EXPECT_EQ(kalman_take_pending_liftoff(&liftoff_ms), 1u);
+    EXPECT_EQ(liftoff_ms, 100u);
+    EXPECT_EQ(kalman_take_pending_liftoff(&liftoff_ms), 0u);
+
+    // Re-arm by returning to INIT state.
+    kalman_on_state_change(static_cast<uint32_t>(State::INIT));
+    kalman_on_liftoff(300);
+
+    EXPECT_EQ(kalman_take_pending_liftoff(&liftoff_ms), 1u);
+    EXPECT_EQ(liftoff_ms, 300u);
+}
