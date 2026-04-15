@@ -76,6 +76,7 @@ const osThreadAttr_t kalmanTask_attributes = {
 osMutexId_t imuData1MutexHandle;
 osMutexId_t imuData2MutexHandle;
 osMutexId_t imuData3MutexHandle;
+osMutexId_t gpsDataMutexHandle;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -150,6 +151,7 @@ int main(void)
   imuData1MutexHandle = osMutexNew(NULL);
   imuData2MutexHandle = osMutexNew(NULL);
   imuData3MutexHandle = osMutexNew(NULL);
+  gpsDataMutexHandle = osMutexNew(NULL);
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */

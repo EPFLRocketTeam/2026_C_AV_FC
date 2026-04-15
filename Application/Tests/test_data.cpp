@@ -233,6 +233,9 @@ TEST(GOATStoreTest, DataDumpContainsAllStores)
     EXPECT_EQ(dump.av_state, State::INIT);
     EXPECT_EQ(dump.gps_state.lat, 0);
     EXPECT_EQ(dump.sensStatus.adxl_status, 0);
+    EXPECT_FLOAT_EQ(dump.navSensors.adxl.x, 0.0f);
+    EXPECT_FLOAT_EQ(dump.navSensors.imu[0].accel_x, 0.0f);
+    EXPECT_EQ(dump.navSensors.imu[0].timestamp_us, 0u);
     EXPECT_EQ(dump.propSensors.N2_pressure, 0.0);
     EXPECT_EQ(dump.valves.valve_dpr_pressure_lox, false);
     EXPECT_EQ(dump.navigationData.altitude, 0.0);
@@ -272,26 +275,39 @@ TEST(NavSensorsStoreTest, DefaultConstructedIsZeroInitialized)
     NavSensorsStore store;
     const auto& data = store.get();
 
-    // Verify a sample from each sub-struct
     EXPECT_FLOAT_EQ(data.adxl.x, 0.0f);
-    EXPECT_FLOAT_EQ(data.bmi_gyro.z, 0.0f);
+    EXPECT_FLOAT_EQ(data.imu[0].accel_x, 0.0f);
+    EXPECT_FLOAT_EQ(data.imu[0].gyro_z, 0.0f);
+    EXPECT_EQ(data.imu[0].timestamp_us, 0u);
+    EXPECT_FLOAT_EQ(data.imu[1].accel_y, 0.0f);
+    EXPECT_FLOAT_EQ(data.imu[2].gyro_x, 0.0f);
     EXPECT_DOUBLE_EQ(data.bmp.pressure, 0.0);
 }
 
 TEST(NavSensorsStoreTest, SetAndGetFullStruct)
 {
     NavSensorsStore store;
-    
+
     NavSensors data;
     data.adxl = {1.0f, 2.0f, 3.0f};
-    data.bmi_accel = {4.0f, 5.0f, 6.0f};
+    data.imu[0].accel_x = 4.0f;
+    data.imu[0].accel_y = 5.0f;
+    data.imu[0].accel_z = 6.0f;
+    data.imu[0].gyro_x  = 0.1f;
+    data.imu[0].gyro_y  = 0.2f;
+    data.imu[0].gyro_z  = 0.3f;
+    data.imu[0].temperature  = 25.0f;
+    data.imu[0].timestamp_us = 1000000u;
     data.bmp = {25.5, 1013.25};
 
     store.set(data);
     const auto& result = store.get();
 
     EXPECT_FLOAT_EQ(result.adxl.x, 1.0f);
-    EXPECT_FLOAT_EQ(result.bmi_accel.y, 5.0f);
+    EXPECT_FLOAT_EQ(result.imu[0].accel_y, 5.0f);
+    EXPECT_FLOAT_EQ(result.imu[0].gyro_z, 0.3f);
+    EXPECT_FLOAT_EQ(result.imu[0].temperature, 25.0f);
+    EXPECT_EQ(result.imu[0].timestamp_us, 1000000u);
     EXPECT_DOUBLE_EQ(result.bmp.pressure, 1013.25);
 }
 
@@ -304,30 +320,49 @@ TEST(NavSensorsStoreTest, HelperSettersAndGettersWork)
     adxl375_data adxl_aux = {2.1f, 2.2f, 2.3f};
     store.set_adxl(adxl);
     store.set_adxl_aux(adxl_aux);
-    
+
     EXPECT_FLOAT_EQ(store.get_adxl().x, 1.1f);
     EXPECT_FLOAT_EQ(store.get_adxl_aux().y, 2.2f);
 
-    // 2. BMI sensors (Accel and Gyro)
-    bmi08_sensor_data_f b_accel = {10.0f, 11.0f, 12.0f};
-    bmi08_sensor_data_f b_gyro = {0.1f, 0.2f, 0.3f};
-    bmi08_sensor_data_f b_aux_accel = {20.0f, 21.0f, 22.0f};
-    bmi08_sensor_data_f b_aux_gyro = {0.4f, 0.5f, 0.6f};
+    // 2. Three IMU sensors
+    IMUData imu0;
+    imu0.accel_x = 1.0f; imu0.accel_y = 2.0f; imu0.accel_z = 3.0f;
+    imu0.gyro_x  = 0.1f; imu0.gyro_y  = 0.2f; imu0.gyro_z  = 0.3f;
+    imu0.temperature = 20.0f;
+    imu0.timestamp_us = 100u;
 
-    store.set_bmi_accel(b_accel);
-    store.set_bmi_gyro(b_gyro);
-    store.set_bmi_aux_accel(b_aux_accel);
-    store.set_bmi_aux_gyro(b_aux_gyro);
+    IMUData imu1;
+    imu1.accel_x = 4.0f; imu1.accel_y = 5.0f; imu1.accel_z = 6.0f;
+    imu1.gyro_x  = 0.4f; imu1.gyro_y  = 0.5f; imu1.gyro_z  = 0.6f;
+    imu1.temperature = 21.0f;
+    imu1.timestamp_us = 200u;
 
-    EXPECT_FLOAT_EQ(store.get_bmi_accel().x, 10.0f);
-    EXPECT_FLOAT_EQ(store.get_bmi_gyro().z, 0.3f);
-    EXPECT_FLOAT_EQ(store.get_bmi_aux_accel().y, 21.0f);
-    EXPECT_FLOAT_EQ(store.get_bmi_aux_gyro().x, 0.4f);
+    IMUData imu2;
+    imu2.accel_x = 7.0f; imu2.accel_y = 8.0f; imu2.accel_z = 9.0f;
+    imu2.gyro_x  = 0.7f; imu2.gyro_y  = 0.8f; imu2.gyro_z  = 0.9f;
+    imu2.temperature = 22.0f;
+    imu2.timestamp_us = 300u;
+
+    store.set_imu(0, imu0);
+    store.set_imu(1, imu1);
+    store.set_imu(2, imu2);
+
+    EXPECT_FLOAT_EQ(store.get_imu(0).accel_x, 1.0f);
+    EXPECT_FLOAT_EQ(store.get_imu(0).gyro_z, 0.3f);
+    EXPECT_EQ(store.get_imu(0).timestamp_us, 100u);
+
+    EXPECT_FLOAT_EQ(store.get_imu(1).accel_y, 5.0f);
+    EXPECT_FLOAT_EQ(store.get_imu(1).gyro_x, 0.4f);
+    EXPECT_EQ(store.get_imu(1).timestamp_us, 200u);
+
+    EXPECT_FLOAT_EQ(store.get_imu(2).accel_z, 9.0f);
+    EXPECT_FLOAT_EQ(store.get_imu(2).gyro_y, 0.8f);
+    EXPECT_EQ(store.get_imu(2).timestamp_us, 300u);
 
     // 3. BMP sensors (Pressure and Temperature)
     bmp3_data bmp = {25.0, 1013.25};
     bmp3_data bmp_aux = {26.0, 990.0};
-    
+
     store.set_bmp(bmp);
     store.set_bmp_aux(bmp_aux);
 
@@ -337,22 +372,47 @@ TEST(NavSensorsStoreTest, HelperSettersAndGettersWork)
     EXPECT_DOUBLE_EQ(store.get_bmp_aux().pressure, 990.0);
 }
 
+TEST(NavSensorsStoreTest, OutOfBoundsIndexIsSafe)
+{
+    NavSensorsStore store;
+
+    // get out-of-bounds returns a default-zeroed IMUData.
+    IMUData oob = store.get_imu(3);
+    EXPECT_FLOAT_EQ(oob.accel_x, 0.0f);
+    EXPECT_EQ(oob.timestamp_us, 0u);
+
+    // set out-of-bounds is a no-op — in-range slots unchanged.
+    IMUData d;
+    d.accel_x = 42.0f;
+    store.set_imu(0, d);
+    store.set_imu(99, d);  // no-op
+    EXPECT_FLOAT_EQ(store.get_imu(0).accel_x, 42.0f);
+}
+
 TEST(NavSensorsStoreTest, PrecisionAndBoundaryTesting)
 {
     NavSensorsStore store;
 
-    // Test extreme values
     float extreme_f = 1e6f;
     double extreme_d = 1e12;
+    uint64_t max_ts = std::numeric_limits<uint64_t>::max();
 
     adxl375_data adxl = {extreme_f, -extreme_f, 0.0f};
     bmp3_data bmp = {extreme_d, extreme_d};
+    IMUData imu;
+    imu.accel_x = extreme_f;
+    imu.gyro_z  = -extreme_f;
+    imu.timestamp_us = max_ts;
 
     store.set_adxl(adxl);
     store.set_bmp(bmp);
+    store.set_imu(0, imu);
 
     EXPECT_FLOAT_EQ(store.get_adxl().x, extreme_f);
     EXPECT_DOUBLE_EQ(store.get_bmp().pressure, extreme_d);
+    EXPECT_FLOAT_EQ(store.get_imu(0).accel_x, extreme_f);
+    EXPECT_FLOAT_EQ(store.get_imu(0).gyro_z, -extreme_f);
+    EXPECT_EQ(store.get_imu(0).timestamp_us, max_ts);
 }
 
 TEST(SensStatusStoreTest, DefaultConstructedIsZeroInitialized)
@@ -910,4 +970,127 @@ TEST(UplinkCmdStoreTest, HelperSettersAndGettersWork)
 
     EXPECT_EQ(store.get_id(), 10);
     EXPECT_EQ(store.get_value(), 20);
+}
+
+// =============================================================================
+// GOATStore singleton tests
+// =============================================================================
+
+TEST(GOATStoreSingletonTest, GetInstanceReturnsSameObject)
+{
+    // Two calls to get_instance() must yield the exact same address.
+    GOATStore& a = GOATStore::get_instance();
+    GOATStore& b = GOATStore::get_instance();
+    EXPECT_EQ(&a, &b);
+}
+
+TEST(GOATStoreSingletonTest, MutationVisibleAcrossCalls)
+{
+    // Write a value through one reference, read it through a fresh call.
+    GOATStore::get_instance().stateStore.set(State::BURN);
+    EXPECT_EQ(GOATStore::get_instance().stateStore.get(), State::BURN);
+
+    // Clean up so other tests that use the singleton are not affected.
+    GOATStore::get_instance().stateStore.set(State::INIT);
+}
+
+TEST(GOATStoreSingletonTest, AllSubStoresAccessibleFromSingleton)
+{
+    GOATStore& g = GOATStore::get_instance();
+
+    // Verify every sub-store can be reached and written via the singleton.
+    g.stateStore.set(State::CALIBRATION);
+    g.batteriesStore.set_lpb_voltage(3.7f);
+    g.navigationDataStore.set_altitude(1234.5);
+    g.uplinkCmdStore.set_id(7);
+
+    EXPECT_EQ(g.stateStore.get(), State::CALIBRATION);
+    EXPECT_FLOAT_EQ(g.batteriesStore.get_lpb_voltage(), 3.7f);
+    EXPECT_DOUBLE_EQ(g.navigationDataStore.get_altitude(), 1234.5);
+    EXPECT_EQ(g.uplinkCmdStore.get_id(), 7u);
+
+    // Clean up.
+    g.stateStore.set(State::INIT);
+    g.batteriesStore.set_lpb_voltage(0.0f);
+    g.navigationDataStore.set_altitude(0.0);
+    g.uplinkCmdStore.set_id(0);
+}
+
+TEST(GOATStoreSingletonTest, GetDumpReflectsCurrentSubStoreValues)
+{
+    GOATStore& g = GOATStore::get_instance();
+
+    g.stateStore.set(State::ASCENT);
+    g.propSensorsStore.set_chamber_pressure(42.0);
+    g.valvesStore.set_valve_prb_main_lox(true);
+
+    const DataDump& dump = g.get();
+    EXPECT_EQ(dump.av_state, State::ASCENT);
+    EXPECT_DOUBLE_EQ(dump.propSensors.chamber_pressure, 42.0);
+    EXPECT_TRUE(dump.valves.valve_prb_main_lox);
+
+    // Clean up.
+    g.stateStore.set(State::INIT);
+    g.propSensorsStore.set_chamber_pressure(0.0);
+    g.valvesStore.set_valve_prb_main_lox(false);
+}
+
+TEST(GOATStoreSingletonTest, NavSensorStoreIsWiredIntoDump)
+{
+    GOATStore& g = GOATStore::get_instance();
+
+    // Write all three IMUs and an ADXL through the sub-store.
+    IMUData imu0;
+    imu0.accel_x = 1.5f; imu0.accel_y = 2.5f; imu0.accel_z = 3.5f;
+    imu0.gyro_x  = 0.1f; imu0.gyro_y  = 0.2f; imu0.gyro_z  = 0.3f;
+    imu0.temperature = 25.0f;
+    imu0.timestamp_us = 999u;
+
+    IMUData imu1;
+    imu1.accel_x = 4.0f;
+    imu1.timestamp_us = 1000u;
+
+    IMUData imu2;
+    imu2.gyro_z = 0.9f;
+    imu2.timestamp_us = 1001u;
+
+    adxl375_data adxl{7.0f, 8.0f, 9.0f};
+
+    g.navSensorStore.set_imu(0, imu0);
+    g.navSensorStore.set_imu(1, imu1);
+    g.navSensorStore.set_imu(2, imu2);
+    g.navSensorStore.set_adxl(adxl);
+
+    // Verify round-trip via helper getters.
+    EXPECT_FLOAT_EQ(g.navSensorStore.get_imu(0).accel_x, 1.5f);
+    EXPECT_FLOAT_EQ(g.navSensorStore.get_imu(0).gyro_z, 0.3f);
+    EXPECT_EQ(g.navSensorStore.get_imu(0).timestamp_us, 999u);
+    EXPECT_FLOAT_EQ(g.navSensorStore.get_imu(1).accel_x, 4.0f);
+    EXPECT_EQ(g.navSensorStore.get_imu(1).timestamp_us, 1000u);
+    EXPECT_FLOAT_EQ(g.navSensorStore.get_imu(2).gyro_z, 0.9f);
+    EXPECT_EQ(g.navSensorStore.get_imu(2).timestamp_us, 1001u);
+    EXPECT_FLOAT_EQ(g.navSensorStore.get_adxl().x, 7.0f);
+
+    // Verify the values flow through into the DataDump returned by get().
+    const DataDump& dump = g.get();
+    EXPECT_FLOAT_EQ(dump.navSensors.imu[0].accel_x, 1.5f);
+    EXPECT_FLOAT_EQ(dump.navSensors.imu[0].gyro_z, 0.3f);
+    EXPECT_EQ(dump.navSensors.imu[0].timestamp_us, 999u);
+    EXPECT_FLOAT_EQ(dump.navSensors.imu[1].accel_x, 4.0f);
+    EXPECT_FLOAT_EQ(dump.navSensors.imu[2].gyro_z, 0.9f);
+    EXPECT_FLOAT_EQ(dump.navSensors.adxl.x, 7.0f);
+
+    // Verify set(DataDump) pushes back into navSensorStore.
+    DataDump d = dump;
+    d.navSensors.imu[0].accel_x = 99.0f;
+    d.navSensors.imu[0].timestamp_us = 42u;
+    g.set(d);
+    EXPECT_FLOAT_EQ(g.navSensorStore.get_imu(0).accel_x, 99.0f);
+    EXPECT_EQ(g.navSensorStore.get_imu(0).timestamp_us, 42u);
+
+    // Clean up.
+    g.navSensorStore.set_imu(0, IMUData{});
+    g.navSensorStore.set_imu(1, IMUData{});
+    g.navSensorStore.set_imu(2, IMUData{});
+    g.navSensorStore.set_adxl(adxl375_data{});
 }

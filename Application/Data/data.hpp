@@ -7,6 +7,7 @@
 
 #include "Application/Data/fsm.hpp"
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
+#include "Drivers/InvIMU/InvIMU.h"
 
 namespace flight_computer {
 
@@ -90,22 +91,12 @@ struct adxl375_data {
   adxl375_data(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
 };
 
-struct bmi08_sensor_data_f {
-  float x;
-  float y;
-  float z;
 
-  bmi08_sensor_data_f() : x(0.0f), y(0.0f), z(0.0f) {}
-  bmi08_sensor_data_f(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
-};
 
 struct NavSensors {
   adxl375_data adxl;
   adxl375_data adxl_aux;
-  bmi08_sensor_data_f bmi_accel;
-  bmi08_sensor_data_f bmi_gyro;
-  bmi08_sensor_data_f bmi_aux_accel;
-  bmi08_sensor_data_f bmi_aux_gyro;
+  Drivers::InvIMU::IMUData imu[3];  // imu[0]=imu_1, imu[1]=imu_2, imu[2]=imu_3
   bmp3_data bmp;
   bmp3_data bmp_aux;
 
@@ -333,17 +324,9 @@ public:
   adxl375_data get_adxl_aux() const;
   void set_adxl_aux(const adxl375_data &data);
 
-  bmi08_sensor_data_f get_bmi_accel() const;
-  void set_bmi_accel(const bmi08_sensor_data_f &data);
-
-  bmi08_sensor_data_f get_bmi_gyro() const;
-  void set_bmi_gyro(const bmi08_sensor_data_f &data);
-
-  bmi08_sensor_data_f get_bmi_aux_accel() const;
-  void set_bmi_aux_accel(const bmi08_sensor_data_f &data);
-
-  bmi08_sensor_data_f get_bmi_aux_gyro() const;
-  void set_bmi_aux_gyro(const bmi08_sensor_data_f &data);
+  // index 0 = imu_1, 1 = imu_2, 2 = imu_3. Out-of-bounds: get returns IMUData{}, set is a no-op.
+  Drivers::InvIMU::IMUData get_imu(size_t index) const;
+  void set_imu(size_t index, const Drivers::InvIMU::IMUData &data);
 
   bmp3_data get_bmp() const;
   void set_bmp(const bmp3_data &data);
@@ -547,6 +530,7 @@ struct DataDump {
   SensStatus sensStatus;
   VehiculeOverview vehiculeOverview;
   FlightEventTimers flightEventTimers;
+  NavSensors navSensors;
   PropSensors propSensors;
   Valves valves;
   NavigationData navigationData;
@@ -592,6 +576,7 @@ public:
   VehiculeOverviewStore vehiculeOverviewStore;
   FlightEventTimersStore flightEventTimersStore;
   PropSensorsStore propSensorsStore;
+  NavSensorsStore navSensorStore;
   ValvesStore valvesStore;
   NavigationDataStore navigationDataStore;
   EventStore eventStore;

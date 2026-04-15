@@ -11,6 +11,7 @@ GOATStore::GOATStore() {
   sensStatusStore = SensStatusStore{};
   vehiculeOverviewStore = VehiculeOverviewStore{};
   flightEventTimersStore = FlightEventTimersStore{};
+  navSensorStore = NavSensorsStore{};
   propSensorsStore = PropSensorsStore{};
   valvesStore = ValvesStore{};
   navigationDataStore = NavigationDataStore{};
@@ -26,6 +27,7 @@ const DataDump &GOATStore::get() const {
   data_.sensStatus = sensStatusStore.get();
   data_.flightEventTimers = flightEventTimersStore.get();
   data_.vehiculeOverview = vehiculeOverviewStore.get();
+  data_.navSensors = navSensorStore.get();
   data_.propSensors = propSensorsStore.get();
   data_.valves = valvesStore.get();
   data_.navigationData = navigationDataStore.get();
@@ -41,6 +43,7 @@ void GOATStore::set(const DataDump &value) {
   gpsStore.set(value.gps_state);
   sensStatusStore.set(value.sensStatus);
   flightEventTimersStore.set(value.flightEventTimers);
+  navSensorStore.set(value.navSensors);
   propSensorsStore.set(value.propSensors);
   valvesStore.set(value.valves);
   navigationDataStore.set(value.navigationData);

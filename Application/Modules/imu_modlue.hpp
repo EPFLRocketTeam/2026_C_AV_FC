@@ -4,6 +4,7 @@
 #include "Application/Data/ring_buffer.hpp"
 #include "Application/Modules/module.hpp"
 #include "Drivers/InvIMU/InvIMU.h"
+#include "Application/Data/data.hpp"
 #include <cstdio>
 
 extern osMutexId_t imuData1MutexHandle;
@@ -46,6 +47,7 @@ public:
     return true;
   }
   void update(uint32_t tick_ms) override {
+    flight_computer::GOATStore& g = flight_computer::GOATStore::get_instance();
     for (size_t i = 0; i < kNumSensors; ++i) {
       drivers_[i]->tick();
       IMUData frame{};
@@ -53,6 +55,7 @@ public:
       osMutexAcquire(lock, osWaitForever);
       while (drivers_[i]->getFrame(frame))
         buffers_[i]->append(frame);
+      g.navSensorStore.set_imu(i, frame);
       osMutexRelease(lock);
     }
   }

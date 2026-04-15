@@ -58,3 +58,5 @@ Release
 # cmake build directory
 build
 .vscode
+
+.metadata
