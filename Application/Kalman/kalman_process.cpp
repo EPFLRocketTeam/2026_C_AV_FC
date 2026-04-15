@@ -16,6 +16,7 @@ extern "C" {
 #include "Drivers/InvIMU/InvIMU.h"
 }
 #include "Drivers/InvIMU/InvIMU.hpp"
+#include "Drivers/UBX_GPS/ubx_gps_interface.h"
 
 #include <algorithm>
 #include <cmath>
@@ -25,9 +26,15 @@ extern osMutexId_t imuData1MutexHandle;
 extern osMutexId_t imuData2MutexHandle;
 extern osMutexId_t imuData3MutexHandle;
 
+extern osMutexId_t gpsDataMutexHandle;
+
+
 extern RingBuffer<IMUData, 100> imuData1;
 extern RingBuffer<IMUData, 100> imuData2;
 extern RingBuffer<IMUData, 100> imuData3;
+
+extern RingBuffer<GpsBasicFixData, 100> gpsData;
+
 
 namespace {
 
