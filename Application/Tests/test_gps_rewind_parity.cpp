@@ -67,7 +67,7 @@ void wakeFilterFromHibernation(EskfYieldable& filter,
 
 }  // namespace
 
-TEST(KtpGpsRewindParity, InitializeResetsBuffers) {
+TEST(KalmanGpsRewindParity, InitializeResetsBuffers) {
   EskfYieldable filter;
 
   const State initial = createDefaultState();
@@ -79,7 +79,7 @@ TEST(KtpGpsRewindParity, InitializeResetsBuffers) {
   EXPECT_EQ(filter.kalmanTimestamp(), 0u);
 }
 
-TEST(KtpGpsRewindParity, CatchUpProcessesBufferedImu) {
+TEST(KalmanGpsRewindParity, CatchUpProcessesBufferedImu) {
   EskfYieldable filter;
 
   State initial = createDefaultState();
@@ -101,7 +101,7 @@ TEST(KtpGpsRewindParity, CatchUpProcessesBufferedImu) {
   EXPECT_GT(filter.state().v[0], 0.005);
 }
 
-TEST(KtpGpsRewindParity, BaroAsyncReserveAndSet) {
+TEST(KalmanGpsRewindParity, BaroAsyncReserveAndSet) {
   EskfYieldable filter;
   const State initial = createDefaultState();
   filter.initialize(initial, InitialCovariance::defaults(), ProcessNoise::defaults());
@@ -117,7 +117,7 @@ TEST(KtpGpsRewindParity, BaroAsyncReserveAndSet) {
   (void)filter.catchUp(5000, 100000);
 }
 
-TEST(KtpGpsRewindParity, BaroOnTimeReplayUsesDirectCorrection) {
+TEST(KalmanGpsRewindParity, BaroOnTimeReplayUsesDirectCorrection) {
   EskfYieldable filter;
 
   State initial = createDefaultState();
@@ -140,7 +140,7 @@ TEST(KtpGpsRewindParity, BaroOnTimeReplayUsesDirectCorrection) {
   EXPECT_LT(std::abs(filter.state().p[2]), 10.0);
 }
 
-TEST(KtpGpsRewindParity, BaroLateCompletionUsesInnovationTransport) {
+TEST(KalmanGpsRewindParity, BaroLateCompletionUsesInnovationTransport) {
   EskfYieldable filter_a;
   EskfYieldable filter_b;
 
@@ -188,7 +188,7 @@ TEST(KtpGpsRewindParity, BaroLateCompletionUsesInnovationTransport) {
   EXPECT_GT(delta_pz, 10.0);
 }
 
-TEST(KtpGpsRewindParity, IsBehindStatus) {
+TEST(KalmanGpsRewindParity, IsBehindStatus) {
   EskfYieldable filter;
 
   State initial = createDefaultState();

@@ -1,8 +1,8 @@
 // Hardware-Specific Sensor Calibration Data
-// Application Layer - KTP Flight Computer
+// Application Layer - Flight Computer
 //
 // This file contains lab calibration values for the specific sensors used
-// in the KTP flight computer:
+// in the flight computer:
 //   - 2x ICM-45605 IMUs
 //   - 1x BMP581 Barometer  
 //   - 1x MMC5983MA Magnetometer
@@ -389,7 +389,7 @@ inline const eskf_scalar* getCgTableEntry(size_t index) {
 #include "Application/Kalman/AppLayer/calibration_config.hpp"
 #include "Application/Kalman/AppLayer/eskf_app_config.hpp"
 
-namespace ktp {
+namespace appcfg {
 
 /// Populate CalibrationConfig from eskf calibration data
 inline CalibrationConfig getDefaultCalibrationConfig() {
@@ -474,5 +474,5 @@ inline CalibrationConfig getDefaultCalibrationConfig() {
   return cfg;
 }
 
-}  // namespace ktp
+}  // namespace appcfg
 

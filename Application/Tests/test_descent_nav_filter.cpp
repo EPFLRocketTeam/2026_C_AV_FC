@@ -4,7 +4,7 @@
 
 using app::DescentNavFilter;
 
-TEST(KtpDescentParity, PredictConstantVelocityMotion) {
+TEST(KalmanDescentParity, PredictConstantVelocityMotion) {
   DescentNavFilter filter;
   filter.reset();
 
@@ -30,7 +30,7 @@ TEST(KtpDescentParity, PredictConstantVelocityMotion) {
   EXPECT_NEAR(s.velocity_ned[2], 10.0f, 0.05f);
 }
 
-TEST(KtpDescentParity, GnssPositionUpdatePullsState) {
+TEST(KalmanDescentParity, GnssPositionUpdatePullsState) {
   DescentNavFilter filter;
   filter.reset();
 
@@ -53,7 +53,7 @@ TEST(KtpDescentParity, GnssPositionUpdatePullsState) {
   EXPECT_GE(filter.stats().gnss_pos_updates, 1u);
 }
 
-TEST(KtpDescentParity, LargeOutlierRejected) {
+TEST(KalmanDescentParity, LargeOutlierRejected) {
   DescentNavFilter filter;
   filter.reset();
 
@@ -78,7 +78,7 @@ TEST(KtpDescentParity, LargeOutlierRejected) {
   EXPECT_GE(filter.stats().gnss_pos_rejects, 1u);
 }
 
-TEST(KtpDescentParity, BaroBiasObservable) {
+TEST(KalmanDescentParity, BaroBiasObservable) {
   DescentNavFilter filter;
   filter.reset();
 
@@ -104,7 +104,7 @@ TEST(KtpDescentParity, BaroBiasObservable) {
   EXPECT_GT(s.baro_bias_m, 0.0f);
 }
 
-TEST(KtpDescentParity, BaroHoldWindowSkipsCorrection) {
+TEST(KalmanDescentParity, BaroHoldWindowSkipsCorrection) {
   DescentNavFilter filter;
   filter.reset();
 

@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-TEST(NullEstimatorPorted, ComputesAltitudeAndVelocityFromBaroBatch) {
+TEST(NullEstimatorSuite, ComputesAltitudeAndVelocityFromBaroBatch) {
     app::NullEstimator est;
     est.reset();
 
@@ -26,7 +26,7 @@ TEST(NullEstimatorPorted, ComputesAltitudeAndVelocityFromBaroBatch) {
     EXPECT_EQ(out.last_update_ms, 1010u);
 }
 
-TEST(NullEstimatorPorted, LiftoffTimestampClampsLastUpdate) {
+TEST(NullEstimatorSuite, LiftoffTimestampClampsLastUpdate) {
     app::NullEstimator est;
     est.reset();
     est.onLiftoff(5000);

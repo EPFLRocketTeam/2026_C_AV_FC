@@ -32,7 +32,7 @@ namespace app {
 class EskfEstimator : public IStateEstimator {
 public:
   /// Configuration for the ESKF estimator
-  struct Config : public ktp::ReplayableConfig {
+  struct Config : public appcfg::ReplayableConfig {
     /// Catchup time budget per tick (microseconds)
     uint32_t catchup_budget_us = ESKF_APP_CATCHUP_BUDGET_US;
 
@@ -46,7 +46,7 @@ public:
   void configure(const Config& cfg);
 
   /// Configure calibration data (call before first use, after configure())
-  void configureCalibration(const ktp::CalibrationConfig& cfg);
+  void configureCalibration(const appcfg::CalibrationConfig& cfg);
 
   /// Native replay override for active synthetic sensor counts.
   /// Leaves Teensy behavior unchanged when not used.
@@ -157,7 +157,7 @@ public:
 
 private:
   Config cfg_{};
-  ktp::CalibrationConfig calib_cfg_{};
+  appcfg::CalibrationConfig calib_cfg_{};
   bool calib_cfg_set_ = false;  ///< True if configureCalibration() was called
   hal::ILogSink* log_ = nullptr;
 

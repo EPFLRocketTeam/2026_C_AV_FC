@@ -110,8 +110,8 @@ void EskfEstimator::interpolateCgAtTimestamp(uint64_t timestamp_us,
 EskfEstimator::EskfEstimator(hal::ILogSink *log) : log_(log) {
   // Initialize configuration with compile-time defaults
   // This ensures valid scaling/tuning even if configure() is not called
-  static_cast<ktp::ReplayableConfig &>(cfg_) = ktp::getDefaultConfig();
-  calib_cfg_ = ktp::getDefaultCalibrationConfig();
+  static_cast<appcfg::ReplayableConfig &>(cfg_) = appcfg::getDefaultConfig();
+  calib_cfg_ = appcfg::getDefaultCalibrationConfig();
 }
 
 void EskfEstimator::configure(const Config &cfg) { cfg_ = cfg; }
@@ -124,7 +124,7 @@ void EskfEstimator::configureReplaySensorCounts(size_t imu_count,
     std::min<size_t>(baro_count, ESKF_MAX_BAROS);
 }
 
-void EskfEstimator::configureCalibration(const ktp::CalibrationConfig &cfg) {
+void EskfEstimator::configureCalibration(const appcfg::CalibrationConfig &cfg) {
   calib_cfg_ = cfg;
   calib_cfg_set_ = true;
 }
@@ -400,7 +400,7 @@ void EskfEstimator::setupVirtualImu() {
       }
     }
 
-    if (i < ktp::kMaxCalibImus) {
+    if (i < appcfg::kMaxCalibImus) {
       for (int axis = 0; axis < 3; ++axis) {
         cfg.imus[i].position[axis] =
             static_cast<eskf_scalar>(calib_cfg_.imu[i].position[axis]);
@@ -457,7 +457,7 @@ void EskfEstimator::setupVirtualImu() {
     dst.gyro_scale[1] = 1.0;
     dst.gyro_scale[2] = 1.0;
 
-    if (i >= cfg.imu_count || i >= ktp::kMaxCalibImus) {
+    if (i >= cfg.imu_count || i >= appcfg::kMaxCalibImus) {
       continue;
     }
 
@@ -1037,7 +1037,7 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
   eskf_scalar temp_data[ESKF_MAX_IMUS][kMaxBatchSize] = {};
   bool source_present[ESKF_MAX_IMUS] = {};
 
-#if KTP_IMU_LOG_FORMAT == 0
+#if APP_IMU_LOG_FORMAT == 0
   const eskf_scalar kAccelScale =
       (static_cast<float>(cfg_.imu_accel_fsr_g) * 9.80665f) / 32768.0f;
   const eskf_scalar kGyroScale =
@@ -1225,7 +1225,7 @@ void EskfEstimator::processBufferedImuBatch(const PendingImuBatch &batch) {
   eskf_sensor_t gyro_data[kMaxBatchSize * 3];
   eskf_scalar temp_data[kMaxBatchSize];
 
-#if KTP_IMU_LOG_FORMAT == 0
+#if APP_IMU_LOG_FORMAT == 0
   const eskf_scalar kAccelScale =
       (static_cast<float>(cfg_.imu_accel_fsr_g) * 9.80665f) / 32768.0f;
   const eskf_scalar kGyroScale =

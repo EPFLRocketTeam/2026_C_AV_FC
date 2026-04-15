@@ -24,7 +24,7 @@ void testCgCallback(void* user_data, uint64_t timestamp_us, eskf_scalar cg_out[3
 
 }  // namespace
 
-TEST(KtpVirtualImuParity, DefaultConfigIdentityRotation) {
+TEST(KalmanVirtualImuParity, DefaultConfigIdentityRotation) {
   ImuSensorConfig cfg{};
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
@@ -34,7 +34,7 @@ TEST(KtpVirtualImuParity, DefaultConfigIdentityRotation) {
   }
 }
 
-TEST(KtpVirtualImuParity, GyroVotingRejectsOutlier) {
+TEST(KalmanVirtualImuParity, GyroVotingRejectsOutlier) {
   VirtualImu vimu;
   VirtualImuConfig cfg{};
   cfg.imu_count = 3;
@@ -71,7 +71,7 @@ TEST(KtpVirtualImuParity, GyroVotingRejectsOutlier) {
   EXPECT_NEAR(output[0].frame.gyro[2], 0.105, 0.05);
 }
 
-TEST(KtpVirtualImuParity, HardFailSkipsVoting) {
+TEST(KalmanVirtualImuParity, HardFailSkipsVoting) {
   VirtualImu vimu;
   VirtualImuConfig cfg{};
   cfg.imu_count = 2;
@@ -96,7 +96,7 @@ TEST(KtpVirtualImuParity, HardFailSkipsVoting) {
   EXPECT_NEAR(output[0].frame.gyro[2], 0.1, kTolF);
 }
 
-TEST(KtpVirtualImuParity, DynamicCentroidShiftsOnFailure) {
+TEST(KalmanVirtualImuParity, DynamicCentroidShiftsOnFailure) {
   VirtualImu vimu;
   VirtualImuConfig cfg{};
   cfg.imu_count = 2;
@@ -120,7 +120,7 @@ TEST(KtpVirtualImuParity, DynamicCentroidShiftsOnFailure) {
   EXPECT_NEAR(output[0].effective_centroid[0], 0.0, kTol);
 }
 
-TEST(KtpVirtualImuParity, CgCallbackUsed) {
+TEST(KalmanVirtualImuParity, CgCallbackUsed) {
   VirtualImu vimu;
   VirtualImuConfig cfg{};
   cfg.imu_count = 1;
@@ -143,7 +143,7 @@ TEST(KtpVirtualImuParity, CgCallbackUsed) {
   EXPECT_EQ(output[0].valid_imu_count, 1u);
 }
 
-TEST(KtpVirtualBaroParity, VotingRejectsOutlier) {
+TEST(KalmanVirtualBaroParity, VotingRejectsOutlier) {
   VirtualBaro vbaro;
   VirtualBaroConfig cfg{};
   cfg.baro_count = 3;
@@ -168,7 +168,7 @@ TEST(KtpVirtualBaroParity, VotingRejectsOutlier) {
   EXPECT_NEAR(out.pressure_pa, 101327.5, 10.0);
 }
 
-TEST(KtpShadowParity, RailResetIdentity) {
+TEST(KalmanShadowParity, RailResetIdentity) {
   RailShadowFilter filter;
   filter.reset();
 
@@ -180,7 +180,7 @@ TEST(KtpShadowParity, RailResetIdentity) {
   EXPECT_TRUE(filter.isGateOpen());
 }
 
-TEST(KtpShadowParity, RailGateClosesDuringHandling) {
+TEST(KalmanShadowParity, RailGateClosesDuringHandling) {
   RailShadowFilter filter;
   filter.reset();
 
@@ -199,7 +199,7 @@ TEST(KtpShadowParity, RailGateClosesDuringHandling) {
   EXPECT_TRUE(filter.isGateOpen());
 }
 
-TEST(KtpShadowParity, FlightAeroBlindIgnoresBaro) {
+TEST(KalmanShadowParity, FlightAeroBlindIgnoresBaro) {
   FlightShadowFilter filter;
   const eskf_scalar initial_q[4] = {1, 0, 0, 0};
   filter.reset(initial_q);
@@ -217,7 +217,7 @@ TEST(KtpShadowParity, FlightAeroBlindIgnoresBaro) {
   EXPECT_NEAR(filter.altitude(), alt_before, kTol);
 }
 
-TEST(KtpShadowParity, FlightReengagementSnap) {
+TEST(KalmanShadowParity, FlightReengagementSnap) {
   FlightShadowFilter filter;
   const eskf_scalar initial_q[4] = {1, 0, 0, 0};
   filter.reset(initial_q);

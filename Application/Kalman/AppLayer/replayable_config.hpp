@@ -12,7 +12,7 @@
 #include "Application/Kalman/AppLayer/hw_config.hpp"
 #include "Application/Kalman/AppLayer/eskf_app_config.hpp"
 
-namespace ktp {
+namespace appcfg {
 
 /// Algorithm-relevant configuration for replay reproducibility.
 /// This struct is serialized to the SD log header at startup.
@@ -359,9 +359,9 @@ inline ReplayableConfig getDefaultConfig() {
 
   return ReplayableConfig{
     // IMU Configuration
-    .imu_odr_hz = KTP_IMU_PRIMARY_ODR_HZ,
-    .imu_accel_fsr_g = static_cast<uint8_t>(KTP_IMU_ACCEL_FSR_G),
-    .imu_gyro_fsr_dps = static_cast<uint16_t>(KTP_IMU_GYRO_FSR_DPS),
+    .imu_odr_hz = APP_IMU_PRIMARY_ODR_HZ,
+    .imu_accel_fsr_g = static_cast<uint8_t>(APP_IMU_ACCEL_FSR_G),
+    .imu_gyro_fsr_dps = static_cast<uint16_t>(APP_IMU_GYRO_FSR_DPS),
     .imu_count = ESKF_APP_IMU_COUNT,
 
     .imu_gyro_voting_threshold =
@@ -532,4 +532,4 @@ inline ReplayableConfig getDefaultConfig() {
   };
 }
 
-} // namespace ktp
+} // namespace appcfg

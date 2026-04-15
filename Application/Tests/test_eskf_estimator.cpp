@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-TEST(EskfEstimatorPorted, BasicLifecycleSmoke) {
+TEST(EskfEstimatorSuite, BasicLifecycleSmoke) {
     app::EskfEstimator estimator;
     estimator.reset();
 

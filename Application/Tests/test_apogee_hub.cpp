@@ -21,7 +21,7 @@ app::ApogeeInput nominalConsensusInput(uint32_t t_since_liftoff_ms) {
 
 }  // namespace
 
-TEST(ApogeeHubPorted, TriggersWhenPrimaryConsensusDetects) {
+TEST(ApogeeHubSuite, TriggersWhenPrimaryConsensusDetects) {
     app::ApogeeHub hub;
     ASSERT_GE(hub.addAlgorithm(app::createConsensusApogeeDetector()), 0);
     hub.setPrimary(0);
@@ -36,7 +36,7 @@ TEST(ApogeeHubPorted, TriggersWhenPrimaryConsensusDetects) {
               app::ApogeeVerdict::Result::Detected);
 }
 
-TEST(ApogeeHubPorted, ShadowEarlyUsesTimeoutOverride) {
+TEST(ApogeeHubSuite, ShadowEarlyUsesTimeoutOverride) {
     app::ApogeeHub hub;
     ASSERT_GE(hub.addAlgorithm(app::createConsensusApogeeDetector()), 0);
     hub.setPrimary(0);

@@ -1,13 +1,17 @@
 #pragma once
 
-#ifndef KTP_IMU_PRIMARY_ODR_HZ
-#define KTP_IMU_PRIMARY_ODR_HZ 6400
+#ifndef APP_IMU_PRIMARY_ODR_HZ
+#define APP_IMU_PRIMARY_ODR_HZ 6400
 #endif
 
-#ifndef KTP_IMU_ACCEL_FSR_G
-#define KTP_IMU_ACCEL_FSR_G 16
+#ifndef APP_IMU_ACCEL_FSR_G
+#define APP_IMU_ACCEL_FSR_G 16
 #endif
 
-#ifndef KTP_IMU_GYRO_FSR_DPS
-#define KTP_IMU_GYRO_FSR_DPS 2000
+#ifndef APP_IMU_GYRO_FSR_DPS
+#define APP_IMU_GYRO_FSR_DPS 2000
+#endif
+
+#ifndef APP_IMU_LOG_FORMAT
+#define APP_IMU_LOG_FORMAT 0
 #endif

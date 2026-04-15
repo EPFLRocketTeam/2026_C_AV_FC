@@ -73,7 +73,7 @@ class NeverDetectAlgo : public app::IApogeeAlgorithm {
 
 }  // namespace
 
-TEST(KtpParityConsensus, BothAgreeDetects) {
+TEST(KalmanParityConsensus, BothAgreeDetects) {
     auto algo = app::createConsensusApogeeDetector();
     algo->reset();
     algo->arm(0);
@@ -94,7 +94,7 @@ TEST(KtpParityConsensus, BothAgreeDetects) {
     ASSERT_NE(decision.reason, nullptr);
 }
 
-TEST(KtpParityConsensus, EskfEarlyVeto) {
+TEST(KalmanParityConsensus, EskfEarlyVeto) {
     auto algo = app::createConsensusApogeeDetector();
     algo->reset();
     algo->arm(0);
@@ -114,7 +114,27 @@ TEST(KtpParityConsensus, EskfEarlyVeto) {
     EXPECT_EQ(decision.result, app::ApogeeVerdict::Result::Vetoed);
 }
 
-TEST(KtpParityConsensus, EskfEarlyNearZeroAllows) {
+TEST(KalmanParityConsensus, EskfEarlyModerateAscentVeto) {
+    auto algo = app::createConsensusApogeeDetector();
+    algo->reset();
+    algo->arm(0);
+
+    app::ApogeeInput input{};
+    input.altitude_m = 1000.0f;
+    input.eskf_valid = true;
+    input.eskf_diverged = false;
+    input.shadow_valid = true;
+    input.is_coast_phase = true;
+    input.body_accel_x_mps2 = -5.0f;
+    input.time_since_liftoff_ms = 5000;
+    input.eskf_velocity_down_mps = 2.0f;
+    input.shadow_velocity_down_mps = -5.0f;
+
+    const app::ApogeeVerdict decision = algo->update(5000, input);
+    EXPECT_EQ(decision.result, app::ApogeeVerdict::Result::Vetoed);
+}
+
+TEST(KalmanParityConsensus, EskfEarlyNearZeroAllows) {
     auto algo = app::createConsensusApogeeDetector();
     algo->reset();
     algo->arm(0);
@@ -134,7 +154,7 @@ TEST(KtpParityConsensus, EskfEarlyNearZeroAllows) {
     EXPECT_EQ(decision.result, app::ApogeeVerdict::Result::Detected);
 }
 
-TEST(KtpParityConsensus, ShadowTimerTimeoutOverride) {
+TEST(KalmanParityConsensus, ShadowTimerTimeoutOverride) {
     auto algo = app::createConsensusApogeeDetector();
     algo->reset();
     algo->arm(0);
@@ -160,7 +180,35 @@ TEST(KtpParityConsensus, ShadowTimerTimeoutOverride) {
     EXPECT_EQ(timeout.result, app::ApogeeVerdict::Result::Detected);
 }
 
-TEST(KtpParityConsensus, DivergedShadowFallbackDetects) {
+TEST(KalmanParityConsensus, ShadowTimerSurvivesTransientClear) {
+    auto algo = app::createConsensusApogeeDetector();
+    algo->reset();
+    algo->arm(0);
+
+    app::ApogeeInput input{};
+    input.altitude_m = 1100.0f;
+    input.eskf_valid = true;
+    input.eskf_diverged = false;
+    input.shadow_valid = true;
+    input.is_coast_phase = true;
+    input.body_accel_x_mps2 = -4.0f;
+    input.time_since_liftoff_ms = 6000;
+
+    input.eskf_velocity_down_mps = -5.0f;
+    input.shadow_velocity_down_mps = 2.0f;
+    const app::ApogeeVerdict start = algo->update(5000, input);
+    EXPECT_EQ(start.result, app::ApogeeVerdict::Result::WaitingTimer);
+
+    input.shadow_velocity_down_mps = -0.1f;
+    const app::ApogeeVerdict clear = algo->update(6400, input);
+    EXPECT_EQ(clear.result, app::ApogeeVerdict::Result::NoDetection);
+
+    input.shadow_velocity_down_mps = 2.0f;
+    const app::ApogeeVerdict timeout = algo->update(6501, input);
+    EXPECT_EQ(timeout.result, app::ApogeeVerdict::Result::Detected);
+}
+
+TEST(KalmanParityConsensus, DivergedShadowFallbackDetects) {
     auto algo = app::createConsensusApogeeDetector();
     algo->reset();
     algo->arm(0);
@@ -179,7 +227,51 @@ TEST(KtpParityConsensus, DivergedShadowFallbackDetects) {
     EXPECT_EQ(verdict.result, app::ApogeeVerdict::Result::Detected);
 }
 
-TEST(KtpParityApogeeHub, PrimaryOnlyTriggers) {
+TEST(KalmanParityConsensus, DivergedSmallShadowDescentStartsTimer) {
+    auto algo = app::createConsensusApogeeDetector();
+    algo->reset();
+    algo->arm(0);
+
+    app::ApogeeInput input{};
+    input.altitude_m = 905.0f;
+    input.eskf_valid = false;
+    input.eskf_diverged = true;
+    input.shadow_valid = true;
+    input.shadow_velocity_down_mps = 0.2f;
+    input.is_coast_phase = true;
+    input.body_accel_x_mps2 = -2.0f;
+    input.time_since_liftoff_ms = 5000;
+
+    const app::ApogeeVerdict verdict = algo->update(5000, input);
+    EXPECT_EQ(verdict.result, app::ApogeeVerdict::Result::WaitingTimer);
+}
+
+TEST(KalmanParityConsensus, DivergedNearZeroTimeoutOverride) {
+    auto algo = app::createConsensusApogeeDetector();
+    algo->reset();
+    algo->arm(0);
+
+    app::ApogeeInput input{};
+    input.altitude_m = 950.0f;
+    input.eskf_valid = false;
+    input.eskf_diverged = true;
+    input.shadow_valid = true;
+    input.shadow_velocity_down_mps = -5.0f;
+    input.is_coast_phase = true;
+    input.body_accel_x_mps2 = -2.0f;
+    input.time_since_liftoff_ms = 5000;
+
+    const app::ApogeeVerdict first = algo->update(5000, input);
+    EXPECT_EQ(first.result, app::ApogeeVerdict::Result::WaitingTimer);
+
+    const app::ApogeeVerdict waiting = algo->update(6400, input);
+    EXPECT_EQ(waiting.result, app::ApogeeVerdict::Result::WaitingTimer);
+
+    const app::ApogeeVerdict timeout = algo->update(6500, input);
+    EXPECT_EQ(timeout.result, app::ApogeeVerdict::Result::Detected);
+}
+
+TEST(KalmanParityApogeeHub, PrimaryOnlyTriggers) {
     app::ApogeeHub hub;
     ASSERT_EQ(hub.addAlgorithm(std::make_unique<NeverDetectAlgo>()), 0);
     ASSERT_EQ(hub.addAlgorithm(std::make_unique<AlwaysDetectAlgo>()), 1);
@@ -195,7 +287,7 @@ TEST(KtpParityApogeeHub, PrimaryOnlyTriggers) {
     EXPECT_EQ(decision.result_count, 2u);
 }
 
-TEST(KtpParityEstimator, Contract13FirstFixNoFuseAfterLateLiftoff) {
+TEST(KalmanParityEstimator, Contract13FirstFixNoFuseAfterLateLiftoff) {
     app::EskfEstimator est;
     app::EskfEstimator::Config cfg{};
     cfg.gps_delay_us = 0;
@@ -221,7 +313,7 @@ TEST(KtpParityEstimator, Contract13FirstFixNoFuseAfterLateLiftoff) {
     EXPECT_NEAR(s.p[2], 8.0, 1e-9);
 }
 
-TEST(KtpParityEstimator, Contract13LiftoffUsesLatestPreflightAnchor) {
+TEST(KalmanParityEstimator, Contract13LiftoffUsesLatestPreflightAnchor) {
     app::EskfEstimator est;
     app::EskfEstimator::Config cfg{};
     cfg.gps_delay_us = 0;
@@ -246,7 +338,7 @@ TEST(KtpParityEstimator, Contract13LiftoffUsesLatestPreflightAnchor) {
     EXPECT_LT(std::abs(s.p[1]), 5.0);
 }
 
-TEST(KtpParityEstimator, Contract16PreflightBypassSkipsCatchup) {
+TEST(KalmanParityEstimator, Contract16PreflightBypassSkipsCatchup) {
     app::EskfEstimator est;
     app::EskfEstimator::Config cfg{};
     cfg.gps_delay_us = 0;
@@ -282,7 +374,7 @@ TEST(KtpParityEstimator, Contract16PreflightBypassSkipsCatchup) {
     EXPECT_NE(est.railShadow().findCheckpointBefore(100000), nullptr);
 }
 
-TEST(KtpParityEstimator, Contract20OnTickWrapDomainMonotonic) {
+TEST(KalmanParityEstimator, Contract20OnTickWrapDomainMonotonic) {
     app::EskfEstimator est;
     app::EskfEstimator::Config cfg{};
     cfg.gps_delay_us = 0;

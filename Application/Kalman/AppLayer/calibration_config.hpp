@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <cstddef>
 
-namespace ktp {
+namespace appcfg {
 
 /// Maximum number of CG table entries for time-varying CG model
 constexpr size_t kMaxCgTableEntries = 8;
@@ -140,4 +140,4 @@ struct CalibrationConfig {
 /// Get default calibration config from hw_calibration_data.hpp values
 CalibrationConfig getDefaultCalibrationConfig();
 
-}  // namespace ktp
+}  // namespace appcfg
