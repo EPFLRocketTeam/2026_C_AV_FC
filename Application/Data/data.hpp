@@ -461,7 +461,6 @@ struct Event {
   bool ignition_failed;
   bool catastrophic_failure;
 
-  // NEW
   bool timer_launch_delay; // TODO: update the store
   bool cut_off_detected;   // TODO: update the store
   bool apogee_detected;    // TODO: update the store

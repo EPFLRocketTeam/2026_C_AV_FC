@@ -1,6 +1,6 @@
 #include "Application/Kalman/AppLayer/eskf_estimator.hpp"
 
-#if APP_TARGET_TEENSY || APP_TARGET_NATIVE
+#if APP_TARGET_TEENSY || APP_TARGET_NATIVE || true
 
 #include "Application/Kalman/AppLayer/hw_calibration_data.hpp"
 #include "Application/Kalman/AppLayer/hw_config.hpp"
@@ -17,6 +17,13 @@
 // which is included via state_estimator.hpp
 
 namespace app {
+
+constexpr size_t EskfEstimator::kMaxImuSources;
+constexpr uint32_t EskfEstimator::kImuSyncToleranceUs;
+constexpr uint32_t EskfEstimator::kImuBatchTimeoutUs;
+constexpr size_t EskfEstimator::kMaxBaroSources;
+constexpr uint32_t EskfEstimator::kBaroSyncToleranceUs;
+constexpr uint32_t EskfEstimator::kBaroBatchTimeoutUs;
 
 namespace {
 
@@ -2040,8 +2047,10 @@ void EskfEstimator::updateTurnOnAccelBiasEstimate(const eskf_scalar nav_accel[3]
   }
 
   const eskf_scalar alpha_raw = static_cast<eskf_scalar>(cfg_.gyro_bias_lpf_alpha);
-  const eskf_scalar alpha = std::clamp(alpha_raw, static_cast<eskf_scalar>(0),
-                                       static_cast<eskf_scalar>(0.99999));
+  const eskf_scalar alpha = std::max(
+		  alpha_raw, std::min(static_cast<eskf_scalar>(0), static_cast<eskf_scalar>(0.99999))
+		  );
+
   for (int i = 0; i < 3; ++i) {
     turn_on_accel_bias_[i] = alpha * turn_on_accel_bias_[i] +
                              (static_cast<eskf_scalar>(1) - alpha) * sample_bias[i];

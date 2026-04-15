@@ -2,7 +2,7 @@
 // ESKF-Based State Estimator
 // Application-level wrapper integrating the Kalman filter subsystem
 
-#if APP_TARGET_TEENSY || APP_TARGET_NATIVE
+#if APP_TARGET_TEENSY || APP_TARGET_NATIVE || true
 
 #include "Application/Kalman/AppLayer/state_estimator.hpp"
 #include "Application/Kalman/AppLayer/eskf_app_config.hpp"
