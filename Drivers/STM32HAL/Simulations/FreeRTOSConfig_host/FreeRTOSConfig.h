@@ -24,7 +24,7 @@
 #define configUSE_COUNTING_SEMAPHORES           1
 #define configUSE_QUEUE_SETS                    1
 #define configQUEUE_REGISTRY_SIZE               8
-#define configSUPPORT_STATIC_ALLOCATION         1
+#define configSUPPORT_STATIC_ALLOCATION         0   /* host/SIL only: scheduler never starts, dynamic alloc (heap-3/malloc) is sufficient */
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
 #define configTOTAL_HEAP_SIZE                   ( ( size_t ) ( 64 * 1024 ) )
 #define configUSE_IDLE_HOOK                     0

@@ -5,8 +5,7 @@
 #include <vector>
 #include <cstring>
 
-// Assuming GpsPvtData is defined in your interface header
-// #include "Drivers/UBX_GPS/ubx_gps_interface.h"
+#include "Drivers/UBX_GPS/ubx_gps_interface.h"
 
 namespace UBXTestHelpers {
 
@@ -126,6 +125,91 @@ inline std::vector<uint8_t> createDefaultPvtPacket() {
     message.push_back(ck_b);
 
     return message;
+}
+
+/**
+ * Returns a copy of the default PVT packet with the last checksum byte (CK_B)
+ * deliberately corrupted. The parser will resync to STATE_SYNC_1 and never
+ * find a valid packet, so getPvt() will eventually time-out.
+ */
+inline std::vector<uint8_t> createPvtPacketBadChecksum() {
+    auto msg = createDefaultPvtPacket();
+    msg.back() ^= 0xFF;  // flip all bits of CK_B
+    return msg;
+}
+
+/**
+ * Parameters for createCustomPvtPacket().
+ * All values are raw UBX units (lat/lon in 1e-7 degrees, hAcc in mm, …).
+ */
+struct PvtPacketParams {
+    int32_t    lat         = 37414496;            // raw 1e-7 deg  (~3.74°)
+    int32_t    lon         = 84505132;            // raw 1e-7 deg  (~8.45°)
+    uint32_t   hAcc        = 80;                  // horizontal accuracy, mm
+    uint8_t    fixType     = 3;                   // 3 = 3-D fix
+    uint8_t    numSV       = 8;                   // satellites used
+    uint8_t    validFlags  = 0x0F;                // all validity bits set
+    uint8_t    statusFlags = 0x01;                // gnssFixOK
+};
+
+/**
+ * Build a complete, valid UBX NAV-PVT packet from the given parameters.
+ * Fields not covered by PvtPacketParams are left at zero.
+ *
+ * UBX NAV-PVT payload layout (92 bytes):
+ *   0-3   iTOW        (u32)
+ *   4-5   year        (u16)
+ *   6     month       (u8)
+ *   7     day         (u8)
+ *   8     hour        (u8)
+ *   9     min         (u8)
+ *  10     sec         (u8)
+ *  11     valid       (u8)  ← validFlags
+ *  12-15  tAcc        (u32)
+ *  16-19  nano        (i32)
+ *  20     fixType     (u8)
+ *  21     flags       (u8)  ← statusFlags
+ *  22     flags2      (u8)
+ *  23     numSV       (u8)
+ *  24-27  lon         (i32)
+ *  28-31  lat         (i32)
+ *  32-35  height      (i32)
+ *  36-39  hMSL        (i32)
+ *  40-43  hAcc        (u32)
+ *  44-91  (other fields, zeroed)
+ */
+inline std::vector<uint8_t> createCustomPvtPacket(const PvtPacketParams& p) {
+    std::vector<uint8_t> msg;
+
+    // Header
+    msg.push_back(0xB5);
+    msg.push_back(0x62);
+    msg.push_back(0x01);  // Class: NAV
+    msg.push_back(0x07);  // ID:    PVT
+    msg.push_back(0x5C);  // Length LSB = 92
+    msg.push_back(0x00);  // Length MSB
+
+    // Payload (92 bytes, zero-initialised)
+    uint8_t payload[92] = {};
+
+    payload[11] = p.validFlags;
+    payload[20] = p.fixType;
+    payload[21] = p.statusFlags;
+    payload[23] = p.numSV;
+    setI4(&payload[24], p.lon);
+    setI4(&payload[28], p.lat);
+    setU4(&payload[40], p.hAcc);
+
+    for (int i = 0; i < 92; ++i)
+        msg.push_back(payload[i]);
+
+    // Checksum over class…payload (everything from byte 2 onwards)
+    uint8_t ck_a = 0, ck_b = 0;
+    ubxChecksum(msg.data() + 2, msg.size() - 2, ck_a, ck_b);
+    msg.push_back(ck_a);
+    msg.push_back(ck_b);
+
+    return msg;
 }
 
 } // namespace UBXTestHelpers

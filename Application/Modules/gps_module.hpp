@@ -19,11 +19,11 @@ public:
       : Module(drivers, buffers) {}
 
   bool init() override {
-	 GpsStatus status = drivers_[0]->init();
-	 if (status == GpsStatus::OK) {
-	     printf("Error starting GPS : got %d \n", (int)status);
-	     return false;
-	 }
+    GpsStatus status = drivers_[0]->init();
+    if (status != GpsStatus::OK) {
+      printf("Error starting GPS : got %d \n", (int)status);
+      return false;
+    }
     return true;
   }
   void update(uint32_t tick_ms) override {

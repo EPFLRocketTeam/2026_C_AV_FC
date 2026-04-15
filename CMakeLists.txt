@@ -155,6 +155,13 @@ include(GoogleTest)
 function(create_test test_name test_file)
     add_executable(${test_name} ${test_file})
     target_link_libraries(${test_name} PRIVATE flight_computer GTest::gtest_main GTest::gmock)
+    # freertos_kernel is a PRIVATE dep of flight_computer, so its include
+    # directories do not propagate.  Add them here so any test that includes
+    # application headers (cmsis_os.h → FreeRTOS.h) can compile without errors.
+    target_include_directories(${test_name} PRIVATE
+        $<TARGET_PROPERTY:freertos_kernel,INTERFACE_INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:freertos_kernel_port,INTERFACE_INCLUDE_DIRECTORIES>
+    )
     gtest_discover_tests(${test_name})
 endfunction()
 
