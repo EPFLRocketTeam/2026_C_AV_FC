@@ -265,3 +265,81 @@ TEST(RingBufferRoundTrip, BulkAppendWithOverwriteThenBulkGet) {
     EXPECT_EQ(dst[2], 5);
     EXPECT_EQ(dst[3], 6);
 }
+
+// =============================================================================
+// clear()
+// =============================================================================
+
+TEST(RingBufferClear, EmptyBufferClearIsNoop) {
+    RingBuffer<int, 4> buf;
+    buf.clear();
+    EXPECT_TRUE(buf.empty());
+    EXPECT_EQ(buf.size(), 0u);
+}
+
+TEST(RingBufferClear, PartialFillClearsToEmpty) {
+    RingBuffer<int, 4> buf;
+    buf.append(1);
+    buf.append(2);
+    buf.clear();
+
+    EXPECT_TRUE(buf.empty());
+    EXPECT_FALSE(buf.full());
+    EXPECT_EQ(buf.size(), 0u);
+    EXPECT_EQ(buf.get(0), nullptr);
+}
+
+TEST(RingBufferClear, FullBufferClearsToEmpty) {
+    RingBuffer<int, 3> buf;
+    buf.append(1);
+    buf.append(2);
+    buf.append(3);
+    EXPECT_TRUE(buf.full());
+
+    buf.clear();
+
+    EXPECT_TRUE(buf.empty());
+    EXPECT_EQ(buf.size(), 0u);
+}
+
+TEST(RingBufferClear, AppendAfterClearWorksCorrectly) {
+    RingBuffer<int, 4> buf;
+    buf.append(10);
+    buf.append(20);
+    buf.clear();
+
+    buf.append(100);
+    buf.append(200);
+    buf.append(300);
+
+    EXPECT_EQ(buf.size(), 3u);
+    EXPECT_EQ(*buf.get(0), 100);
+    EXPECT_EQ(*buf.get(1), 200);
+    EXPECT_EQ(*buf.get(2), 300);
+}
+
+TEST(RingBufferClear, ClearAfterWrapAroundThenRefill) {
+    RingBuffer<int, 3> buf;
+    // Fill and wrap: holds 4, 5, 6
+    for (int i = 1; i <= 6; ++i) buf.append(i);
+
+    buf.clear();
+    EXPECT_TRUE(buf.empty());
+
+    // Refill from scratch: should behave as a fresh buffer
+    buf.append(7);
+    buf.append(8);
+    EXPECT_EQ(buf.size(), 2u);
+    EXPECT_EQ(*buf.get(0), 7);
+    EXPECT_EQ(*buf.get(1), 8);
+}
+
+TEST(RingBufferClear, BulkGetOnClearedBufferReturnsZero) {
+    RingBuffer<int, 4> buf;
+    buf.append(1);
+    buf.append(2);
+    buf.clear();
+
+    int out[4] = {};
+    EXPECT_EQ(buf.get(out, 4), 0u);
+}

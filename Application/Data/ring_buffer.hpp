@@ -91,6 +91,17 @@ class RingBuffer {
     /** @brief True when the buffer has reached its capacity. */
     bool full() const { return size_ == N; }
 
+    /**
+     * @brief Reset the buffer to the empty state.
+     *
+     * Only the metadata (head and size) is reset; the underlying memory is
+     * left untouched. O(1), no element destruction.
+     */
+    void clear() {
+        head_ = 0;
+        size_ = 0;
+    }
+
   private:
     T      buffer_[N]{};
     size_t head_ = 0;  ///< Physical index of the oldest element.
