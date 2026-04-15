@@ -1,4 +1,5 @@
 #include "mock_uart.hpp"
+#include "Drivers/STM32HAL/Simulations/stm32sim_ticks.hpp"
 
 namespace SIMULATOR_NAMESPACE::interfaces {
 
@@ -71,6 +72,7 @@ HAL_StatusTypeDef MockUARTDevice::sOnReceive(void *data, uint8_t *pData, uint16_
     auto *self = static_cast<MockUARTDevice*>(data);
 
     if (self->rxQueue_.size() < Size) {
+        stm32sim_ticks_advance(Timeout);
         return HAL_TIMEOUT;
     }
 

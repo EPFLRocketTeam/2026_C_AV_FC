@@ -47,6 +47,11 @@ void stm32sim_ticks_deinit()
         g_thread.join();
 }
 
+void stm32sim_ticks_advance(uint32_t delta_ms)
+{
+    g_tick.fetch_add(delta_ms, std::memory_order_relaxed);
+}
+
 uint32_t HAL_GetTick()
 {
     return g_tick.load();

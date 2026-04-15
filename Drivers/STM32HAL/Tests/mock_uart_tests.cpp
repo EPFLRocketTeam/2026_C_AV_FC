@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "Drivers/STM32HAL/Interfaces/mock_uart.hpp"
+#include "Drivers/STM32HAL/Simulations/stm32sim_ticks.hpp"
 
 USING_SIMULATOR_NAMESPACE::interfaces;
 
@@ -73,4 +74,17 @@ TEST(MockInterfaceTests, BidirectionalWire) {
     uint8_t aBuf[1] = {};
     HAL_UART_Receive(&uart1, aBuf, 1, 10);
     EXPECT_EQ(aBuf[0], 0x99);
+}
+
+TEST(MockInterfaceTests, TimeoutAdvancesSimulatedTick) {
+    stm32sim_ticks_init();
+
+    MockUARTDevice devA(&uart1);
+    uint8_t buf[1] = {};
+
+    EXPECT_EQ(HAL_GetTick(), 0u);
+    EXPECT_EQ(HAL_UART_Receive(&uart1, buf, 1, 25), HAL_TIMEOUT);
+    EXPECT_EQ(HAL_GetTick(), 25u);
+
+    stm32sim_ticks_deinit();
 }
