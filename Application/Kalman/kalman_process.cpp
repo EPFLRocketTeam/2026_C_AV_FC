@@ -197,8 +197,6 @@ struct KalmanRuntime {
 		// through a dedicated timestamped queue/ring-buffer.
 		// TODO(kalman): Wire GNSS fixes into estimator once GPS module publishes
 		// validated fix packets to the Kalman task boundary.
-		// TODO(kalman): Wire magnetometer heading updates through
-		// estimator.processMagSample when mag pipeline is available.
 	}
 };
 
