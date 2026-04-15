@@ -3,8 +3,10 @@
 
 #include "Application/Data/data.hpp"
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
+#include "Drivers/InvIMU/InvIMU.h"
 
 using namespace flight_computer;
+using namespace Drivers::InvIMU;
 
 
 TEST(StateStoreTest, DefaultStateIsInit)
