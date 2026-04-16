@@ -46,7 +46,9 @@ SET(FC_SOURCE_FILES
     Drivers/STM32HAL/Simulations/stm32sim_gpio.cpp
     Drivers/STM32HAL/Simulations/stm32sim_spi.cpp
 
-    Drivers/InvIMU/Impl/InvIMU_mock.cpp)
+    Drivers/InvIMU/Impl/InvIMU_mock.cpp
+
+    Drivers/BMP390/Impl/BMP390_mock.cpp)
 
 add_library(flight_computer STATIC ${FC_SOURCE_FILES})
 target_link_libraries(flight_computer PRIVATE gcov)
@@ -83,4 +85,5 @@ endfunction()
 add_subdirectory(Application/Tests)
 add_subdirectory(Drivers/STM32HAL/Tests)
 add_subdirectory(Drivers/InvIMU/Tests)
+add_subdirectory(Drivers/BMP390/Tests)
 
