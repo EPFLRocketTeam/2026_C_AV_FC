@@ -2046,10 +2046,11 @@ void EskfEstimator::updateTurnOnAccelBiasEstimate(const eskf_scalar nav_accel[3]
     sample_bias[2] *= scale;
   }
 
-  const eskf_scalar alpha_raw = static_cast<eskf_scalar>(cfg_.gyro_bias_lpf_alpha);
-  const eskf_scalar alpha = std::max(
-		  alpha_raw, std::min(static_cast<eskf_scalar>(0), static_cast<eskf_scalar>(0.99999))
-		  );
+    const eskf_scalar alpha_raw =
+      static_cast<eskf_scalar>(cfg_.gyro_bias_lpf_alpha);
+    const eskf_scalar alpha = std::max(
+      static_cast<eskf_scalar>(0),
+      std::min(alpha_raw, static_cast<eskf_scalar>(0.99999)));
 
   for (int i = 0; i < 3; ++i) {
     turn_on_accel_bias_[i] = alpha * turn_on_accel_bias_[i] +

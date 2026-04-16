@@ -1561,9 +1561,9 @@ void EskfYieldable::processNextEvent() {
             R_vel_inflated[0], R_vel_inflated[1], R_vel_inflated[2]};
           if (vel_pass_soft) {
           const eskf_scalar scale = std::max(
-        		  vel_chi2 / vel_threshold,
-        		  std::min(static_cast<eskf_scalar>(1.0f),
-        				  static_cast<eskf_scalar>(kGpsVelSoftAcceptMultiplier)));
+              static_cast<eskf_scalar>(1.0f),
+              std::min(vel_chi2 / vel_threshold,
+                       static_cast<eskf_scalar>(kGpsVelSoftAcceptMultiplier)));
           R_vel_used[0] *= scale;
           R_vel_used[1] *= scale;
           R_vel_used[2] *= scale;
@@ -1727,9 +1727,9 @@ void EskfYieldable::processNextEvent() {
               R_pos_inflated[0], R_pos_inflated[1], R_pos_inflated[2]};
           if (pos_pass_soft) {
             const eskf_scalar scale = std::max(
-            		pos_chi2 / pos_threshold,
-            		std::min(static_cast<eskf_scalar>(1.0f),
-            				static_cast<eskf_scalar>(kGpsPosSoftAcceptMultiplier)));
+					static_cast<eskf_scalar>(1.0f),
+					std::min(pos_chi2 / pos_threshold,
+							 static_cast<eskf_scalar>(kGpsPosSoftAcceptMultiplier)));
             R_pos_used[0] *= scale;
             R_pos_used[1] *= scale;
             R_pos_used[2] *= scale;
