@@ -42,11 +42,26 @@ endif()
 SET(FC_SOURCE_FILES
     Application/Data/data.cpp
     Application/main.cpp
-    
+    Application/Data/Stores/NavSensorsStore.cpp
+    Application/Data/Stores/SensStatusStore.cpp
+    Application/Data/Stores/PropSensorsStore.cpp
+    Application/Data/Stores/ValvesStore.cpp
+    Application/Data/Stores/NavigationDataStore.cpp
+    Application/Data/Stores/EventStore.cpp
+    Application/Data/Stores/BatteriesStore.cpp
+    Application/Data/Stores/CamsRecordingStore.cpp
+    Application/Data/Stores/UplinkCmdStore.cpp
+    Application/Data/gps_store.cpp
+
+    Drivers/UBX_GPS/Impl/ubx_gps_interface.cpp
+    # Drivers/STM32HAL/stm32hal.cpp
+    Drivers/STM32HAL/Interfaces/mock_uart.cpp
     Drivers/STM32HAL/Simulations/stm32sim_gpio.cpp
     Drivers/STM32HAL/Simulations/stm32sim_spi.cpp
 
     Drivers/InvIMU/Impl/InvIMU_mock.cpp
+    Drivers/STM32HAL/Simulations/stm32sim_ticks.cpp
+    Drivers/STM32HAL/Simulations/stm32sim_uart.cpp
 
     Drivers/BMP390/Impl/BMP390_mock.cpp)
 
@@ -56,6 +71,7 @@ target_include_directories(flight_computer PUBLIC .)
 
 # Add includes here
 # For example target_include_directories(flight_computer PUBLIC Drivers/X)
+
 
 #############################################################
 ######################## GOOGLE TEST ########################
@@ -83,6 +99,7 @@ function(create_test test_name test_file)
 endfunction()
 
 add_subdirectory(Application/Tests)
+add_subdirectory(Drivers/UBX_GPS/Tests)
 add_subdirectory(Drivers/STM32HAL/Tests)
 add_subdirectory(Drivers/InvIMU/Tests)
 add_subdirectory(Drivers/BMP390/Tests)

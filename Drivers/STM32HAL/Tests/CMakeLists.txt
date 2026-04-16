@@ -1,3 +1,5 @@
-
 create_test(stm32sim_gpio_tests stm32sim_gpio_tests.cpp)
 create_test(stm32sim_spi_tests stm32sim_spi_tests.cpp)
+create_test(stm32sim_uart_tests stm32sim_uart_tests.cpp)
+create_test(mock_uart_tests mock_uart_tests.cpp)
+create_test(stm32sim_ticks_tests stm32sim_ticks_tests.cpp)

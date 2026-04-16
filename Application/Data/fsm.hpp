@@ -7,20 +7,25 @@ namespace flight_computer {
         /* =============== On ground =============== */
         INIT,
         CALIBRATION,
-        MANUAL,
+		FILLING,
+
         ARMED,
-        READY,
+        PRESSURIZATION,
+		IGNITION,
 
         /* =============== In flight =============== */
-        THRUSTSEQUENCE,
-        LIFTOFF,
+        BURN,
         ASCENT,
+		DESCENT,
         LANDED,
-        DESCENT,
+
 
         /* ============== Error States ============== */
-        ERRORGROUND,
-        ERRORFLIGHT
+        ABORT_ON_GROUND,
+        ABORT_IN_FLIGHT,
+
+		/* ============== Other ============== */
+		MANUAL,
     };
 };
 

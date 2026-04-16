@@ -5,7 +5,6 @@
 #ifndef UNIT_TEST_ENV
 #include "stm32h7xx_hal.h"
 #else
-
 /* Place your mocked types here */
 
 /*
@@ -20,6 +19,11 @@
 #include "Drivers/STM32HAL/Simulations/stm32sim_gpio.hpp"
 /* Serial Peripheral Interface */
 #include "Drivers/STM32HAL/Simulations/stm32sim_spi.hpp"
+/* General purpose uart */
+#include "Drivers/STM32HAL/Simulations/stm32sim_uart.hpp"
+/* Ticks mock */
+#include "Drivers/STM32HAL/Simulations/stm32sim_ticks.hpp"
+
 
 #endif
 
