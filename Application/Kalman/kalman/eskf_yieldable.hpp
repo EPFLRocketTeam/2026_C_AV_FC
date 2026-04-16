@@ -57,7 +57,7 @@ struct ImuEntry {
 
 /// Barometer ring buffer entry (Innovation Transport pattern, Section 3.4.A)
 /// 
-/// The timestamp is the trigger time (when Teensy commanded conversion).
+/// The timestamp is the trigger time (when the app commanded conversion).
 /// predicted_alt_at_trigger is the ESKF's altitude estimate at trigger time.
 /// When measurement arrives, innovation is: y = alt_m - predicted_alt_at_trigger
 /// This innovation is then applied to the CURRENT state (not trigger-time state).

@@ -10,8 +10,10 @@
 #include <cstring>
 #include <algorithm>
 
-#if APP_TARGET_TEENSY
-#include <Arduino.h>
+#if APP_TARGET_STM32
+extern "C" {
+#include "Core/Inc/main.h"
+}
 #elif APP_TARGET_NATIVE
 #include <chrono>
 #endif
@@ -35,8 +37,8 @@ void resetTimeOrigin() {
 #endif
 
 uint32_t EskfYieldable::nowMicros() const {
-#if APP_TARGET_TEENSY
-  return micros();
+#if APP_TARGET_STM32
+  return static_cast<uint32_t>(HAL_GetTick() * 1000U);
 #elif APP_TARGET_NATIVE
   if (test_now_micros_fn_) {
     return test_now_micros_fn_(test_now_micros_ctx_);

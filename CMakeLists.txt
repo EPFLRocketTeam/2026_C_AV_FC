@@ -114,8 +114,7 @@ SET(FC_SOURCE_FILES
 add_library(flight_computer STATIC ${FC_SOURCE_FILES})
 target_compile_definitions(flight_computer PUBLIC
     APP_TARGET_NATIVE=1
-    APP_TARGET_TEENSY=0
-    APP_TARGET_ESP32=0
+    APP_TARGET_STM32=0
 )
 target_link_libraries(flight_computer PRIVATE
     freertos_kernel

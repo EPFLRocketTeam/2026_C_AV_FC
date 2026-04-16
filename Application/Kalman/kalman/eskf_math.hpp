@@ -3,7 +3,7 @@
 // Part of Phase 1: Standalone Core ESKF Library
 //
 // Provides matrix/vector operations with two backends:
-// - Eigen (default): Full-featured, optimized, recommended for Teensy 4.1
+// - Eigen (default): Full-featured and optimized for host/embedded builds
 // - Custom (ESKF_USE_CUSTOM_LINALG=1): Minimal, for constrained MCUs
 //
 // Quaternion operations are always custom (simple enough, avoid Eigen dependency).
@@ -17,9 +17,9 @@
 // ============================================================
 
 // Platform-specific Eigen includes:
-// - Teensy: Use ArduinoEigen wrapper (handles Arduino macro conflicts)
-// - Native: Direct include from ArduinoEigen's bundled Eigen headers
-#if defined(HAL_PLATFORM_TEENSY) || defined(ARDUINO)
+// - Arduino environments: Use ArduinoEigen wrapper
+// - Host/STM32 builds: Direct include from ArduinoEigen's bundled Eigen headers
+#if defined(ARDUINO)
   #include <ArduinoEigenDense.h>
 #else
   // Native build: directly include Eigen from ArduinoEigen library

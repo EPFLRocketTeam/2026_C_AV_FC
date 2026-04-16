@@ -10,6 +10,7 @@
 #include "eskf_tuning_config.hpp"
 #include "eskf_tuning_defaults.hpp"
 #include "eskf_sizes.hpp"
+#include "target_platform.hpp"
 
 namespace eskf {
 namespace constants {

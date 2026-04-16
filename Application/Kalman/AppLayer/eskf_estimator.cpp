@@ -1,6 +1,6 @@
 #include "Application/Kalman/AppLayer/eskf_estimator.hpp"
 
-#if APP_TARGET_TEENSY || APP_TARGET_NATIVE || true
+#if APP_TARGET_NATIVE || APP_TARGET_STM32
 
 #include "Application/Kalman/AppLayer/hw_calibration_data.hpp"
 #include "Application/Kalman/AppLayer/hw_config.hpp"
@@ -1938,7 +1938,7 @@ void EskfEstimator::onTick(uint64_t now_us) {
       catchup_yield_count_++;
     }
 #else
-    // Production (Teensy): use time budget to avoid blocking the loop too long.
+    // Embedded runtime (STM32): use time budget to avoid blocking the loop too long.
     // This may leave events buffered for the next tick.
     if (!filter_.catchUp(now_us, cfg_.catchup_budget_us)) {
       catchup_yield_count_++;
@@ -2431,4 +2431,4 @@ void EskfEstimator::logImuPipelineIfDue(const eskf::VirtualImuOutput &vout,
 
 } // namespace app
 
-#endif // APP_TARGET_TEENSY || APP_TARGET_NATIVE
+#endif // APP_TARGET_NATIVE || APP_TARGET_STM32

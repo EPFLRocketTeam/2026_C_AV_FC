@@ -2,7 +2,9 @@
 // ESKF-Based State Estimator
 // Application-level wrapper integrating the Kalman filter subsystem
 
-#if APP_TARGET_TEENSY || APP_TARGET_NATIVE || true
+#include "Application/Kalman/kalman/target_platform.hpp"
+
+#if APP_TARGET_NATIVE || APP_TARGET_STM32
 
 #include "Application/Kalman/AppLayer/state_estimator.hpp"
 #include "Application/Kalman/AppLayer/eskf_app_config.hpp"
@@ -49,7 +51,7 @@ public:
   void configureCalibration(const appcfg::CalibrationConfig& cfg);
 
   /// Native replay override for active synthetic sensor counts.
-  /// Leaves Teensy behavior unchanged when not used.
+  /// Leaves STM32 runtime behavior unchanged when not used.
   void configureReplaySensorCounts(size_t imu_count, size_t baro_count);
 
   // --- IStateEstimator interface ---
@@ -365,4 +367,4 @@ private:
 
 }  // namespace app
 
-#endif  // APP_TARGET_TEENSY || APP_TARGET_NATIVE
+#endif  // APP_TARGET_NATIVE || APP_TARGET_STM32
