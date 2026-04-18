@@ -13,6 +13,7 @@
 
 extern "C" {
 #include <Application/Kalman/kalman_process.h>
+#include "Application/main.h"
 #include "Drivers/InvIMU/InvIMU.h"
 }
 #include "Drivers/InvIMU/InvIMU.hpp"
@@ -105,9 +106,9 @@ struct KalmanRuntime {
 	}
 
 	static app::ImuSample convertImuSample(const IMUData &sample) {
-		constexpr float kAccelScale = (16.0f * 9.80665f) / 32768.0f;
+		constexpr float kAccelScale = (INV_IMU_MAX_ACCEL_G * 9.80665f) / 32768.0f;
 		constexpr float kGyroScale =
-			(2000.0f * 3.14159265359f / 180.0f) / 32768.0f;
+			(INV_IMU_MAX_GYRO_DPS * 3.14159265359f / 180.0f) / 32768.0f;
 		constexpr float kTempScale = 1.0f / 2.07f;
 		constexpr float kTempOffsetK = 25.0f + 273.15f;
 
@@ -239,7 +240,19 @@ int kalman_loop() {
 			continue;
 		}
 
+		const bool source_healthy =
+			(app_imu_sensor_healthy(static_cast<uint8_t>(i)) != 0U);
+
 		osMutexAcquire(locks[i], osWaitForever);
+		if (!source_healthy) {
+			while (buffers[i]->pop(sample)) {
+				latest_imu_ts = std::max(latest_imu_ts, sample.timestamp_us);
+				++drained;
+			}
+			osMutexRelease(locks[i]);
+			continue;
+		}
+
 		while (buffers[i]->pop(sample)) {
 			kalman.ingestImu(i, sample);
 			latest_imu_ts = std::max(latest_imu_ts, sample.timestamp_us);

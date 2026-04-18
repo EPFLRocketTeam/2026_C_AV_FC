@@ -133,6 +133,70 @@ gyro_config0_gyro_odr_t InvIMU_STM32::toGyroOdr(ODR odr) {
     }
 }
 
+ipreg_sys2_reg_131_accel_ui_lpfbw_t InvIMU_STM32::toAccelBwDiv(uint8_t div) {
+    switch (div) {
+        case 0:   return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_NO_FILTER;
+        case 4:   return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_4;
+        case 8:   return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_8;
+        case 16:  return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_16;
+        case 32:  return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_32;
+        case 64:  return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_64;
+        case 128: return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_128;
+        default:  return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_4;
+    }
+}
+
+ipreg_sys1_reg_172_gyro_ui_lpfbw_sel_t InvIMU_STM32::toGyroBwDiv(uint8_t div) {
+    switch (div) {
+        case 0:   return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_NO_FILTER;
+        case 4:   return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_4;
+        case 8:   return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_8;
+        case 16:  return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_16;
+        case 32:  return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_32;
+        case 64:  return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_64;
+        case 128: return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_128;
+        default:  return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_4;
+    }
+}
+
+ipreg_sys2_reg_129_accel_lp_avg_sel_t InvIMU_STM32::toAccelLpAvg(uint8_t avg) {
+    switch (avg) {
+        case 1:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_1;
+        case 2:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_2;
+        case 4:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_4;
+        case 5:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_5;
+        case 7:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_7;
+        case 8:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_8;
+        case 10: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_10;
+        case 11: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_11;
+        case 16: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_16;
+        case 18: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_18;
+        case 20: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_20;
+        case 32: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_32;
+        case 64: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_64;
+        default: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_1;
+    }
+}
+
+ipreg_sys1_reg_170_gyro_lp_avg_sel_t InvIMU_STM32::toGyroLpAvg(uint8_t avg) {
+    switch (avg) {
+        case 1:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_1;
+        case 2:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_2;
+        case 4:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_4;
+        case 5:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_5;
+        case 7:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_7;
+        case 8:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_8;
+        case 10: return IPREG_SYS1_REG_170_GYRO_LP_AVG_10;
+        case 11: return IPREG_SYS1_REG_170_GYRO_LP_AVG_11;
+        case 16: return IPREG_SYS1_REG_170_GYRO_LP_AVG_16;
+        case 18: return IPREG_SYS1_REG_170_GYRO_LP_AVG_18;
+        case 20: return IPREG_SYS1_REG_170_GYRO_LP_AVG_20;
+        case 32: return IPREG_SYS1_REG_170_GYRO_LP_AVG_32;
+        case 64: return IPREG_SYS1_REG_170_GYRO_LP_AVG_64;
+        default: return IPREG_SYS1_REG_170_GYRO_LP_AVG_1;
+    }
+}
+
 // ======================================================================
 // 2. CONTEXT WRAPPERS (Bridging static callbacks to instance)
 // ======================================================================
@@ -236,6 +300,10 @@ void InvIMU_STM32::configure(AccelRange ar, GyroRange gr, ODR odr) {
     inv_imu_set_gyro_fsr(&_dev, tdk_gyro_fsr);
     inv_imu_set_accel_frequency(&_dev, tdk_accel_odr);
     inv_imu_set_gyro_frequency(&_dev, tdk_gyro_odr);
+    inv_imu_set_accel_ln_bw(&_dev, toAccelBwDiv(_hw.accel_bw_div));
+    inv_imu_set_accel_lp_avg(&_dev, toAccelLpAvg(_hw.accel_lp_avg));
+    inv_imu_set_gyro_ln_bw(&_dev, toGyroBwDiv(_hw.gyro_bw_div));
+    inv_imu_set_gyro_lp_avg(&_dev, toGyroLpAvg(_hw.gyro_lp_avg));
     inv_imu_set_accel_mode(&_dev, PWR_MGMT0_ACCEL_MODE_LN);
     inv_imu_set_gyro_mode(&_dev, PWR_MGMT0_GYRO_MODE_LN);
 
@@ -579,9 +647,27 @@ void InvIMU_STM32::tick() {
 
     if (count == 0u) return;
 
-    _dma_busy = true;
+#ifndef UNIT_TEST_ENV
+    const bool dma_hw_ready = (_hw.hspi != nullptr) && (_hw.hspi->hdmarx != nullptr);
+#else
+    const bool dma_hw_ready = false;
+#endif
+    const bool use_dma_path = _hw.use_dma && dma_hw_ready;
+
     _last_dma_size = count;
     _dma_irq_time_us = _irq_time_us;
+
+    if (!use_dma_path) {
+        if (spi_read_fifo(REG_FIFO_DATA, _dma_rx_buffer, count) != 0) {
+            _status_flags |= IMU_STATUS_SPI_ERROR;
+            return;
+        }
+        _rx_pending = true;
+        processPendingRx();
+        return;
+    }
+
+    _dma_busy = true;
 
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
     uint8_t reg = REG_FIFO_DATA | 0x80;
@@ -604,6 +690,9 @@ void InvIMU_STM32::tick() {
 }
 
 void InvIMU_STM32::onDmaComplete() {
+    if (!_dma_busy) {
+        return;
+    }
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
     const uint16_t total_bytes = _last_dma_size;
     _invalidate_size = (total_bytes > 0u) ? ((uint32_t)total_bytes + 31u) & ~31u : (uint32_t)kRawBufferSize;

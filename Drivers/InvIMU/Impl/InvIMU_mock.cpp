@@ -13,8 +13,10 @@ InvIMU_Mock::InvIMU_Mock()
       _fifo_max_size(512),
       _interrupt_pending(false),
       _dma_in_progress(false),
+    _use_dma(false),
       _spi_error(false),
       _fifo_overflow(false),
+    _drop_count(0),
       _next_timestamp(0)
 {}
 
@@ -38,6 +40,7 @@ void InvIMU_Mock::enableFsync() {
 void InvIMU_Mock::addMockSample(IMUData sample) {
     if (_fifo.size() >= _fifo_max_size) {
         _fifo_overflow = true;
+        ++_drop_count;
         return;
     }
 
@@ -63,12 +66,17 @@ void InvIMU_Mock::onInterrupt() {
 
 void InvIMU_Mock::tick() {
     if (_interrupt_pending && !_dma_in_progress) {
-        _dma_in_progress = true;
+        if (_use_dma) {
+            _dma_in_progress = true;
+        }
         _interrupt_pending = false;
     }
 }
 
 void InvIMU_Mock::onDmaComplete() {
+    if (!_use_dma) {
+        return;
+    }
     if (_spi_error) {
         _dma_in_progress = false;
         return;
@@ -77,13 +85,28 @@ void InvIMU_Mock::onDmaComplete() {
 }
 
 bool InvIMU_Mock::getFrame(IMUData& out_data) {
-    if (_dma_in_progress) return false;
+    if (_use_dma && _dma_in_progress) return false;
     if (_fifo.empty()) return false;
     if (_spi_error) return false;
 
     out_data = _fifo.front();
     _fifo.pop();
     return true;
+}
+
+uint32_t InvIMU_Mock::statusFlags() const {
+    uint32_t flags = IMU_STATUS_OK;
+    if (_spi_error) {
+        flags |= IMU_STATUS_SPI_ERROR;
+    }
+    if (_fifo_overflow) {
+        flags |= IMU_STATUS_FIFO_OVERFLOW;
+    }
+    return flags;
+}
+
+uint32_t InvIMU_Mock::dropCount() const {
+    return _drop_count;
 }
 
 void InvIMU_Mock::setFifoWatermark(size_t watermark) {
@@ -101,6 +124,13 @@ void InvIMU_Mock::injectSpiError() {
 void InvIMU_Mock::clearErrors() {
     _spi_error = false;
     _fifo_overflow = false;
+}
+
+void InvIMU_Mock::setUseDma(bool enabled) {
+    _use_dma = enabled;
+    if (!enabled) {
+        _dma_in_progress = false;
+    }
 }
 
 void InvIMU_Mock::setBaseTimestamp(uint64_t ts) {

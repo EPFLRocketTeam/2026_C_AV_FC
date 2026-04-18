@@ -53,6 +53,7 @@ TEST_F(InvIMUTest, FifoPreservesOrder) {
 // ==========================================================
 
 TEST_F(InvIMUTest, InterruptTriggersDmaFlow) {
+    imu.setUseDma(true);
     imu.setFifoWatermark(2);
 
     IMUData d{};
@@ -117,6 +118,7 @@ TEST_F(InvIMUTest, TimestampMonotonic) {
 // ==========================================================
 
 TEST_F(InvIMUTest, SpiErrorBlocksDma) {
+    imu.setUseDma(true);
     imu.injectSpiError();
 
     IMUData d{};

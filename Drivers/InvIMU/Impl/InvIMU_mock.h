@@ -21,6 +21,8 @@ public:
     void enableFsync() override;
 
     bool getFrame(IMUData& out_data) override;
+    uint32_t statusFlags() const override;
+    uint32_t dropCount() const override;
 
     void onInterrupt() override;
     void tick() override;
@@ -35,6 +37,7 @@ public:
 
     void injectSpiError();
     void clearErrors();
+    void setUseDma(bool enabled);
 
     void setBaseTimestamp(uint64_t ts);
 
@@ -63,10 +66,12 @@ private:
 
     bool _interrupt_pending;
     bool _dma_in_progress;
+    bool _use_dma;
 
     // Error simulation
     bool _spi_error;
     bool _fifo_overflow;
+    uint32_t _drop_count;
 
     // Timestamp generation
     uint64_t _next_timestamp;
