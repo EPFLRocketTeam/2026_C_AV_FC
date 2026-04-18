@@ -27,12 +27,27 @@ GpsStatus UbxGpsInterface::init() {
   if (status != GpsStatus::OK)
     return status;
 
-  // 2. Enable UBX-NAV-PVT on UART1
-  status = writeCfgVal8(CFG_KEY_MSGOUT_NAV_PVT_UART1, 1);
+  // 2. Configure power mode (ktp-soft parity: high performance by default)
+  status = configurePowerMode();
   if (status != GpsStatus::OK)
     return status;
 
-  // 3. Set configured rate
+  // 3. Configure constellation set
+  status = configureConstellations();
+  if (status != GpsStatus::OK)
+    return status;
+
+  // 4. Configure dynamic model
+  status = configureDynamics();
+  if (status != GpsStatus::OK)
+    return status;
+
+  // 5. Configure auto-output messages
+  status = configureMessages();
+  if (status != GpsStatus::OK)
+    return status;
+
+  // 6. Set configured rate
   status = setRate(rate_ms_);
 
   // Allow GPS to process configs
@@ -150,6 +165,9 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
     case STATE_CK_B:
       if (byte == parser_ck_b_calc_) {
         parseBasicFix(parser_payload_buf_, pvt_data);
+        const uint64_t now_us = static_cast<uint64_t>(HAL_GetTick()) * 1000ULL;
+        pvt_data->timestamp_us = now_us;
+        pvt_data->pps_timestamp_us = 0ULL;
         resetParserState();
         return true;
       }
@@ -225,6 +243,68 @@ void UbxGpsInterface::resetParserState() {
 // ============================================================================
 // PRIVATE HELPER METHODS
 // ============================================================================
+
+GpsStatus UbxGpsInterface::configurePowerMode() {
+#if APP_GPS_HIGH_PERFORMANCE != 0u
+  // 0 = full power / high performance mode.
+  return writeCfgVal8(CFG_KEY_PM_OPERATEMODE, 0u);
+#else
+  return GpsStatus::OK;
+#endif
+}
+
+GpsStatus UbxGpsInterface::configureConstellations() {
+  const uint8_t constellations = static_cast<uint8_t>(APP_GPS_CONSTELLATIONS);
+
+  GpsStatus status =
+      writeCfgVal8(CFG_KEY_SIGNAL_GPS_ENA,
+                   (constellations & GPS_CONSTELLATION_GPS) ? 1u : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  status = writeCfgVal8(CFG_KEY_SIGNAL_GAL_ENA,
+                        (constellations & GPS_CONSTELLATION_GALILEO) ? 1u
+                                                                    : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  status = writeCfgVal8(CFG_KEY_SIGNAL_GLO_ENA,
+                        (constellations & GPS_CONSTELLATION_GLONASS) ? 1u
+                                                                    : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  return writeCfgVal8(CFG_KEY_SIGNAL_BDS_ENA,
+                      (constellations & GPS_CONSTELLATION_BEIDOU) ? 1u : 0u);
+}
+
+GpsStatus UbxGpsInterface::configureDynamics() {
+  return writeCfgVal8(CFG_KEY_NAVSPG_DYNMODEL,
+                      static_cast<uint8_t>(APP_GPS_DYNAMIC_MODEL));
+}
+
+GpsStatus UbxGpsInterface::configureMessages() {
+  const uint16_t messages = static_cast<uint16_t>(APP_GPS_MESSAGES);
+
+  GpsStatus status =
+      writeCfgVal8(CFG_KEY_MSGOUT_NAV_PVT_UART1,
+                   (messages & GPS_MESSAGE_PVT) ? 1u : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  status = writeCfgVal8(CFG_KEY_MSGOUT_NAV_DOP_UART1,
+                        (messages & GPS_MESSAGE_DOP) ? 1u : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  status = writeCfgVal8(CFG_KEY_MSGOUT_NAV_STATUS_UART1,
+                        (messages & GPS_MESSAGE_STATUS) ? 1u : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  return writeCfgVal8(CFG_KEY_MSGOUT_NAV_TIMEUTC_UART1,
+                      (messages & GPS_MESSAGE_TIMEUTC) ? 1u : 0u);
+}
 
 GpsStatus UbxGpsInterface::sendCommand(uint8_t msg_class, uint8_t msg_id,
                                        const uint8_t *payload,
@@ -422,51 +502,40 @@ void UbxGpsInterface::parsePvt(const uint8_t *payload, GpsPvtData *data) {
 
 void UbxGpsInterface::parseBasicFix(const uint8_t *payload,
                                     GpsBasicFixData *data) {
-  const uint8_t *p = payload;
+  GpsPvtData pvt{};
+  parsePvt(payload, &pvt);
+
 #ifdef DEBUG_MODE
   printPayload(payload, 92);
 #endif
-  // Skip to validity flags (offset 11)
-  p += 11;
+  data->iTOW = pvt.iTOW;
+  data->year = pvt.year;
+  data->month = pvt.month;
+  data->day = pvt.day;
+  data->hour = pvt.hour;
+  data->min = pvt.min;
+  data->sec = pvt.sec;
+  data->nano = pvt.nano;
 
-  // --- Validity ---
-  uint8_t validByte = *p++;
-  data->valid.validDate = (validByte & 0x01);
-  data->valid.validTime = (validByte & 0x02);
-  data->valid.fullyResolved = (validByte & 0x04);
-  data->valid.validMag = (validByte & 0x08);
+  data->valid = pvt.valid;
+  data->fixType = pvt.fixType;
+  data->flags = pvt.flags;
+  data->numSV = pvt.numSV;
 
-  // Skip tAcc (4 bytes) and nano (4 bytes)
-  p += 8;
+  data->lon = pvt.lon;
+  data->lat = pvt.lat;
+  data->height = pvt.height;
+  data->hMSL = pvt.hMSL;
+  data->hAcc = pvt.hAcc;
+  data->vAcc = pvt.vAcc;
 
-  // --- Fix Info ---
-  data->fixType = static_cast<GpsFixType>(*p++);
+  data->velN = pvt.velN;
+  data->velE = pvt.velE;
+  data->velD = pvt.velD;
+  data->gSpeed = pvt.gSpeed;
+  data->headMot = pvt.headMot;
+  data->sAcc = pvt.sAcc;
+  data->headAcc = pvt.headAcc;
 
-  // --- Flags ---
-  uint8_t flags = *p++;
-  data->flags.gnssFixOK = (flags & 0x01);
-  data->flags.diffSoln = (flags & 0x02);
-  data->flags.psmState = static_cast<GpsPowerSaveMode>((flags >> 2) & 0x07);
-  data->flags.headVehValid = (flags & 0x20);
-  data->flags.carrSoln =
-      static_cast<GpsCarrierPhaseStatus>((flags >> 6) & 0x03);
-
-  p++; // Skip flags2
-
-  // --- numSV ---
-  data->numSV = *p++;
-
-  // --- Position ---
-  data->lon = getI4(p);
-  p += 4;
-  data->lat = getI4(p);
-  p += 4;
-
-  // Skip height and hMSL
-  p += 8;
-
-  // hAcc
-  data->hAcc = getU4(p);
-  p += 4;
-
+  data->pDOP = pvt.pDOP;
 }

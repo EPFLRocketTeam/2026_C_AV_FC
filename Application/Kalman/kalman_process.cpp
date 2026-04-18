@@ -43,6 +43,7 @@ namespace {
 
 constexpr uint32_t kKalmanThreadWakeFlag = 0x0001U;
 constexpr size_t kMaxImuSamplesPerSourcePerRun = 32u;
+constexpr size_t kMaxGpsSamplesPerRun = 8u;
 #if APP_IMU_PRIMARY_ODR_HZ > 0
 constexpr uint32_t kNominalImuDtUs =
 	static_cast<uint32_t>(1000000ULL / APP_IMU_PRIMARY_ODR_HZ);
@@ -144,6 +145,66 @@ struct KalmanRuntime {
 		return out;
 	}
 
+	static app::sensors::gnss::GnssSample convertGpsFixSample(
+		const GpsBasicFixData &fix,
+		uint64_t fallback_timestamp_us) {
+		app::sensors::gnss::GnssSample sample{};
+
+		sample.timestamp_us =
+			(fix.timestamp_us > 0u) ? fix.timestamp_us : fallback_timestamp_us;
+		sample.pps_timestamp_us = fix.pps_timestamp_us;
+		sample.lat_deg7 = fix.lat;
+		sample.lon_deg7 = fix.lon;
+		sample.alt_msl_mm = fix.hMSL;
+		sample.alt_ellipsoid_mm = fix.height;
+		sample.vel_n_mms = fix.velN;
+		sample.vel_e_mms = fix.velE;
+		sample.vel_d_mms = fix.velD;
+		sample.ground_speed_mms = fix.gSpeed;
+		sample.heading_deg5 = fix.headMot;
+		sample.h_acc_mm = fix.hAcc;
+		sample.v_acc_mm = fix.vAcc;
+		sample.s_acc_mms = fix.sAcc;
+		sample.head_acc_deg5 = fix.headAcc;
+		sample.pdop = fix.pDOP;
+		sample.fix_type = static_cast<uint8_t>(fix.fixType);
+		sample.num_sv = fix.numSV;
+		sample.flags = 0;
+		if (fix.flags.gnssFixOK) {
+			sample.flags |= 0x01u;
+		}
+		if (fix.flags.diffSoln) {
+			sample.flags |= 0x02u;
+		}
+
+		sample.year = fix.year;
+		sample.month = fix.month;
+		sample.day = fix.day;
+		sample.hour = fix.hour;
+		sample.min = fix.min;
+		sample.sec = fix.sec;
+		sample.nano = fix.nano;
+		sample.time_valid = 0;
+		if (fix.valid.validDate) {
+			sample.time_valid |= 0x01u;
+		}
+		if (fix.valid.validTime) {
+			sample.time_valid |= 0x02u;
+		}
+		if (fix.valid.fullyResolved) {
+			sample.time_valid |= 0x04u;
+		}
+		if (fix.valid.validMag) {
+			sample.time_valid |= 0x08u;
+		}
+		sample.itow_ms = fix.iTOW;
+
+		sample.valid =
+			fix.flags.gnssFixOK &&
+			(sample.fix_type >= static_cast<uint8_t>(GpsFixType::FIX_2D));
+		return sample;
+	}
+
 	void ingestImu(size_t source_index, const IMUData &sample) {
 		initIfNeeded();
 
@@ -216,11 +277,39 @@ struct KalmanRuntime {
 	}
 
 	void ingestAidingFromStore() {
+		GpsBasicFixData staged_fixes[kMaxGpsSamplesPerRun] = {};
+		size_t fix_count = 0;
+		bool gps_backlog_pending = false;
+
+		if (gpsDataMutexHandle != nullptr) {
+			osMutexAcquire(gpsDataMutexHandle, osWaitForever);
+		}
+
+		while (fix_count < kMaxGpsSamplesPerRun &&
+			   gpsData.pop(staged_fixes[fix_count])) {
+			++fix_count;
+		}
+		gps_backlog_pending = !gpsData.empty();
+
+		if (gpsDataMutexHandle != nullptr) {
+			osMutexRelease(gpsDataMutexHandle);
+		}
+
+		const uint64_t fallback_timestamp_us =
+			static_cast<uint64_t>(HAL_GetTick()) * 1000ULL;
+		for (size_t i = 0; i < fix_count; ++i) {
+			const app::sensors::gnss::GnssSample sample =
+				convertGpsFixSample(staged_fixes[i], fallback_timestamp_us);
+			estimator.processGpsSample(sample);
+			health.gps_updates += 1;
+		}
+
+		if (gps_backlog_pending && kalmanTaskHandle != nullptr) {
+			osThreadFlagsSet(kalmanTaskHandle, kKalmanThreadWakeFlag);
+		}
 
 		// TODO(kalman): Wire barometer into estimator once BMP samples are exposed
 		// through a dedicated timestamped queue/ring-buffer.
-		// TODO(kalman): Wire GNSS fixes into estimator once GPS module publishes
-		// validated fix packets to the Kalman task boundary.
 	}
 };
 

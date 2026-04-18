@@ -48,6 +48,10 @@ public:
       return;
     }
 
+    if (gpsFix.timestamp_us == 0u) {
+      gpsFix.timestamp_us = static_cast<uint64_t>(tick_ms) * 1000ULL;
+    }
+
     if (gpsDataMutexHandle != nullptr) {
       osMutexAcquire(gpsDataMutexHandle, osWaitForever);
     }
@@ -77,6 +81,8 @@ private:
     }
 
     GpsBasicFixData stale_fix = g.gpsStore.get();
+    stale_fix.timestamp_us = static_cast<uint64_t>(tick_ms) * 1000ULL;
+    stale_fix.pps_timestamp_us = 0ULL;
     stale_fix.fixType = GpsFixType::NO_FIX;
     stale_fix.valid.validDate = false;
     stale_fix.valid.validTime = false;

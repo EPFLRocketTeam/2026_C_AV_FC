@@ -48,6 +48,13 @@ uint8_t g_imu_healthy[3] = {0u, 0u, 0u};
 uint32_t g_imu_status_flags[3] = {IMU_STATUS_OK, IMU_STATUS_OK, IMU_STATUS_OK};
 constexpr uint32_t kKalmanThreadWakeFlag = 0x0001U;
 
+#if APP_GPS_UPDATE_RATE_HZ > 0
+constexpr uint16_t kGpsRateMs = static_cast<uint16_t>(
+    (1000u + (APP_GPS_UPDATE_RATE_HZ / 2u)) / APP_GPS_UPDATE_RATE_HZ);
+#else
+constexpr uint16_t kGpsRateMs = 1000u;
+#endif
+
 constexpr uint16_t kImuIntPins[3] = {
     APP_IMU1_INT_PIN,
     APP_IMU2_INT_PIN,
@@ -132,7 +139,7 @@ void mainLoop() {
     }
         g_imu_module = &imuModule;
 
-    UbxGpsInterface gps(&huart7, 1000);
+    UbxGpsInterface gps(&huart7, kGpsRateMs);
     UbxGpsInterface* gpsArr[] = {&gps};
     RingBuffer<GpsBasicFixData, 100>* gpsRing[] = {&gpsData};
 
