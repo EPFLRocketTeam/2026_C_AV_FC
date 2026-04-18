@@ -43,14 +43,15 @@ TEST(P6OutputBridge, BuildsApogeeInputContract) {
   app::EstimatorOutput out{};
   out.altitude_m = 800.0f;
   out.velocity_ned[2] = 12.5f;
-  out.vertical_velocity_mps = 11.0f;
-  out.velocity_valid = true;
+  out.shadow_velocity_down_mps = 11.0f;
+  out.eskf_valid = true;
+  out.shadow_valid = true;
+  out.body_accel_x_mps2 = -4.0f;
 
   const auto input = app::buildApogeeInput(
       out,
       false,
       flight_computer::State::ASCENT,
-      -4.0f,
       1000,
       1600);
 

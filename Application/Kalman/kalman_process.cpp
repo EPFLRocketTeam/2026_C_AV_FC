@@ -5,6 +5,7 @@
 #include "Application/Kalman/AppLayer/eskf_estimator.hpp"
 #include "Application/Kalman/AppLayer/apogee_hub.hpp"
 #include "Application/Kalman/AppLayer/apogee_factory.hpp"
+#include "Application/Kalman/AppLayer/hw_config.hpp"
 #include "Application/Kalman/AppLayer/output_bridge.hpp"
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Data/fsm.hpp"
@@ -42,6 +43,12 @@ namespace {
 
 constexpr uint32_t kKalmanThreadWakeFlag = 0x0001U;
 constexpr size_t kMaxImuSamplesPerSourcePerRun = 32u;
+#if APP_IMU_PRIMARY_ODR_HZ > 0
+constexpr uint32_t kNominalImuDtUs =
+	static_cast<uint32_t>(1000000ULL / APP_IMU_PRIMARY_ODR_HZ);
+#else
+constexpr uint32_t kNominalImuDtUs = 1000U;
+#endif
 
 struct KalmanRuntime {
 	app::EskfEstimator estimator;
@@ -51,6 +58,7 @@ struct KalmanRuntime {
 	uint32_t liftoff_ms = 0;
 	bool initialized = false;
 	uint64_t last_imu_ts_us[3] = {0, 0, 0};
+	bool has_prev_imu_ts[3] = {false, false, false};
 	flight_computer::State last_state = flight_computer::State::INIT;
 	flight_computer::Vector3 last_body_accel_mps2{};
 	KalmanHealthSnapshot health{};
@@ -94,6 +102,9 @@ struct KalmanRuntime {
 			last_imu_ts_us[0] = 0;
 			last_imu_ts_us[1] = 0;
 			last_imu_ts_us[2] = 0;
+			has_prev_imu_ts[0] = false;
+			has_prev_imu_ts[1] = false;
+			has_prev_imu_ts[2] = false;
 			liftoff_ms = 0;
 			apogee_detected = false;
 			last_body_accel_mps2 = {};
@@ -136,8 +147,10 @@ struct KalmanRuntime {
 	void ingestImu(size_t source_index, const IMUData &sample) {
 		initIfNeeded();
 
+		const bool has_prev_ts = has_prev_imu_ts[source_index];
 		const uint64_t prev_ts = last_imu_ts_us[source_index];
 		last_imu_ts_us[source_index] = sample.timestamp_us;
+		has_prev_imu_ts[source_index] = true;
 
 		app::ImuSample converted = convertImuSample(sample);
 		app::ImuBatch batch{};
@@ -145,9 +158,9 @@ struct KalmanRuntime {
 		batch.count = 1;
 		batch.t0_us = sample.timestamp_us;
 		batch.dt_us =
-			(prev_ts > 0 && sample.timestamp_us > prev_ts)
+			(has_prev_ts && sample.timestamp_us > prev_ts)
 				? static_cast<uint32_t>(sample.timestamp_us - prev_ts)
-				: 1000U;
+				: kNominalImuDtUs;
 		batch.source = static_cast<uint8_t>(source_index);
 		batch.slot = 0xFF;
 
@@ -184,7 +197,6 @@ struct KalmanRuntime {
 				output,
 				eskf_diverged,
 				last_state,
-				static_cast<float>(last_body_accel_mps2.x),
 				liftoff_ms,
 				now_ms);
 
@@ -235,7 +247,10 @@ int kalman_loop() {
 	osMutexId_t locks[] = {imuData1MutexHandle, imuData2MutexHandle,
 						   imuData3MutexHandle};
 
-	IMUData staged_samples[kMaxImuSamplesPerSourcePerRun] = {};
+	IMUData staged_samples[3][kMaxImuSamplesPerSourcePerRun] = {};
+	size_t staged_count[3] = {0, 0, 0};
+	size_t staged_index[3] = {0, 0, 0};
+	bool source_healthy[3] = {false, false, false};
 	int drained = 0;
 	uint64_t latest_imu_ts = 0;
 	bool imu_backlog_pending = false;
@@ -245,15 +260,15 @@ int kalman_loop() {
 			continue;
 		}
 
-		const bool source_healthy =
+		source_healthy[i] =
 			(app_imu_sensor_healthy(static_cast<uint8_t>(i)) != 0U);
 
 		osMutexAcquire(locks[i], osWaitForever);
 		size_t source_samples = 0;
 		while (source_samples < kMaxImuSamplesPerSourcePerRun &&
-			   buffers[i]->pop(staged_samples[source_samples])) {
+			   buffers[i]->pop(staged_samples[i][source_samples])) {
 			latest_imu_ts = std::max(latest_imu_ts,
-							  staged_samples[source_samples].timestamp_us);
+							  staged_samples[i][source_samples].timestamp_us);
 			++source_samples;
 		}
 		if (!buffers[i]->empty()) {
@@ -261,14 +276,36 @@ int kalman_loop() {
 		}
 		osMutexRelease(locks[i]);
 
+		staged_count[i] = source_samples;
 		drained += static_cast<int>(source_samples);
-		if (!source_healthy) {
-			continue;
+	}
+
+	for (;;) {
+		size_t best_source = 3;
+		uint64_t best_ts = UINT64_MAX;
+
+		for (size_t i = 0; i < 3; ++i) {
+			if (!source_healthy[i]) {
+				continue;
+			}
+			if (staged_index[i] >= staged_count[i]) {
+				continue;
+			}
+
+			const uint64_t ts = staged_samples[i][staged_index[i]].timestamp_us;
+			if (ts < best_ts) {
+				best_ts = ts;
+				best_source = i;
+			}
 		}
 
-		for (size_t j = 0; j < source_samples; ++j) {
-			kalman.ingestImu(i, staged_samples[j]);
+		if (best_source >= 3) {
+			break;
 		}
+
+		kalman.ingestImu(best_source,
+					 staged_samples[best_source][staged_index[best_source]]);
+		++staged_index[best_source];
 	}
 
 	if (latest_imu_ts == 0) {

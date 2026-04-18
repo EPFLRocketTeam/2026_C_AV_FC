@@ -52,17 +52,16 @@ flight_computer::NavigationData mapEstimatorToNavigation(
 ApogeeInput buildApogeeInput(const EstimatorOutput& output,
                              bool eskf_diverged,
                              flight_computer::State state,
-                             float body_accel_x_mps2,
                              uint32_t liftoff_ms,
                              uint32_t now_ms) {
   ApogeeInput input{};
   input.altitude_m = output.altitude_m;
   input.eskf_velocity_down_mps = output.velocity_ned[2];
-  input.shadow_velocity_down_mps = output.vertical_velocity_mps;
-  input.eskf_valid = output.velocity_valid;
-  input.shadow_valid = output.velocity_valid;
+  input.shadow_velocity_down_mps = output.shadow_velocity_down_mps;
+  input.eskf_valid = output.eskf_valid;
+  input.shadow_valid = output.shadow_valid;
   input.eskf_diverged = eskf_diverged;
-  input.body_accel_x_mps2 = body_accel_x_mps2;
+  input.body_accel_x_mps2 = output.body_accel_x_mps2;
 
   input.is_coast_phase =
       (state == flight_computer::State::ASCENT ||

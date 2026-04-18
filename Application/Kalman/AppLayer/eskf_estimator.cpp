@@ -2087,6 +2087,12 @@ void EskfEstimator::updateCachedOutput() const {
     cached_output_.vertical_velocity_mps = -ds.velocity_ned[2];
     cached_output_.altitude_valid = true;
     cached_output_.velocity_valid = true;
+    cached_output_.eskf_valid = !isEskfDiverged();
+    cached_output_.shadow_valid =
+      in_flight_ && (flight_shadow_.lastPredictTimestampUs() != 0ULL);
+    cached_output_.shadow_velocity_down_mps =
+      static_cast<float>(flight_shadow_.velocity());
+    cached_output_.body_accel_x_mps2 = static_cast<float>(last_body_accel_x_);
 
     // Descent mode intentionally does not estimate attitude.
     cached_output_.attitude_valid = false;
@@ -2114,6 +2120,12 @@ void EskfEstimator::updateCachedOutput() const {
       static_cast<float>(-s.v[2]); // NED Down → velocity up
   cached_output_.altitude_valid = true;
   cached_output_.velocity_valid = true;
+  cached_output_.eskf_valid = !isEskfDiverged();
+  cached_output_.shadow_valid =
+      in_flight_ && (flight_shadow_.lastPredictTimestampUs() != 0ULL);
+  cached_output_.shadow_velocity_down_mps =
+      static_cast<float>(flight_shadow_.velocity());
+  cached_output_.body_accel_x_mps2 = static_cast<float>(last_body_accel_x_);
 
   // Attitude
   cached_output_.attitude_valid = true;

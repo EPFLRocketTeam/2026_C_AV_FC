@@ -1,5 +1,6 @@
 
 #include "Application/Data/data.hpp"
+#include "Drivers/STM32HAL/stm32hal.h"
 
 using namespace flight_computer;
 
@@ -23,6 +24,7 @@ GOATStore::GOATStore() {
 
 const DataDump &GOATStore::get() const {
   data_.av_state = stateStore.get();
+  data_.av_timestamp = HAL_GetTick();
   data_.gps_state = gpsStore.get();
   data_.sensStatus = sensStatusStore.get();
   data_.flightEventTimers = flightEventTimersStore.get();

@@ -5,11 +5,11 @@
 #endif
 
 #ifndef APP_IMU_ACCEL_FSR_G
-#define APP_IMU_ACCEL_FSR_G 16
+#define APP_IMU_ACCEL_FSR_G 32
 #endif
 
 #ifndef APP_IMU_GYRO_FSR_DPS
-#define APP_IMU_GYRO_FSR_DPS 2000
+#define APP_IMU_GYRO_FSR_DPS 4000
 #endif
 
 #ifndef APP_IMU_LOG_FORMAT

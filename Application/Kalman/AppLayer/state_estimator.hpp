@@ -9,8 +9,12 @@ namespace app {
 struct EstimatorOutput {
   bool altitude_valid = false;
   bool velocity_valid = false;
+  bool eskf_valid = false;
+  bool shadow_valid = false;
   float altitude_m = 0.0f;
   float vertical_velocity_mps = 0.0f;
+  float shadow_velocity_down_mps = 0.0f;
+  float body_accel_x_mps2 = 0.0f;
   uint32_t last_update_ms = 0;
 
   bool attitude_valid = false;
