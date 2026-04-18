@@ -198,7 +198,11 @@ public:
   /**
    * @brief Listen to UART stream for a PVT message
    *
-   * Blocking call that scans UART RX stream for UBX-NAV-PVT header.
+   * Bounded polling call that scans UART RX stream for UBX-NAV-PVT.
+   * Parser state is preserved across calls, so short poll budgets are safe.
+   *
+   * timeout_ms == 0 performs a non-blocking poll of currently available UART
+   * bytes only (no wait).
    *
    * @param[out] pvt_data Pointer to struct where data will be written
    * @param[in] timeout_ms Time to wait before giving up
@@ -217,6 +221,7 @@ private:
   static constexpr uint32_t GPS_TX_TIMEOUT = 100;
   static constexpr uint32_t GPS_BOOT_DELAY_MS = 200;
   static constexpr uint32_t GPS_RX_POLL_TIMEOUT = 10;
+  static constexpr uint32_t GPS_RX_NONBLOCKING_MAX_BYTES = 128;
 
   static constexpr uint8_t UBX_CLASS_CFG = 0x06;
   static constexpr uint8_t UBX_ID_CFG_VALSET = 0x8A;
@@ -256,8 +261,15 @@ private:
   GpsStatus sendCommand(uint8_t msg_class, uint8_t msg_id,
                         const uint8_t *payload, uint16_t payload_len);
   GpsStatus resetReceiver(uint8_t reset_mode, uint16_t nav_bbr_mask);
+  void resetParserState();
   void parsePvt(const uint8_t *payload, GpsPvtData *data);
   void parseBasicFix(const uint8_t *payload, GpsBasicFixData *data);
+
+  ParserState parser_state_ = STATE_SYNC_1;
+  uint8_t parser_payload_buf_[UBX_NAV_PVT_PAYLOAD_LEN] = {};
+  uint16_t parser_payload_idx_ = 0;
+  uint8_t parser_ck_a_calc_ = 0;
+  uint8_t parser_ck_b_calc_ = 0;
 
   // Endian-safe extraction helpers
   static uint32_t getU4(const uint8_t *b) {

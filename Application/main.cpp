@@ -152,10 +152,12 @@ void mainLoop() {
             g_imu_status_flags[i] = imuModule.sensorStatusFlags(i);
         }
 
-        gpsModule.update(currTick);
-        if (imuModule.takeProducedCount() > 0) {
+        const size_t imu_samples_produced = imuModule.takeProducedCount();
+        if (imu_samples_produced > 0u) {
             osThreadFlagsSet(kalmanTaskHandle, kKalmanThreadWakeFlag);
         }
+
+        gpsModule.update(currTick);
 
         // Keep producer/consumer threads cooperative at equal RTOS priority.
         osThreadYield();

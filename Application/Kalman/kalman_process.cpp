@@ -235,7 +235,7 @@ int kalman_loop() {
 	osMutexId_t locks[] = {imuData1MutexHandle, imuData2MutexHandle,
 						   imuData3MutexHandle};
 
-	IMUData sample{};
+	IMUData staged_samples[kMaxImuSamplesPerSourcePerRun] = {};
 	int drained = 0;
 	uint64_t latest_imu_ts = 0;
 	bool imu_backlog_pending = false;
@@ -250,31 +250,25 @@ int kalman_loop() {
 
 		osMutexAcquire(locks[i], osWaitForever);
 		size_t source_samples = 0;
-		if (!source_healthy) {
-			while (source_samples < kMaxImuSamplesPerSourcePerRun &&
-				   buffers[i]->pop(sample)) {
-				latest_imu_ts = std::max(latest_imu_ts, sample.timestamp_us);
-				++drained;
-				++source_samples;
-			}
-			if (!buffers[i]->empty()) {
-				imu_backlog_pending = true;
-			}
-			osMutexRelease(locks[i]);
-			continue;
-		}
-
 		while (source_samples < kMaxImuSamplesPerSourcePerRun &&
-			   buffers[i]->pop(sample)) {
-			kalman.ingestImu(i, sample);
-			latest_imu_ts = std::max(latest_imu_ts, sample.timestamp_us);
-			++drained;
+			   buffers[i]->pop(staged_samples[source_samples])) {
+			latest_imu_ts = std::max(latest_imu_ts,
+							  staged_samples[source_samples].timestamp_us);
 			++source_samples;
 		}
 		if (!buffers[i]->empty()) {
 			imu_backlog_pending = true;
 		}
 		osMutexRelease(locks[i]);
+
+		drained += static_cast<int>(source_samples);
+		if (!source_healthy) {
+			continue;
+		}
+
+		for (size_t j = 0; j < source_samples; ++j) {
+			kalman.ingestImu(i, staged_samples[j]);
+		}
 	}
 
 	if (latest_imu_ts == 0) {

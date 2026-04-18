@@ -166,6 +166,26 @@ TEST_F(UbxGPSTest, TestGetPVT_TimesOutWithNoData) {
     EXPECT_EQ(status, GpsStatus::ERROR_TIMEOUT);
 }
 
+TEST_F(UbxGPSTest, TestGetPVT_NonBlockingBuildsFrameAcrossCalls) {
+    SIMULATOR_NAMESPACE::interfaces::MockUARTDevice mockGps(&huart_gps);
+    UbxGpsInterface gps(mockGps.getHandle(), 1000);
+    ASSERT_EQ(gps.init(), GpsStatus::OK);
+
+    std::vector<uint8_t> pkt = UBXTestHelpers::createDefaultPvtPacket();
+    ASSERT_GT(pkt.size(), 16u);
+    const size_t split = pkt.size() / 2u;
+
+    mockGps.feedRx(std::vector<uint8_t>(pkt.begin(), pkt.begin() + split));
+
+    GpsBasicFixData fix{};
+    EXPECT_EQ(gps.getPvt(&fix, 0), GpsStatus::ERROR_TIMEOUT);
+
+    mockGps.feedRx(std::vector<uint8_t>(pkt.begin() + split, pkt.end()));
+
+    EXPECT_EQ(gps.getPvt(&fix, 0), GpsStatus::OK);
+    EXPECT_EQ(fix.fixType, GpsFixType::FIX_3D);
+}
+
 TEST_F(UbxGPSTest, TestGetPVT_BadChecksumCausesTimeout) {
     SIMULATOR_NAMESPACE::interfaces::MockUARTDevice mockGps(&huart_gps);
     UbxGpsInterface gps(mockGps.getHandle(), 1000);

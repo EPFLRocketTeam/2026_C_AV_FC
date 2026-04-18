@@ -102,21 +102,39 @@ TEST_F(GpsModuleTest, UpdateAppendsToBuffer) {
     EXPECT_EQ(buf_.size(), 1u);
 }
 
-TEST_F(GpsModuleTest, UpdateOnTimeoutStillAppendsZeroedFix) {
-    // When no data is available getPvt() times out, but update() still
-    // appends the zero-initialised GpsBasicFixData to keep the buffer
-    // advancing in lock-step with the scheduler tick.
+TEST_F(GpsModuleTest, UpdateOnTimeoutDoesNotAppend) {
+    // Non-blocking GPS polls should not append synthetic zero fixes when
+    // no complete UBX-NAV-PVT packet is available.
     ASSERT_TRUE(module_->init());
 
-    // No feedRx → getPvt will time out after 150 ms
+    // No feedRx -> getPvt returns timeout in non-blocking mode.
     module_->update(0);
 
+    EXPECT_EQ(buf_.size(), 0u);
+}
+
+TEST_F(GpsModuleTest, TimeoutAfterFixPublishesOneStaleNoFix) {
+    ASSERT_TRUE(module_->init());
+
+    feedValidPacket();
+    module_->update(0);
+    ASSERT_EQ(buf_.size(), 1u);
+
+    // Before stale timeout, timeout polls should not emit no-fix markers.
+    module_->update(1500);
     EXPECT_EQ(buf_.size(), 1u);
-    const GpsBasicFixData* entry = buf_.get(0);
-    ASSERT_NE(entry, nullptr);
-    EXPECT_EQ(entry->lat, 0);
-    EXPECT_EQ(entry->lon, 0);
-    EXPECT_EQ(entry->fixType, GpsFixType::NO_FIX);
+
+    // Once stale timeout is exceeded, emit a single no-fix marker.
+    module_->update(2100);
+    ASSERT_EQ(buf_.size(), 2u);
+    const GpsBasicFixData* stale = buf_.get(1);
+    ASSERT_NE(stale, nullptr);
+    EXPECT_EQ(stale->fixType, GpsFixType::NO_FIX);
+    EXPECT_FALSE(stale->flags.gnssFixOK);
+
+    // Additional timeout polls should not spam repeated stale markers.
+    module_->update(2600);
+    EXPECT_EQ(buf_.size(), 2u);
 }
 
 TEST_F(GpsModuleTest, MultipleUpdatesGrowBuffer) {

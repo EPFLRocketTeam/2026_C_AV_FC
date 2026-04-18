@@ -10,13 +10,16 @@
 
 UbxGpsInterface::UbxGpsInterface(UART_HandleTypeDef *huart,
                                  uint16_t rate_ms)
-    : uart_handle_(huart), rate_ms_(rate_ms) {}
+    : uart_handle_(huart), rate_ms_(rate_ms) {
+  resetParserState();
+}
 
 // ============================================================================
 // PUBLIC METHODS
 // ============================================================================
 
 GpsStatus UbxGpsInterface::init() {
+  resetParserState();
   GpsStatus status;
 
   // 1. Disable NMEA on UART1
@@ -63,127 +66,129 @@ void printPayload(const uint8_t *payload, size_t payloadLen) {
 
 GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
                                   uint32_t timeout_ms) {
-  uint32_t start_tick = HAL_GetTick();
-  uint8_t rx_byte;
-  ParserState step = STATE_SYNC_1;
+  if (pvt_data == nullptr) {
+    return GpsStatus::ERROR_CONFIG;
+  }
 
-  // Buffers
-  uint8_t payload_buf[UBX_NAV_PVT_PAYLOAD_LEN];
-  uint16_t payload_idx = 0;
-  uint8_t ck_a_calc = 0, ck_b_calc = 0;
-#ifdef DEBUG_MODE
-  uint8_t header_part[4];
-#endif
-  while ((HAL_GetTick() - start_tick) < timeout_ms) {
+  uint8_t rx_byte = 0;
+  const uint32_t start_tick = HAL_GetTick();
 
-    // Read 1 byte at a time
-    if (HAL_UART_Receive(uart_handle_, &rx_byte, 1, GPS_RX_POLL_TIMEOUT) ==
-        HAL_OK) {
+  auto processByte = [&](uint8_t byte) -> bool {
+    switch (parser_state_) {
+    case STATE_SYNC_1:
+      if (byte == UBX_SYNC_CHAR_1) {
+        parser_state_ = STATE_SYNC_2;
+      }
+      break;
 
-      switch (step) {
-      case STATE_SYNC_1:
-        if (rx_byte == UBX_SYNC_CHAR_1) {
-          step = STATE_SYNC_2;
-#ifdef DEBUG_MODE
-          header_part[0] = rx_byte;
-#endif
-        }
-        break;
+    case STATE_SYNC_2:
+      if (byte == UBX_SYNC_CHAR_2) {
+        parser_state_ = STATE_CLASS;
+      } else {
+        resetParserState();
+      }
+      break;
 
-      case STATE_SYNC_2:
-    	  // printf("header second: %02X \r\n", rx_byte);
-        if (rx_byte == UBX_SYNC_CHAR_2) {
-          step = STATE_CLASS;
-#ifdef DEBUG_MODE
-          header_part[1] = rx_byte;
-#endif
-        }
-        else
-          step = STATE_SYNC_1;
-        break;
+    case STATE_CLASS:
+      if (byte == UBX_CLASS_NAV) {
+        parser_state_ = STATE_ID;
+        parser_ck_a_calc_ = byte;
+        parser_ck_b_calc_ = byte;
+      } else {
+        resetParserState();
+      }
+      break;
 
-      case STATE_CLASS:
-    	 // printf("State class: %02X \r\n", rx_byte);
-        if (rx_byte == UBX_CLASS_NAV) {
-          step = STATE_ID;
-#ifdef DEBUG_MODE
-          header_part[2] = rx_byte;
-#endif
-          ck_a_calc = rx_byte;
-          ck_b_calc = rx_byte;
-        } else {
-          step = STATE_SYNC_1;
-        }
-        break;
+    case STATE_ID:
+      if (byte == UBX_ID_NAV_PVT) {
+        parser_state_ = STATE_LEN_LSB;
+        parser_ck_a_calc_ += byte;
+        parser_ck_b_calc_ += parser_ck_a_calc_;
+      } else {
+        resetParserState();
+      }
+      break;
 
-      case STATE_ID:
-    	  //printf("State id: %02X \r\n", rx_byte);
-        if (rx_byte == UBX_ID_NAV_PVT) {
-          step = STATE_LEN_LSB;
-#ifdef DEBUG_MODE
-          header_part[3] = rx_byte;
-#endif
-          ck_a_calc += rx_byte;
-          ck_b_calc += ck_a_calc;
-        } else {
-          step = STATE_SYNC_1;
-        }
-        break;
+    case STATE_LEN_LSB:
+      if (byte == (uint8_t)(UBX_NAV_PVT_PAYLOAD_LEN & 0xFFU)) {
+        parser_state_ = STATE_LEN_MSB;
+        parser_ck_a_calc_ += byte;
+        parser_ck_b_calc_ += parser_ck_a_calc_;
+      } else {
+        resetParserState();
+      }
+      break;
 
-      case STATE_LEN_LSB:
-        if (rx_byte == (uint8_t)(UBX_NAV_PVT_PAYLOAD_LEN & 0xFF)) {
-          step = STATE_LEN_MSB;
-          ck_a_calc += rx_byte;
-          ck_b_calc += ck_a_calc;
-        } else {
-          step = STATE_SYNC_1;
-        }
-        break;
+    case STATE_LEN_MSB:
+      if (byte == (uint8_t)(UBX_NAV_PVT_PAYLOAD_LEN >> 8)) {
+        parser_state_ = STATE_PAYLOAD;
+        parser_ck_a_calc_ += byte;
+        parser_ck_b_calc_ += parser_ck_a_calc_;
+        parser_payload_idx_ = 0;
+      } else {
+        resetParserState();
+      }
+      break;
 
-      case STATE_LEN_MSB:
-        if (rx_byte == (uint8_t)(UBX_NAV_PVT_PAYLOAD_LEN >> 8)) {
-          step = STATE_PAYLOAD;
-          ck_a_calc += rx_byte;
-          ck_b_calc += ck_a_calc;
-          payload_idx = 0;
-        } else {
-          step = STATE_SYNC_1;
-        }
-        break;
+    case STATE_PAYLOAD:
+      parser_payload_buf_[parser_payload_idx_++] = byte;
+      parser_ck_a_calc_ += byte;
+      parser_ck_b_calc_ += parser_ck_a_calc_;
+      if (parser_payload_idx_ == UBX_NAV_PVT_PAYLOAD_LEN) {
+        parser_state_ = STATE_CK_A;
+      }
+      break;
 
-      case STATE_PAYLOAD:
-        payload_buf[payload_idx++] = rx_byte;
-        ck_a_calc += rx_byte;
-        ck_b_calc += ck_a_calc;
-        if (payload_idx == UBX_NAV_PVT_PAYLOAD_LEN) {
-          step = STATE_CK_A;
-        }
-        break;
+    case STATE_CK_A:
+      if (byte == parser_ck_a_calc_) {
+        parser_state_ = STATE_CK_B;
+      } else {
+        resetParserState();
+      }
+      break;
 
-      case STATE_CK_A:
+    case STATE_CK_B:
+      if (byte == parser_ck_b_calc_) {
+        parseBasicFix(parser_payload_buf_, pvt_data);
+        resetParserState();
+        return true;
+      }
+      resetParserState();
+      break;
 
-        if (rx_byte == ck_a_calc) {
-          step = STATE_CK_B;
-        } else {
-          step = STATE_SYNC_1;
-        }
-        break;
+    default:
+      resetParserState();
+      break;
+    }
 
-      case STATE_CK_B:
-        if (rx_byte == ck_b_calc) {
-          // --- SUCCESS ---
-#ifdef DEBUG_MODE
-        	printPayload(header_part, 4);
-#endif
-          parseBasicFix(payload_buf, pvt_data);
-          return GpsStatus::OK;
-        }
-        step = STATE_SYNC_1;
-        break;
+    return false;
+  };
 
-      default:
-        step = STATE_SYNC_1;
-        break;
+  if (timeout_ms == 0u) {
+    uint32_t bytes_polled = 0;
+    while (bytes_polled < GPS_RX_NONBLOCKING_MAX_BYTES &&
+           HAL_UART_Receive(uart_handle_, &rx_byte, 1, 0u) == HAL_OK) {
+      ++bytes_polled;
+      if (processByte(rx_byte)) {
+        return GpsStatus::OK;
+      }
+    }
+    return GpsStatus::ERROR_TIMEOUT;
+  }
+
+  while (true) {
+    const uint32_t elapsed_ms = HAL_GetTick() - start_tick;
+    if (elapsed_ms >= timeout_ms) {
+      break;
+    }
+
+    const uint32_t remaining_ms = timeout_ms - elapsed_ms;
+    const uint32_t poll_timeout_ms =
+        (remaining_ms < GPS_RX_POLL_TIMEOUT) ? remaining_ms : GPS_RX_POLL_TIMEOUT;
+
+    if (HAL_UART_Receive(uart_handle_, &rx_byte, 1, poll_timeout_ms) == HAL_OK) {
+      if (processByte(rx_byte)) {
+        return GpsStatus::OK;
       }
     }
   }
@@ -192,6 +197,7 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
 }
 
 GpsStatus UbxGpsInterface::stop() {
+  resetParserState();
   GpsStatus status;
 
   // 1. Disable UBX-NAV-PVT message output
@@ -207,6 +213,13 @@ GpsStatus UbxGpsInterface::stop() {
   HAL_Delay(50);
 
   return GpsStatus::OK;
+}
+
+void UbxGpsInterface::resetParserState() {
+  parser_state_ = STATE_SYNC_1;
+  parser_payload_idx_ = 0;
+  parser_ck_a_calc_ = 0;
+  parser_ck_b_calc_ = 0;
 }
 
 // ============================================================================
