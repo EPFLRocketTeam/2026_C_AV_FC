@@ -77,6 +77,8 @@ osMutexId_t imuData1MutexHandle;
 osMutexId_t imuData2MutexHandle;
 osMutexId_t imuData3MutexHandle;
 osMutexId_t gpsDataMutexHandle;
+
+#define KALMAN_TASK_WAKE_FLAG 0x0001U
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -718,8 +720,9 @@ void StartKalmanTask(void *argument)
   for(;;)
   {
 
-	  osThreadFlagsWait(0x0001U, osFlagsWaitAny, osWaitForever);
+    osThreadFlagsWait(KALMAN_TASK_WAKE_FLAG, osFlagsWaitAny, osWaitForever);
 	  kalman_loop();
+    osThreadYield();
 
   }
   /* USER CODE END 5 */

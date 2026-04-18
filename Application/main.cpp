@@ -46,6 +46,7 @@ namespace {
 ImuModule* g_imu_module = nullptr;
 uint8_t g_imu_healthy[3] = {0u, 0u, 0u};
 uint32_t g_imu_status_flags[3] = {IMU_STATUS_OK, IMU_STATUS_OK, IMU_STATUS_OK};
+constexpr uint32_t kKalmanThreadWakeFlag = 0x0001U;
 
 constexpr uint16_t kImuIntPins[3] = {
     APP_IMU1_INT_PIN,
@@ -153,7 +154,10 @@ void mainLoop() {
 
         gpsModule.update(currTick);
         if (imuModule.takeProducedCount() > 0) {
-            osThreadFlagsSet(kalmanTaskHandle, 0x0001U);
+            osThreadFlagsSet(kalmanTaskHandle, kKalmanThreadWakeFlag);
         }
+
+        // Keep producer/consumer threads cooperative at equal RTOS priority.
+        osThreadYield();
     }
 }

@@ -26,6 +26,7 @@ extern "C" {
 extern osMutexId_t imuData1MutexHandle;
 extern osMutexId_t imuData2MutexHandle;
 extern osMutexId_t imuData3MutexHandle;
+extern osThreadId_t kalmanTaskHandle;
 
 extern osMutexId_t gpsDataMutexHandle;
 
@@ -38,6 +39,9 @@ extern RingBuffer<GpsBasicFixData, 100> gpsData;
 
 
 namespace {
+
+constexpr uint32_t kKalmanThreadWakeFlag = 0x0001U;
+constexpr size_t kMaxImuSamplesPerSourcePerRun = 32u;
 
 struct KalmanRuntime {
 	app::EskfEstimator estimator;
@@ -234,6 +238,7 @@ int kalman_loop() {
 	IMUData sample{};
 	int drained = 0;
 	uint64_t latest_imu_ts = 0;
+	bool imu_backlog_pending = false;
 
 	for (size_t i = 0; i < 3; ++i) {
 		if (locks[i] == nullptr) {
@@ -244,19 +249,30 @@ int kalman_loop() {
 			(app_imu_sensor_healthy(static_cast<uint8_t>(i)) != 0U);
 
 		osMutexAcquire(locks[i], osWaitForever);
+		size_t source_samples = 0;
 		if (!source_healthy) {
-			while (buffers[i]->pop(sample)) {
+			while (source_samples < kMaxImuSamplesPerSourcePerRun &&
+				   buffers[i]->pop(sample)) {
 				latest_imu_ts = std::max(latest_imu_ts, sample.timestamp_us);
 				++drained;
+				++source_samples;
+			}
+			if (!buffers[i]->empty()) {
+				imu_backlog_pending = true;
 			}
 			osMutexRelease(locks[i]);
 			continue;
 		}
 
-		while (buffers[i]->pop(sample)) {
+		while (source_samples < kMaxImuSamplesPerSourcePerRun &&
+			   buffers[i]->pop(sample)) {
 			kalman.ingestImu(i, sample);
 			latest_imu_ts = std::max(latest_imu_ts, sample.timestamp_us);
 			++drained;
+			++source_samples;
+		}
+		if (!buffers[i]->empty()) {
+			imu_backlog_pending = true;
 		}
 		osMutexRelease(locks[i]);
 	}
@@ -268,6 +284,10 @@ int kalman_loop() {
 	kalman.ingestAidingFromStore();
 
 	kalman.onTick(latest_imu_ts);
+
+	if (imu_backlog_pending && kalmanTaskHandle != nullptr) {
+		osThreadFlagsSet(kalmanTaskHandle, kKalmanThreadWakeFlag);
+	}
 
 	return drained;
 }

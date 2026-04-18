@@ -91,6 +91,15 @@ static inline uint32_t osMutexRelease(osMutexId_t mutex_id)
     return (xSemaphoreGive(mutex_id) == pdTRUE) ? 0 : 1;
 }
 
+/* ---- Cooperative scheduling ---- */
+
+/** Yield execution to another ready task. */
+static inline uint32_t osThreadYield(void)
+{
+    taskYIELD();
+    return 0;
+}
+
 #ifdef __cplusplus
 }
 #endif
