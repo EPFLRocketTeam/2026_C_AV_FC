@@ -53,7 +53,9 @@ Subsystem label: Lifecycle events
   - kalman_on_state_change(state)
   - kalman_on_liftoff(ts)
 - Lifecycle hooks also set the Kalman task wake flag so state/liftoff events are consumed even if IMU is temporarily silent.
-- kalman_loop consumes these atomically and applies:
+- kalman_loop drains IMU and aiding first, then consumes pending liftoff, then runs onTick.
+- State INIT transition performs a hard runtime reset (`estimator.reset()` + `apogee_hub.reset()`) so each mission starts from a clean estimator lifecycle.
+- kalman_loop consumes lifecycle updates atomically and applies:
   - estimator.onFlightStateChange(...)
   - estimator.onLiftoff(...)
 
@@ -65,13 +67,14 @@ Each kalman onTick cycle publishes estimator output into GOATStore.navigationDat
 - speed <- estimator velocity_ned
 - altitude <- estimator altitude_m
 - attitude <- quaternion converted to roll/pitch/yaw
-- course <- yaw from quaternion
+- course <- yaw heading from quaternion (explicitly not ground-track)
 - accel <- latest measured body acceleration from IMU ingest path
 
 Subsystem label: Apogee interface contract
-- Runtime builds ApogeeInput from estimator output and current flight state.
+- Runtime builds ApogeeInput from estimator output and estimator-derived coast classification (`EskfEstimator::isCoastPhase()`, parity with ktp-soft).
 - Runtime evaluates ApogeeHub (primary: consensus detector).
 - When triggered, event.apogee_detected is set in GOATStore.eventStore.
+- EventStore apogee/catastrophic flags are synchronized through a dedicated mutex because FSM reads and Kalman writes occur on different tasks.
 
 Subsystem label: Health telemetry contract
 - Runtime updates KalmanHealthStore each cycle with:
@@ -82,6 +85,7 @@ Subsystem label: Health telemetry contract
   - baro_updates counter
   - gps_updates counter
 - Runtime also sets event.catastrophic_failure if ESKF divergence is detected.
+- Flight FSM now consumes catastrophic_failure in IGNITION/BURN/ASCENT/DESCENT and transitions to ABORT_IN_FLIGHT.
 
 ## 5. Logging and Observability
 
@@ -130,7 +134,7 @@ Subsystem label: App/RTOS integration ownership
 
 Subsystem label: Flight-logic ownership
 - [ ] Consume event.apogee_detected in flight-state/actions path (parachute/deployment logic).
-- [ ] Decide final policy for event.catastrophic_failure handling triggered by ESKF divergence.
+- [x] Catastrophic policy wired: catastrophic_failure forces ABORT_IN_FLIGHT from in-flight states.
 
 Subsystem label: Telemetry/logging ownership
 - [ ] Surface KalmanHealthStore snapshot in telemetry/log packets.

@@ -14,7 +14,7 @@ flight_computer::NavigationData mapEstimatorToNavigation(
 
 ApogeeInput buildApogeeInput(const EstimatorOutput& output,
                              bool eskf_diverged,
-                             flight_computer::State state,
+                             bool is_coast_phase,
                              uint32_t liftoff_ms,
                              uint32_t now_ms);
 

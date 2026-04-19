@@ -336,6 +336,13 @@ TEST_F(AvStateIgnitionTest, AbortOnGroundWhenAbortCmdReceived) {
   EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_ON_GROUND);
 }
 
+TEST_F(AvStateIgnitionTest, AbortInFlightWhenCatastrophicFailureRaised) {
+  DataDump d = neutralDump();
+  d.event.catastrophic_failure = true;
+  fsm_.update(d);
+  EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_IN_FLIGHT);
+}
+
 TEST_F(AvStateIgnitionTest, AbortOnGroundWhenNeitherCableNorAccDetected) {
   // Default neutral dump has no_cable_continuity=0 and vertical_acc_hold=false
   // → engine did not ignite, safety abort.
@@ -374,6 +381,13 @@ TEST_F(AvStateBurnTest, AbortInFlightWhenAbortCmdReceived) {
   EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_IN_FLIGHT);
 }
 
+TEST_F(AvStateBurnTest, AbortInFlightWhenCatastrophicFailureRaised) {
+  DataDump d = neutralDump();
+  d.event.catastrophic_failure = true;
+  fsm_.update(d);
+  EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_IN_FLIGHT);
+}
+
 TEST_F(AvStateBurnTest, StaysInBurnOnNeutralDump) {
   fsm_.update(neutralDump());
   EXPECT_EQ(fsm_.getCurrentState(), State::BURN);
@@ -406,6 +420,13 @@ TEST_F(AvStateAscentTest, TransitionsToDescentWhenFlightTimerExceedsAscentMax) {
 TEST_F(AvStateAscentTest, AbortInFlightWhenAbortCmdReceived) {
   DataDump d = neutralDump();
   d.uplinkCmd.id = 1; // ABORT
+  fsm_.update(d);
+  EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_IN_FLIGHT);
+}
+
+TEST_F(AvStateAscentTest, AbortInFlightWhenCatastrophicFailureRaised) {
+  DataDump d = neutralDump();
+  d.event.catastrophic_failure = true;
   fsm_.update(d);
   EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_IN_FLIGHT);
 }
@@ -451,6 +472,13 @@ TEST_F(AvStateDescentTest, StaysInDescentWhenDurationOkButNoTouchdown) {
 TEST_F(AvStateDescentTest, AbortInFlightWhenAbortCmdReceived) {
   DataDump d = neutralDump();
   d.uplinkCmd.id = 1; // ABORT
+  fsm_.update(d);
+  EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_IN_FLIGHT);
+}
+
+TEST_F(AvStateDescentTest, AbortInFlightWhenCatastrophicFailureRaised) {
+  DataDump d = neutralDump();
+  d.event.catastrophic_failure = true;
   fsm_.update(d);
   EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_IN_FLIGHT);
 }

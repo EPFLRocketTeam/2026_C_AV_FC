@@ -31,6 +31,7 @@ extern osMutexId_t imuData3MutexHandle;
 extern osThreadId_t kalmanTaskHandle;
 
 extern osMutexId_t gpsDataMutexHandle;
+extern osMutexId_t eventStoreMutexHandle;
 
 
 extern RingBuffer<IMUData, 100> imuData1;
@@ -102,6 +103,10 @@ struct KalmanRuntime {
 		last_state = state;
 
 		if (state == flight_computer::State::INIT) {
+			estimator.reset();
+			estimator.configureReplaySensorCounts(3u, 0u);
+			active_imu_sources = 3u;
+			apogee_hub.reset();
 			last_imu_ts_us[0] = 0;
 			last_imu_ts_us[1] = 0;
 			last_imu_ts_us[2] = 0;
@@ -268,6 +273,7 @@ struct KalmanRuntime {
 
 		const app::EstimatorOutput output = estimator.output();
 		const bool eskf_diverged = estimator.isEskfDiverged();
+		const bool is_coast_phase = estimator.isCoastPhase();
 		auto &goat = flight_computer::GOATStore::get_instance();
 
 		const auto nav = app::mapEstimatorToNavigation(
@@ -276,28 +282,43 @@ struct KalmanRuntime {
 			last_body_accel_mps2);
 		goat.navigationDataStore.set(nav);
 
-		auto event = goat.eventStore.get();
-		if (eskf_diverged) {
-			event.catastrophic_failure = true;
-		}
+		const bool set_catastrophic_failure = eskf_diverged;
+		bool set_apogee_detected = false;
 
 		if (!apogee_detected && liftoff_ms > 0) {
 			const uint32_t now_ms = static_cast<uint32_t>(now_us / 1000ULL);
 			const app::ApogeeInput input = app::buildApogeeInput(
 				output,
 				eskf_diverged,
-				last_state,
+				is_coast_phase,
 				liftoff_ms,
 				now_ms);
 
 			const app::ApogeeDecision decision = apogee_hub.update(now_ms, input);
 			if (decision.triggered) {
 				apogee_detected = true;
-				event.apogee_detected = true;
+				set_apogee_detected = true;
 			}
 		}
 
-		goat.eventStore.set(event);
+		if (set_catastrophic_failure || set_apogee_detected) {
+			if (eventStoreMutexHandle != nullptr) {
+				osMutexAcquire(eventStoreMutexHandle, osWaitForever);
+			}
+
+			auto event = goat.eventStore.get();
+			if (set_catastrophic_failure) {
+				event.catastrophic_failure = true;
+			}
+			if (set_apogee_detected) {
+				event.apogee_detected = true;
+			}
+			goat.eventStore.set(event);
+
+			if (eventStoreMutexHandle != nullptr) {
+				osMutexRelease(eventStoreMutexHandle);
+			}
+		}
 
 		health.diverged = eskf_diverged;
 		health.altitude_valid = output.altitude_valid;
@@ -363,11 +384,6 @@ int kalman_loop() {
 
 	const uint32_t current_state = kalman_current_state();
 	kalman.onStateChange(current_state);
-
-	uint32_t liftoff_ms = 0;
-	if (kalman_take_pending_liftoff(&liftoff_ms) != 0U) {
-		kalman.onLiftoff(liftoff_ms);
-	}
 
 	RingBuffer<IMUData, 100> *buffers[] = {&imuData1, &imuData2, &imuData3};
 	osMutexId_t locks[] = {imuData1MutexHandle, imuData2MutexHandle,
@@ -474,6 +490,11 @@ int kalman_loop() {
 	}
 
 	kalman.ingestAidingFromStore();
+
+	uint32_t liftoff_ms = 0;
+	if (kalman_take_pending_liftoff(&liftoff_ms) != 0U) {
+		kalman.onLiftoff(liftoff_ms);
+	}
 
 	kalman.onTick(latest_imu_ts);
 

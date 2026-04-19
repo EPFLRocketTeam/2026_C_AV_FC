@@ -101,6 +101,10 @@ State AvState::fromPressurization(DataDump const &dump) {
 }
 
 State AvState::fromIgnition(DataDump const &dump) {
+  if (dump.event.catastrophic_failure) {
+    return State::ABORT_IN_FLIGHT;
+  }
+
   if (dump.uplinkCmd.id == 1 ||
       (!dump.vehiculeOverview.no_cable_continuity &&
        !dump.event.vertical_acc_hold)) // TODO: replace this with proper cmd id
@@ -124,6 +128,10 @@ State AvState::fromIgnition(DataDump const &dump) {
 }
 
 State AvState::fromBurn(DataDump const &dump) {
+  if (dump.event.catastrophic_failure) {
+    return State::ABORT_IN_FLIGHT;
+  }
+
   if (dump.uplinkCmd.id == 1) // TODO: replace this with proper cmd id from the
                               // protocol and add the condition p_tanks > p_prvs
   {
@@ -141,6 +149,10 @@ State AvState::fromBurn(DataDump const &dump) {
 }
 
 State AvState::fromAscent(DataDump const &dump) {
+  if (dump.event.catastrophic_failure) {
+    return State::ABORT_IN_FLIGHT;
+  }
+
   if (dump.uplinkCmd.id == 1) // TODO: replace this with proper cmd id from the
                               // protocol and add the condition p_tanks > p_prvs
   {
@@ -158,6 +170,10 @@ State AvState::fromAscent(DataDump const &dump) {
 }
 
 State AvState::fromDescent(DataDump const &dump) {
+  if (dump.event.catastrophic_failure) {
+    return State::ABORT_IN_FLIGHT;
+  }
+
   if (dump.uplinkCmd.id == 1) // TODO: replace this with proper cmd id from the
                               // protocol and add the condition p_tanks > p_prvs
   {

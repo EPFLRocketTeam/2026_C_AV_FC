@@ -43,6 +43,7 @@ flight_computer::NavigationData mapEstimatorToNavigation(
   const double yaw_deg = std::atan2(siny_cosp, cosy_cosp) * kRadToDeg;
 
   nav.attitude = {roll_deg, pitch_deg, yaw_deg};
+  // NavigationData::course is heading (yaw) in degrees, not track-over-ground.
   nav.course = yaw_deg;
   nav.altitude = output.altitude_m;
   nav.baro = baro;
@@ -51,7 +52,7 @@ flight_computer::NavigationData mapEstimatorToNavigation(
 
 ApogeeInput buildApogeeInput(const EstimatorOutput& output,
                              bool eskf_diverged,
-                             flight_computer::State state,
+                             bool is_coast_phase,
                              uint32_t liftoff_ms,
                              uint32_t now_ms) {
   ApogeeInput input{};
@@ -63,9 +64,7 @@ ApogeeInput buildApogeeInput(const EstimatorOutput& output,
   input.eskf_diverged = eskf_diverged;
   input.body_accel_x_mps2 = output.body_accel_x_mps2;
 
-  input.is_coast_phase =
-      (state == flight_computer::State::ASCENT ||
-       state == flight_computer::State::DESCENT);
+  input.is_coast_phase = is_coast_phase;
 
   if (now_ms >= liftoff_ms) {
     input.time_since_liftoff_ms = now_ms - liftoff_ms;

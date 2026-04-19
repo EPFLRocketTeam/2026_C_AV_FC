@@ -79,6 +79,7 @@ osMutexId_t imuData1MutexHandle;
 osMutexId_t imuData2MutexHandle;
 osMutexId_t imuData3MutexHandle;
 osMutexId_t gpsDataMutexHandle;
+osMutexId_t eventStoreMutexHandle;
 osTimerId_t kalmanWakeTimerHandle;
 
 #define KALMAN_TASK_WAKE_FLAG 0x0001U
@@ -160,6 +161,7 @@ int main(void)
   imuData2MutexHandle = osMutexNew(NULL);
   imuData3MutexHandle = osMutexNew(NULL);
   gpsDataMutexHandle = osMutexNew(NULL);
+  eventStoreMutexHandle = osMutexNew(NULL);
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */

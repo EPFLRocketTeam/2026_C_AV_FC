@@ -161,6 +161,7 @@ struct NavigationData {
   Vector3 speed;
   Vector3 accel;
   Vector3 attitude;
+  // Heading from attitude yaw (degrees), not ground-track.
   double course;
   double altitude;
   bmp3_data baro;

@@ -51,7 +51,7 @@ TEST(P6OutputBridge, BuildsApogeeInputContract) {
   const auto input = app::buildApogeeInput(
       out,
       false,
-      flight_computer::State::ASCENT,
+      true,
       1000,
       1600);
 

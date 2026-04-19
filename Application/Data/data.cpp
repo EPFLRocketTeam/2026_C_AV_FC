@@ -3,6 +3,21 @@
 #include "Application/app_timebase.h"
 #include "Drivers/STM32HAL/stm32hal.h"
 
+#if !defined(UNIT_TEST_ENV)
+extern "C" {
+int32_t osMutexAcquire(void *mutex_id, uint32_t timeout);
+int32_t osMutexRelease(void *mutex_id);
+}
+#endif
+
+constexpr uint32_t kOsWaitForever = 0xFFFFFFFFu;
+
+#if defined(UNIT_TEST_ENV)
+void *eventStoreMutexHandle = nullptr;
+#else
+extern void *eventStoreMutexHandle;
+#endif
+
 namespace {
 
 struct AppTimebaseState {
@@ -15,6 +30,22 @@ struct AppTimebaseState {
 };
 
 AppTimebaseState g_app_timebase{};
+
+inline void lock_event_store() {
+#if !defined(UNIT_TEST_ENV)
+  if (eventStoreMutexHandle != nullptr) {
+    osMutexAcquire(eventStoreMutexHandle, kOsWaitForever);
+  }
+#endif
+}
+
+inline void unlock_event_store() {
+#if !defined(UNIT_TEST_ENV)
+  if (eventStoreMutexHandle != nullptr) {
+    osMutexRelease(eventStoreMutexHandle);
+  }
+#endif
+}
 
 #if !defined(UNIT_TEST_ENV)
 inline void app_timebase_enable_dwt() {
@@ -167,7 +198,11 @@ const DataDump &GOATStore::get() const {
   data_.propSensors = propSensorsStore.get();
   data_.valves = valvesStore.get();
   data_.navigationData = navigationDataStore.get();
+
+  lock_event_store();
   data_.event = eventStore.get();
+  unlock_event_store();
+
   data_.batteries = batteriesStore.get();
   data_.camsRecording = camsRecordingStore.get();
   data_.uplinkCmd = uplinkCmdStore.get();
@@ -183,7 +218,11 @@ void GOATStore::set(const DataDump &value) {
   propSensorsStore.set(value.propSensors);
   valvesStore.set(value.valves);
   navigationDataStore.set(value.navigationData);
+
+  lock_event_store();
   eventStore.set(value.event);
+  unlock_event_store();
+
   batteriesStore.set(value.batteries);
   camsRecordingStore.set(value.camsRecording);
   uplinkCmdStore.set(value.uplinkCmd);
