@@ -1,4 +1,5 @@
 #include "Drivers/InvIMU/InvIMU.hpp"
+#include "Application/app_timebase.h"
 #include <stdio.h>
 
 // Registers used for manual SPI access
@@ -36,22 +37,9 @@ bool InvIMU_STM32::dwt_is_running() {
 
 uint64_t InvIMU_STM32::now_us(bool use_dwt) {
     if (use_dwt) {
-        static uint32_t last_cyccnt = 0u;
-        static uint64_t acc_us = 0u;
-        const uint32_t cycles_per_us = (SystemCoreClock / 1000000u);
-        if (cycles_per_us == 0u) return acc_us;
-        const uint32_t cyccnt = DWT->CYCCNT;
-        const uint32_t delta_cycles = (uint32_t)(cyccnt - last_cyccnt);
-        last_cyccnt = cyccnt;
-        acc_us += (uint64_t)(delta_cycles / cycles_per_us);
-        return acc_us;
+        return app_timebase_now_us();
     }
-    static uint32_t last_ms = 0u;
-    static uint64_t acc_us = 0u;
-    const uint32_t ms = HAL_GetTick();
-    acc_us += (uint64_t)((uint32_t)(ms - last_ms)) * 1000ull;
-    last_ms = ms;
-    return acc_us;
+    return static_cast<uint64_t>(HAL_GetTick()) * 1000ULL;
 }
 
 void InvIMU_STM32::applyAlignment(IMUData& d) {

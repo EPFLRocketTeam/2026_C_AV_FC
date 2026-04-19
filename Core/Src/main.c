@@ -23,7 +23,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "Application/app_timebase.h"
 #include "Application/main.h"
+#include "Application/Kalman/kalman_lifecycle.h"
 #include "Application/Kalman/kalman_process.h"
 /* USER CODE END Includes */
 
@@ -69,16 +71,18 @@ const osThreadAttr_t defaultTask_attributes = {
 osThreadId_t kalmanTaskHandle;
 const osThreadAttr_t kalmanTask_attributes = {
   .name = "kalmanTask",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 8 * 1024,
+  .priority = (osPriority_t) osPriorityAboveNormal,
 };
 
 osMutexId_t imuData1MutexHandle;
 osMutexId_t imuData2MutexHandle;
 osMutexId_t imuData3MutexHandle;
 osMutexId_t gpsDataMutexHandle;
+osTimerId_t kalmanWakeTimerHandle;
 
 #define KALMAN_TASK_WAKE_FLAG 0x0001U
+#define KALMAN_TASK_WAKE_PERIOD_MS 20U
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -96,6 +100,7 @@ void StartDefaultTask(void *argument);
 void StartKalmanTask(void *argument);
 
 /* USER CODE BEGIN PFP */
+static void KalmanWakeTimerCallback(void *argument);
 
 /* USER CODE END PFP */
 
@@ -142,6 +147,7 @@ int main(void)
   MX_UART7_Init();
   MX_I2C4_Init();
   /* USER CODE BEGIN 2 */
+  app_timebase_init();
 
   /* USER CODE END 2 */
 
@@ -162,6 +168,11 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
+  kalmanWakeTimerHandle =
+      osTimerNew(KalmanWakeTimerCallback, osTimerPeriodic, NULL, NULL);
+  if (kalmanWakeTimerHandle != NULL) {
+    osTimerStart(kalmanWakeTimerHandle, KALMAN_TASK_WAKE_PERIOD_MS);
+  }
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -711,10 +722,18 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+static void KalmanWakeTimerCallback(void *argument)
+{
+  (void)argument;
+  (void)app_timebase_now_us();
+  if (kalmanTaskHandle != NULL) {
+    kalman_note_wake_timer();
+    osThreadFlagsSet(kalmanTaskHandle, KALMAN_TASK_WAKE_FLAG);
+  }
+}
+
 void StartKalmanTask(void *argument)
 {
-  /* init code for USB_DEVICE */
-  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
   for(;;)
@@ -722,7 +741,6 @@ void StartKalmanTask(void *argument)
 
     osThreadFlagsWait(KALMAN_TASK_WAKE_FLAG, osFlagsWaitAny, osWaitForever);
 	  kalman_loop();
-    osThreadYield();
 
   }
   /* USER CODE END 5 */
@@ -748,7 +766,6 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *argument)
 {
-  /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
   /* Infinite loop */

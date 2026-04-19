@@ -2,11 +2,13 @@
 // include it outside extern "C" (it has its own C++ guards).
 #include "Core/Inc/main.h"
 #include "cmsis_os.h"
+#include "Application/app_timebase.h"
 #include "Modules/imu_modlue.hpp"
 #include "Modules/gps_module.hpp"
 
 extern "C" {
 #include "Application/main.h"
+#include "Application/Kalman/kalman_lifecycle.h"
 #include "Drivers/InvIMU/InvIMU.h"
 }
 #include "Drivers/InvIMU/InvIMU.hpp"
@@ -109,11 +111,13 @@ extern "C" uint32_t app_imu_sensor_status_flags(uint8_t sensor_index) {
 
 
 void mainLoop() {
+    app_timebase_init();
+
     Config imu_cfg1{};
     imu_cfg1.hspi = &hspi1;
     imu_cfg1.cs_port = BMI4_NSS_GPIO_Port;
     imu_cfg1.cs_pin = BMI4_NSS_Pin;
-    imu_cfg1.use_dwt_timestamps = false;
+    imu_cfg1.use_dwt_timestamps = true;
     imu_cfg1.use_dma = (APP_IMU_USE_DMA != 0u);
 
     Config imu_cfg2 = imu_cfg1;
@@ -161,12 +165,10 @@ void mainLoop() {
 
         const size_t imu_samples_produced = imuModule.takeProducedCount();
         if (imu_samples_produced > 0u) {
+            kalman_note_wake_imu();
             osThreadFlagsSet(kalmanTaskHandle, kKalmanThreadWakeFlag);
         }
 
         gpsModule.update(currTick);
-
-        // Keep producer/consumer threads cooperative at equal RTOS priority.
-        osThreadYield();
     }
 }

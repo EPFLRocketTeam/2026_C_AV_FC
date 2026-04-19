@@ -523,8 +523,8 @@ public:
 
 struct DataDump {
   State av_state;
-  // Producer contract: set this to the current AV monotonic tick in milliseconds
-  // (HAL_GetTick domain) before calling AvState::update.
+  // Timestamp contract: GOATStore::get() stamps this field from the shared
+  // AV monotonic timebase in milliseconds before AvState::update consumes it.
   uint32_t av_timestamp;
   float av_fc_temp;
   GpsBasicFixData gps_state;

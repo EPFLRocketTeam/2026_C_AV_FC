@@ -9,6 +9,10 @@ TEST(KalmanHealthStore, ResetSetGet) {
   auto snap = store.get();
   EXPECT_FALSE(snap.diverged);
   EXPECT_EQ(snap.imu_samples_consumed, 0u);
+  EXPECT_EQ(snap.wake_imu, 0u);
+  EXPECT_EQ(snap.wake_lifecycle, 0u);
+  EXPECT_EQ(snap.wake_timer, 0u);
+  EXPECT_EQ(snap.wake_backlog, 0u);
 
   KalmanHealthSnapshot update{};
   update.diverged = true;
@@ -17,6 +21,10 @@ TEST(KalmanHealthStore, ResetSetGet) {
   update.imu_samples_consumed = 77;
   update.baro_updates = 5;
   update.gps_updates = 3;
+  update.wake_imu = 11;
+  update.wake_lifecycle = 7;
+  update.wake_timer = 9;
+  update.wake_backlog = 2;
 
   store.set(update);
   snap = store.get();
@@ -27,4 +35,8 @@ TEST(KalmanHealthStore, ResetSetGet) {
   EXPECT_EQ(snap.imu_samples_consumed, 77u);
   EXPECT_EQ(snap.baro_updates, 5u);
   EXPECT_EQ(snap.gps_updates, 3u);
+  EXPECT_EQ(snap.wake_imu, 11u);
+  EXPECT_EQ(snap.wake_lifecycle, 7u);
+  EXPECT_EQ(snap.wake_timer, 9u);
+  EXPECT_EQ(snap.wake_backlog, 2u);
 }

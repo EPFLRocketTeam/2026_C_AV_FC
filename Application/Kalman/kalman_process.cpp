@@ -14,6 +14,7 @@
 
 extern "C" {
 #include <Application/Kalman/kalman_process.h>
+#include "Application/app_timebase.h"
 #include "Application/main.h"
 #include "Drivers/InvIMU/InvIMU.h"
 }
@@ -63,6 +64,7 @@ struct KalmanRuntime {
 	flight_computer::State last_state = flight_computer::State::INIT;
 	flight_computer::Vector3 last_body_accel_mps2{};
 	KalmanHealthSnapshot health{};
+	size_t active_imu_sources = 3u;
 
 	void initIfNeeded() {
 		if (initialized) {
@@ -119,6 +121,15 @@ struct KalmanRuntime {
 		estimator.onLiftoff(liftoff_ms);
 		apogee_hub.arm(liftoff_ms);
 		apogee_detected = false;
+	}
+
+	void setActiveImuSources(size_t imu_sources) {
+		initIfNeeded();
+		if (imu_sources == active_imu_sources) {
+			return;
+		}
+		estimator.configureReplaySensorCounts(imu_sources, 0u);
+		active_imu_sources = imu_sources;
 	}
 
 	static app::ImuSample convertImuSample(const IMUData &sample) {
@@ -205,32 +216,50 @@ struct KalmanRuntime {
 		return sample;
 	}
 
-	void ingestImu(size_t source_index, const IMUData &sample) {
+	void ingestImuChunk(size_t source_index, const IMUData *samples, size_t count) {
 		initIfNeeded();
+		if (samples == nullptr || count == 0u) {
+			return;
+		}
+
+		if (count > kMaxImuSamplesPerSourcePerRun) {
+			count = kMaxImuSamplesPerSourcePerRun;
+		}
 
 		const bool has_prev_ts = has_prev_imu_ts[source_index];
 		const uint64_t prev_ts = last_imu_ts_us[source_index];
-		last_imu_ts_us[source_index] = sample.timestamp_us;
+		const uint64_t first_ts = samples[0].timestamp_us;
+		const uint64_t last_ts = samples[count - 1u].timestamp_us;
+		last_imu_ts_us[source_index] = last_ts;
 		has_prev_imu_ts[source_index] = true;
 
-		app::ImuSample converted = convertImuSample(sample);
+		app::ImuSample converted[kMaxImuSamplesPerSourcePerRun] = {};
+		for (size_t i = 0; i < count; ++i) {
+			converted[i] = convertImuSample(samples[i]);
+		}
+
 		app::ImuBatch batch{};
-		batch.data = &converted;
-		batch.count = 1;
-		batch.t0_us = sample.timestamp_us;
-		batch.dt_us =
-			(has_prev_ts && sample.timestamp_us > prev_ts)
-				? static_cast<uint32_t>(sample.timestamp_us - prev_ts)
-				: kNominalImuDtUs;
+		batch.data = converted;
+		batch.count = count;
+		batch.t0_us = first_ts;
+		if (count >= 2u && samples[1].timestamp_us > first_ts) {
+			batch.dt_us =
+				static_cast<uint32_t>(samples[1].timestamp_us - first_ts);
+		} else {
+			batch.dt_us =
+				(has_prev_ts && first_ts > prev_ts)
+					? static_cast<uint32_t>(first_ts - prev_ts)
+					: kNominalImuDtUs;
+		}
 		batch.source = static_cast<uint8_t>(source_index);
 		batch.slot = 0xFF;
 
 		estimator.processImuBatch(batch);
 
-		last_body_accel_mps2.x = sample.accel_x;
-		last_body_accel_mps2.y = sample.accel_y;
-		last_body_accel_mps2.z = sample.accel_z;
-		health.imu_samples_consumed += 1;
+		last_body_accel_mps2.x = samples[count - 1u].accel_x;
+		last_body_accel_mps2.y = samples[count - 1u].accel_y;
+		last_body_accel_mps2.z = samples[count - 1u].accel_z;
+		health.imu_samples_consumed += static_cast<uint32_t>(count);
 	}
 
 	void onTick(uint64_t now_us) {
@@ -273,6 +302,10 @@ struct KalmanRuntime {
 		health.diverged = eskf_diverged;
 		health.altitude_valid = output.altitude_valid;
 		health.velocity_valid = output.velocity_valid;
+		health.wake_imu = kalman_wake_count_imu();
+		health.wake_lifecycle = kalman_wake_count_lifecycle();
+		health.wake_timer = kalman_wake_count_timer();
+		health.wake_backlog = kalman_wake_count_backlog();
 		KalmanHealthStore::instance().set(health);
 	}
 
@@ -296,16 +329,20 @@ struct KalmanRuntime {
 		}
 
 		const uint64_t fallback_timestamp_us =
-			static_cast<uint64_t>(HAL_GetTick()) * 1000ULL;
+			app_timebase_now_us();
 		for (size_t i = 0; i < fix_count; ++i) {
 			const app::sensors::gnss::GnssSample sample =
 				convertGpsFixSample(staged_fixes[i], fallback_timestamp_us);
+			if (!sample.valid) {
+				continue;
+			}
 			estimator.processGpsSample(sample);
 			health.gps_updates += 1;
 		}
 
 		if (gps_backlog_pending && kalmanTaskHandle != nullptr) {
 			osThreadFlagsSet(kalmanTaskHandle, kKalmanThreadWakeFlag);
+			kalman_note_wake_backlog();
 		}
 
 		// TODO(kalman): Wire barometer into estimator once BMP samples are exposed
@@ -340,6 +377,7 @@ int kalman_loop() {
 	size_t staged_count[3] = {0, 0, 0};
 	size_t staged_index[3] = {0, 0, 0};
 	bool source_healthy[3] = {false, false, false};
+	size_t healthy_source_count = 0;
 	int drained = 0;
 	uint64_t latest_imu_ts = 0;
 	bool imu_backlog_pending = false;
@@ -351,6 +389,9 @@ int kalman_loop() {
 
 		source_healthy[i] =
 			(app_imu_sensor_healthy(static_cast<uint8_t>(i)) != 0U);
+		if (source_healthy[i]) {
+			++healthy_source_count;
+		}
 
 		osMutexAcquire(locks[i], osWaitForever);
 		size_t source_samples = 0;
@@ -368,6 +409,8 @@ int kalman_loop() {
 		staged_count[i] = source_samples;
 		drained += static_cast<int>(source_samples);
 	}
+
+	kalman.setActiveImuSources(healthy_source_count);
 
 	for (;;) {
 		size_t best_source = 3;
@@ -392,13 +435,42 @@ int kalman_loop() {
 			break;
 		}
 
-		kalman.ingestImu(best_source,
-					 staged_samples[best_source][staged_index[best_source]]);
-		++staged_index[best_source];
+		uint64_t next_other_ts = UINT64_MAX;
+		for (size_t i = 0; i < 3; ++i) {
+			if (i == best_source || !source_healthy[i]) {
+				continue;
+			}
+			if (staged_index[i] >= staged_count[i]) {
+				continue;
+			}
+			next_other_ts =
+				std::min(next_other_ts, staged_samples[i][staged_index[i]].timestamp_us);
+		}
+
+		const size_t start_idx = staged_index[best_source];
+		size_t chunk_count = 0;
+		while ((start_idx + chunk_count) < staged_count[best_source]) {
+			const uint64_t ts =
+				staged_samples[best_source][start_idx + chunk_count].timestamp_us;
+			if (chunk_count > 0u && next_other_ts != UINT64_MAX && ts > next_other_ts) {
+				break;
+			}
+			++chunk_count;
+		}
+
+		if (chunk_count == 0u) {
+			chunk_count = 1u;
+		}
+
+		kalman.ingestImuChunk(
+			best_source,
+			&staged_samples[best_source][start_idx],
+			chunk_count);
+		staged_index[best_source] += chunk_count;
 	}
 
 	if (latest_imu_ts == 0) {
-		latest_imu_ts = static_cast<uint64_t>(HAL_GetTick()) * 1000ULL;
+		latest_imu_ts = app_timebase_now_us();
 	}
 
 	kalman.ingestAidingFromStore();
@@ -407,6 +479,7 @@ int kalman_loop() {
 
 	if (imu_backlog_pending && kalmanTaskHandle != nullptr) {
 		osThreadFlagsSet(kalmanTaskHandle, kKalmanThreadWakeFlag);
+		kalman_note_wake_backlog();
 	}
 
 	return drained;

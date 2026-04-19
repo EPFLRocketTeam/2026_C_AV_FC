@@ -12,7 +12,7 @@
 
 #if APP_TARGET_STM32
 extern "C" {
-#include "Core/Inc/main.h"
+#include "Application/app_timebase.h"
 }
 #elif APP_TARGET_NATIVE
 #include <chrono>
@@ -38,7 +38,8 @@ void resetTimeOrigin() {
 
 uint32_t EskfYieldable::nowMicros() const {
 #if APP_TARGET_STM32
-  return static_cast<uint32_t>(HAL_GetTick() * 1000U);
+  // Keep uint32 API parity with existing yieldable contracts; wrap is expected.
+  return static_cast<uint32_t>(app_timebase_now_us());
 #elif APP_TARGET_NATIVE
   if (test_now_micros_fn_) {
     return test_now_micros_fn_(test_now_micros_ctx_);

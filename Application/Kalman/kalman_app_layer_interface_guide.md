@@ -22,7 +22,7 @@ Subsystem label: RTOS task topology
 - Synchronization: IMU ring buffers are protected by per-buffer mutexes on write and read.
 
 Compared to other RTOS processes
-- This Kalman flow is event-driven on IMU production (thread flag set when new IMU frames were produced).
+- This Kalman flow is hybrid wake-driven: IMU production, lifecycle events, and a 20 ms periodic RTOS timer all wake kalmanTask.
 - It is not a fixed-period vTaskDelay loop.
 - It drains all available IMU data in one wake cycle, then performs aiding ingestion and onTick processing.
 - It is stateful across calls (internal runtime singleton), unlike short stateless handlers.
@@ -52,6 +52,7 @@ Subsystem label: Lifecycle events
 - AvState transition logic calls:
   - kalman_on_state_change(state)
   - kalman_on_liftoff(ts)
+- Lifecycle hooks also set the Kalman task wake flag so state/liftoff events are consumed even if IMU is temporarily silent.
 - kalman_loop consumes these atomically and applies:
   - estimator.onFlightStateChange(...)
   - estimator.onLiftoff(...)
@@ -100,6 +101,9 @@ Subsystem label: Input contracts
   - source-tagged batches
   - monotonic timestamps (us)
   - conversion path from SI IMUData to estimator raw-like format
+- Timebase contract:
+  - Shared app monotonic clock drives IMU timestamps, GNSS timestamps, av_timestamp, apogee timing, and EskfYieldable nowMicros.
+  - DWT-backed microsecond timing is used on STM32 when available, with HAL tick fallback.
 - Baro input contract:
   - pressure Pa + temperature C + timestamp us
   - trigger/complete sequence at runtime level
@@ -117,12 +121,12 @@ Subsystem label: Output contracts
 Subsystem label: Producer ownership outside Kalman team
 - [ ] Baro producer ownership: ensure GOATStore.navigationDataStore.baro is fed with valid, timestamp-consistent data semantics at runtime.
 - [ ] GNSS producer ownership: ensure GOATStore.gpsStore updates are consistent, timely, and include reliable valid/fix flags.
-- [ ] Timebase ownership: align producer timestamps and av_timestamp semantics so liftoff and aiding timing stay coherent.
+- [x] Timebase ownership: producer timestamps and av_timestamp are aligned on the shared monotonic app timebase.
 
 Subsystem label: App/RTOS integration ownership
-- [ ] Confirm kalmanTask stack budget (currently small for heavy estimator path) under real load.
-- [ ] Ensure kalmanTask priority and producer/consumer scheduling do not starve IMU ingestion or downstream control tasks.
-- [ ] Decide whether MX_USB_DEVICE_Init belongs in both defaultTask and kalmanTask (currently both call it).
+- [x] Raised kalmanTask stack budget to 8 KB baseline; still validate high-water on hardware load tests.
+- [x] Ensure kalmanTask is not starved when IMU is silent by waking on lifecycle events and periodic timer.
+- [x] Keep MX_USB_DEVICE_Init single-owned from defaultTask startup (single post-kernel call).
 
 Subsystem label: Flight-logic ownership
 - [ ] Consume event.apogee_detected in flight-state/actions path (parachute/deployment logic).

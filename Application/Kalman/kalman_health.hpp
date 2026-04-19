@@ -9,6 +9,10 @@ struct KalmanHealthSnapshot {
   uint32_t imu_samples_consumed = 0;
   uint32_t baro_updates = 0;
   uint32_t gps_updates = 0;
+  uint32_t wake_imu = 0;
+  uint32_t wake_lifecycle = 0;
+  uint32_t wake_timer = 0;
+  uint32_t wake_backlog = 0;
 };
 
 class KalmanHealthStore {

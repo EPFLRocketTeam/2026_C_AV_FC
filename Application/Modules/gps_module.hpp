@@ -3,6 +3,7 @@
 #include "cmsis_os.h"
 #include "Application/Data/ring_buffer.hpp"
 #include "Application/Modules/module.hpp"
+#include "Application/app_timebase.h"
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
 #include "Application/Data/data.hpp"
 #include <cstdio>
@@ -49,7 +50,7 @@ public:
     }
 
     if (gpsFix.timestamp_us == 0u) {
-      gpsFix.timestamp_us = static_cast<uint64_t>(tick_ms) * 1000ULL;
+      gpsFix.timestamp_us = app_timebase_now_us();
     }
 
     if (gpsDataMutexHandle != nullptr) {
@@ -81,7 +82,7 @@ private:
     }
 
     GpsBasicFixData stale_fix = g.gpsStore.get();
-    stale_fix.timestamp_us = static_cast<uint64_t>(tick_ms) * 1000ULL;
+    stale_fix.timestamp_us = app_timebase_now_us();
     stale_fix.pps_timestamp_us = 0ULL;
     stale_fix.fixType = GpsFixType::NO_FIX;
     stale_fix.valid.validDate = false;

@@ -1,4 +1,5 @@
 #include "../ubx_gps_interface.h"
+#include "Application/app_timebase.h"
 #include <cstring>
 #include <cstdlib>
 #include <stdio.h>
@@ -165,7 +166,7 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
     case STATE_CK_B:
       if (byte == parser_ck_b_calc_) {
         parseBasicFix(parser_payload_buf_, pvt_data);
-        const uint64_t now_us = static_cast<uint64_t>(HAL_GetTick()) * 1000ULL;
+        const uint64_t now_us = app_timebase_now_us();
         pvt_data->timestamp_us = now_us;
         pvt_data->pps_timestamp_us = 0ULL;
         resetParserState();
