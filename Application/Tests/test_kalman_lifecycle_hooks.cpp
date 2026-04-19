@@ -125,3 +125,34 @@ TEST(KalmanLifecycleHooks, LiftoffIsOneShotUntilResetToInit) {
     EXPECT_EQ(kalman_take_pending_liftoff(&liftoff_ms), 1u);
     EXPECT_EQ(liftoff_ms, 300u);
 }
+
+TEST(KalmanLifecycleHooks, InitTransitionClearsStickyEventFlags) {
+    kalman_reset_lifecycle();
+
+    auto &goat = GOATStore::get_instance();
+    Event event = goat.eventStore.get();
+    event.catastrophic_failure = true;
+    event.apogee_detected = true;
+    goat.eventStore.set(event);
+
+    kalman_on_state_change(static_cast<uint32_t>(State::ASCENT));
+    kalman_on_state_change(static_cast<uint32_t>(State::INIT));
+
+    const Event cleared = goat.eventStore.get();
+    EXPECT_FALSE(cleared.catastrophic_failure);
+    EXPECT_FALSE(cleared.apogee_detected);
+}
+
+TEST(KalmanLifecycleHooks, StateWakeOnlyOnTransition) {
+    kalman_reset_lifecycle();
+
+    EXPECT_EQ(kalman_wake_count_lifecycle(), 0u);
+    kalman_on_state_change(static_cast<uint32_t>(State::INIT));
+    EXPECT_EQ(kalman_wake_count_lifecycle(), 0u);
+
+    kalman_on_state_change(static_cast<uint32_t>(State::CALIBRATION));
+    EXPECT_EQ(kalman_wake_count_lifecycle(), 1u);
+
+    kalman_on_state_change(static_cast<uint32_t>(State::CALIBRATION));
+    EXPECT_EQ(kalman_wake_count_lifecycle(), 1u);
+}

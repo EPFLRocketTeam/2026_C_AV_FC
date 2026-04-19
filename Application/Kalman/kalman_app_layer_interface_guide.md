@@ -55,6 +55,7 @@ Subsystem label: Lifecycle events
 - Lifecycle hooks also set the Kalman task wake flag so state/liftoff events are consumed even if IMU is temporarily silent.
 - kalman_loop drains IMU and aiding first, then consumes pending liftoff, then runs onTick.
 - State INIT transition performs a hard runtime reset (`estimator.reset()` + `apogee_hub.reset()`) so each mission starts from a clean estimator lifecycle.
+- Lifecycle INIT entry also clears sticky EventStore flags (`catastrophic_failure`, `apogee_detected`) before the next mission sequence.
 - kalman_loop consumes lifecycle updates atomically and applies:
   - estimator.onFlightStateChange(...)
   - estimator.onLiftoff(...)
@@ -75,6 +76,7 @@ Subsystem label: Apogee interface contract
 - Runtime evaluates ApogeeHub (primary: consensus detector).
 - When triggered, event.apogee_detected is set in GOATStore.eventStore.
 - EventStore apogee/catastrophic flags are synchronized through a dedicated mutex because FSM reads and Kalman writes occur on different tasks.
+- navigationData publish/read now uses a dedicated mutex as well to avoid torn cross-task snapshots.
 
 Subsystem label: Health telemetry contract
 - Runtime updates KalmanHealthStore each cycle with:
@@ -86,6 +88,8 @@ Subsystem label: Health telemetry contract
   - gps_updates counter
 - Runtime also sets event.catastrophic_failure if ESKF divergence is detected.
 - Flight FSM now consumes catastrophic_failure in IGNITION/BURN/ASCENT/DESCENT and transitions to ABORT_IN_FLIGHT.
+- Preflight states intentionally do not consume catastrophic_failure; the ignition gate enforces the abort if the flag is still present.
+- Wake counters (`wake_imu/lifecycle/timer/backlog`) are cumulative since the last actual transition to INIT.
 
 ## 5. Logging and Observability
 
@@ -108,6 +112,7 @@ Subsystem label: Input contracts
 - Timebase contract:
   - Shared app monotonic clock drives IMU timestamps, GNSS timestamps, av_timestamp, apogee timing, and EskfYieldable nowMicros.
   - DWT-backed microsecond timing is used on STM32 when available, with HAL tick fallback.
+  - `use_dwt_timestamps=false` in IMU config is debug-only fallback and bypasses the unified timebase path.
 - Baro input contract:
   - pressure Pa + temperature C + timestamp us
   - trigger/complete sequence at runtime level
@@ -131,6 +136,7 @@ Subsystem label: App/RTOS integration ownership
 - [x] Raised kalmanTask stack budget to 8 KB baseline; still validate high-water on hardware load tests.
 - [x] Ensure kalmanTask is not starved when IMU is silent by waking on lifecycle events and periodic timer.
 - [x] Keep MX_USB_DEVICE_Init single-owned from defaultTask startup (single post-kernel call).
+- [ ] Add one hardware validation pass with `-fstack-usage` artifacts plus FreeRTOS stack overflow check (`configCHECK_FOR_STACK_OVERFLOW=2`).
 
 Subsystem label: Flight-logic ownership
 - [ ] Consume event.apogee_detected in flight-state/actions path (parachute/deployment logic).

@@ -4,18 +4,20 @@
 #include "Drivers/STM32HAL/stm32hal.h"
 
 #if !defined(UNIT_TEST_ENV)
-extern "C" {
-int32_t osMutexAcquire(void *mutex_id, uint32_t timeout);
-int32_t osMutexRelease(void *mutex_id);
-}
+#include "cmsis_os.h"
+#else
+using osMutexId_t = void *;
+constexpr uint32_t osWaitForever = 0xFFFFFFFFu;
+inline int32_t osMutexAcquire(osMutexId_t, uint32_t) { return 0; }
+inline int32_t osMutexRelease(osMutexId_t) { return 0; }
 #endif
 
-constexpr uint32_t kOsWaitForever = 0xFFFFFFFFu;
-
 #if defined(UNIT_TEST_ENV)
-void *eventStoreMutexHandle = nullptr;
+osMutexId_t eventStoreMutexHandle = nullptr;
+osMutexId_t navigationDataMutexHandle = nullptr;
 #else
-extern void *eventStoreMutexHandle;
+extern osMutexId_t eventStoreMutexHandle;
+extern osMutexId_t navigationDataMutexHandle;
 #endif
 
 namespace {
@@ -32,19 +34,27 @@ struct AppTimebaseState {
 AppTimebaseState g_app_timebase{};
 
 inline void lock_event_store() {
-#if !defined(UNIT_TEST_ENV)
   if (eventStoreMutexHandle != nullptr) {
-    osMutexAcquire(eventStoreMutexHandle, kOsWaitForever);
+    osMutexAcquire(eventStoreMutexHandle, osWaitForever);
   }
-#endif
 }
 
 inline void unlock_event_store() {
-#if !defined(UNIT_TEST_ENV)
   if (eventStoreMutexHandle != nullptr) {
     osMutexRelease(eventStoreMutexHandle);
   }
-#endif
+}
+
+inline void lock_navigation_data() {
+  if (navigationDataMutexHandle != nullptr) {
+    osMutexAcquire(navigationDataMutexHandle, osWaitForever);
+  }
+}
+
+inline void unlock_navigation_data() {
+  if (navigationDataMutexHandle != nullptr) {
+    osMutexRelease(navigationDataMutexHandle);
+  }
 }
 
 #if !defined(UNIT_TEST_ENV)
@@ -197,7 +207,10 @@ const DataDump &GOATStore::get() const {
   data_.navSensors = navSensorStore.get();
   data_.propSensors = propSensorsStore.get();
   data_.valves = valvesStore.get();
+
+  lock_navigation_data();
   data_.navigationData = navigationDataStore.get();
+  unlock_navigation_data();
 
   lock_event_store();
   data_.event = eventStore.get();
@@ -217,7 +230,10 @@ void GOATStore::set(const DataDump &value) {
   navSensorStore.set(value.navSensors);
   propSensorsStore.set(value.propSensors);
   valvesStore.set(value.valves);
+
+  lock_navigation_data();
   navigationDataStore.set(value.navigationData);
+  unlock_navigation_data();
 
   lock_event_store();
   eventStore.set(value.event);

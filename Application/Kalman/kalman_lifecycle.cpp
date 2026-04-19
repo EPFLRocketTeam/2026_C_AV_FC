@@ -1,8 +1,11 @@
 #include "Application/Kalman/kalman_lifecycle.h"
+#include "Application/Data/data.hpp"
 
 #include "cmsis_os.h"
 
 #include <atomic>
+
+extern osMutexId_t eventStoreMutexHandle;
 
 namespace {
 std::atomic<uint32_t> g_kalman_state{0};
@@ -83,7 +86,8 @@ extern "C" void kalman_on_liftoff(uint32_t liftoff_ms) {
 }
 
 extern "C" void kalman_on_state_change(uint32_t state) {
-    g_kalman_state.store(state, std::memory_order_relaxed);
+    const uint32_t previous_state =
+        g_kalman_state.exchange(state, std::memory_order_relaxed);
 
     // INIT re-arms lifecycle state for a fresh flight sequence.
     if (state == 0U) {
@@ -91,6 +95,24 @@ extern "C" void kalman_on_state_change(uint32_t state) {
         g_liftoff_latched.store(false, std::memory_order_relaxed);
         g_liftoff_ms.store(0, std::memory_order_relaxed);
         resetWakeCounters();
+
+        auto &goat = flight_computer::GOATStore::get_instance();
+        if (eventStoreMutexHandle != nullptr) {
+            osMutexAcquire(eventStoreMutexHandle, osWaitForever);
+        }
+
+        auto event = goat.eventStore.get();
+        event.catastrophic_failure = false;
+        event.apogee_detected = false;
+        goat.eventStore.set(event);
+
+        if (eventStoreMutexHandle != nullptr) {
+            osMutexRelease(eventStoreMutexHandle);
+        }
+    }
+
+    if (previous_state == state) {
+        return;
     }
 
     kalman_note_wake_lifecycle();

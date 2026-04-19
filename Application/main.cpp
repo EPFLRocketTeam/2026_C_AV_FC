@@ -117,6 +117,8 @@ void mainLoop() {
     imu_cfg1.hspi = &hspi1;
     imu_cfg1.cs_port = BMI4_NSS_GPIO_Port;
     imu_cfg1.cs_pin = BMI4_NSS_Pin;
+    // Keep true in production so all IMUs stay on the shared app timebase.
+    // use_dwt_timestamps=false is a debug fallback that reverts to raw HAL time.
     imu_cfg1.use_dwt_timestamps = true;
     imu_cfg1.use_dma = (APP_IMU_USE_DMA != 0u);
 

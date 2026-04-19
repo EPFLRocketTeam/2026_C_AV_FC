@@ -32,6 +32,7 @@ extern osThreadId_t kalmanTaskHandle;
 
 extern osMutexId_t gpsDataMutexHandle;
 extern osMutexId_t eventStoreMutexHandle;
+extern osMutexId_t navigationDataMutexHandle;
 
 
 extern RingBuffer<IMUData, 100> imuData1;
@@ -275,12 +276,23 @@ struct KalmanRuntime {
 		const bool eskf_diverged = estimator.isEskfDiverged();
 		const bool is_coast_phase = estimator.isCoastPhase();
 		auto &goat = flight_computer::GOATStore::get_instance();
+		flight_computer::bmp3_data latest_baro{};
+
+		if (navigationDataMutexHandle != nullptr) {
+			osMutexAcquire(navigationDataMutexHandle, osWaitForever);
+		}
+
+		latest_baro = goat.navigationDataStore.get_baro();
 
 		const auto nav = app::mapEstimatorToNavigation(
 			output,
-			goat.navigationDataStore.get_baro(),
+			latest_baro,
 			last_body_accel_mps2);
 		goat.navigationDataStore.set(nav);
+
+		if (navigationDataMutexHandle != nullptr) {
+			osMutexRelease(navigationDataMutexHandle);
+		}
 
 		const bool set_catastrophic_failure = eskf_diverged;
 		bool set_apogee_detected = false;
