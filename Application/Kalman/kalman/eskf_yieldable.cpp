@@ -676,14 +676,6 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
   const bool started_in_rewind = in_rewind_;
   
   while (kalman_timestamp_us_ <= target_timestamp_us) {
-    // Check time budget (always respected, even in normal operation)
-    if (nowMicros() - start_us >= budget_us) {
-      last_catchup_duration_us_ = nowMicros() - start_us;
-      last_events_processed_ = events_processed;
-      stats_.catchup_budget_yields++;
-      return false;  // Yield
-    }
-
     discardStalePendingBaro();
     
     // Find next event (earliest timestamp across all buffers)
@@ -735,6 +727,20 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
     logStateIfDue();
     logCovarianceIfDue();
 #endif
+
+    // Check time budget after processing each event (post-processing check).
+    // The guard is placed here — not at the top of the loop — so that at least
+    // one event is always processed before yielding.  A pre-loop check would
+    // fire immediately under Valgrind (where startup overhead alone can exceed
+    // a tight budget), causing catchUp() to return false on an empty timeline
+    // or before processing any events, which violates the contract that the
+    // function returns true when there is nothing left to do.
+    if (nowMicros() - start_us >= budget_us) {
+      last_catchup_duration_us_ = nowMicros() - start_us;
+      last_events_processed_ = events_processed;
+      stats_.catchup_budget_yields++;
+      return false;  // Yield
+    }
   }
   
   last_catchup_duration_us_ = nowMicros() - start_us;
