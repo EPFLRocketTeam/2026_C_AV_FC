@@ -143,16 +143,15 @@ TEST(KalmanLifecycleHooks, InitTransitionClearsStickyEventFlags) {
     EXPECT_FALSE(cleared.apogee_detected);
 }
 
-TEST(KalmanLifecycleHooks, StateWakeOnlyOnTransition) {
+TEST(KalmanLifecycleHooks, StateHookIsIdempotentForSameValue) {
     kalman_reset_lifecycle();
 
-    EXPECT_EQ(kalman_wake_count_lifecycle(), 0u);
     kalman_on_state_change(static_cast<uint32_t>(State::INIT));
-    EXPECT_EQ(kalman_wake_count_lifecycle(), 0u);
+    EXPECT_EQ(kalman_current_state(), static_cast<uint32_t>(State::INIT));
 
     kalman_on_state_change(static_cast<uint32_t>(State::CALIBRATION));
-    EXPECT_EQ(kalman_wake_count_lifecycle(), 1u);
+    EXPECT_EQ(kalman_current_state(), static_cast<uint32_t>(State::CALIBRATION));
 
     kalman_on_state_change(static_cast<uint32_t>(State::CALIBRATION));
-    EXPECT_EQ(kalman_wake_count_lifecycle(), 1u);
+    EXPECT_EQ(kalman_current_state(), static_cast<uint32_t>(State::CALIBRATION));
 }

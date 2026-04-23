@@ -22,15 +22,10 @@ extern "C" {
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 
-extern osMutexId_t imuData1MutexHandle;
-extern osMutexId_t imuData2MutexHandle;
-extern osMutexId_t imuData3MutexHandle;
-extern osThreadId_t kalmanTaskHandle;
-
-extern osMutexId_t gpsDataMutexHandle;
 extern osMutexId_t eventStoreMutexHandle;
 extern osMutexId_t navigationDataMutexHandle;
 
@@ -44,7 +39,6 @@ extern RingBuffer<GpsBasicFixData, 100> gpsData;
 
 namespace {
 
-constexpr uint32_t kKalmanThreadWakeFlag = 0x0001U;
 constexpr size_t kMaxImuSamplesPerSourcePerRun = 32u;
 constexpr size_t kMaxGpsSamplesPerRun = 8u;
 #if APP_IMU_PRIMARY_ODR_HZ > 0
@@ -53,6 +47,9 @@ constexpr uint32_t kNominalImuDtUs =
 #else
 constexpr uint32_t kNominalImuDtUs = 1000U;
 #endif
+
+std::atomic<uint32_t> g_last_main_loop_iteration_us{0u};
+std::atomic<uint32_t> g_max_main_loop_iteration_us{0u};
 
 struct KalmanRuntime {
 	app::EskfEstimator estimator;
@@ -335,30 +332,16 @@ struct KalmanRuntime {
 		health.diverged = eskf_diverged;
 		health.altitude_valid = output.altitude_valid;
 		health.velocity_valid = output.velocity_valid;
-		health.wake_imu = kalman_wake_count_imu();
-		health.wake_lifecycle = kalman_wake_count_lifecycle();
-		health.wake_timer = kalman_wake_count_timer();
-		health.wake_backlog = kalman_wake_count_backlog();
-		KalmanHealthStore::instance().set(health);
+		health.yieldable_imu_drops = estimator.rewindStats().imu_drops;
 	}
 
 	void ingestAidingFromStore() {
 		GpsBasicFixData staged_fixes[kMaxGpsSamplesPerRun] = {};
 		size_t fix_count = 0;
-		bool gps_backlog_pending = false;
-
-		if (gpsDataMutexHandle != nullptr) {
-			osMutexAcquire(gpsDataMutexHandle, osWaitForever);
-		}
 
 		while (fix_count < kMaxGpsSamplesPerRun &&
 			   gpsData.pop(staged_fixes[fix_count])) {
 			++fix_count;
-		}
-		gps_backlog_pending = !gpsData.empty();
-
-		if (gpsDataMutexHandle != nullptr) {
-			osMutexRelease(gpsDataMutexHandle);
 		}
 
 		const uint64_t fallback_timestamp_us =
@@ -371,11 +354,6 @@ struct KalmanRuntime {
 			}
 			estimator.processGpsSample(sample);
 			health.gps_updates += 1;
-		}
-
-		if (gps_backlog_pending && kalmanTaskHandle != nullptr) {
-			osThreadFlagsSet(kalmanTaskHandle, kKalmanThreadWakeFlag);
-			kalman_note_wake_backlog();
 		}
 
 		// TODO(kalman): Wire barometer into estimator once BMP samples are exposed
@@ -393,13 +371,12 @@ KalmanRuntime &runtime() {
 int kalman_loop() {
 	KalmanRuntime &kalman = runtime();
 	kalman.initIfNeeded();
+	const uint64_t kalman_loop_start_us = app_timebase_now_us();
 
 	const uint32_t current_state = kalman_current_state();
 	kalman.onStateChange(current_state);
 
 	RingBuffer<IMUData, 100> *buffers[] = {&imuData1, &imuData2, &imuData3};
-	osMutexId_t locks[] = {imuData1MutexHandle, imuData2MutexHandle,
-						   imuData3MutexHandle};
 
 	IMUData staged_samples[3][kMaxImuSamplesPerSourcePerRun] = {};
 	size_t staged_count[3] = {0, 0, 0};
@@ -408,20 +385,18 @@ int kalman_loop() {
 	size_t healthy_source_count = 0;
 	int drained = 0;
 	uint64_t latest_imu_ts = 0;
-	bool imu_backlog_pending = false;
 
 	for (size_t i = 0; i < 3; ++i) {
-		if (locks[i] == nullptr) {
-			continue;
-		}
-
 		source_healthy[i] =
 			(app_imu_sensor_healthy(static_cast<uint8_t>(i)) != 0U);
 		if (source_healthy[i]) {
 			++healthy_source_count;
 		}
 
-		osMutexAcquire(locks[i], osWaitForever);
+		const uint32_t ring_depth = static_cast<uint32_t>(buffers[i]->size());
+		kalman.health.imu_ring_hwm[i] =
+			std::max(kalman.health.imu_ring_hwm[i], ring_depth);
+
 		size_t source_samples = 0;
 		while (source_samples < kMaxImuSamplesPerSourcePerRun &&
 			   buffers[i]->pop(staged_samples[i][source_samples])) {
@@ -429,10 +404,6 @@ int kalman_loop() {
 							  staged_samples[i][source_samples].timestamp_us);
 			++source_samples;
 		}
-		if (!buffers[i]->empty()) {
-			imu_backlog_pending = true;
-		}
-		osMutexRelease(locks[i]);
 
 		staged_count[i] = source_samples;
 		drained += static_cast<int>(source_samples);
@@ -510,10 +481,39 @@ int kalman_loop() {
 
 	kalman.onTick(latest_imu_ts);
 
-	if (imu_backlog_pending && kalmanTaskHandle != nullptr) {
-		osThreadFlagsSet(kalmanTaskHandle, kKalmanThreadWakeFlag);
-		kalman_note_wake_backlog();
-	}
+	const uint64_t kalman_loop_end_us = app_timebase_now_us();
+	const uint32_t kalman_loop_elapsed_us =
+		static_cast<uint32_t>(kalman_loop_end_us - kalman_loop_start_us);
+	kalman.health.last_kalman_loop_us = kalman_loop_elapsed_us;
+	kalman.health.max_kalman_loop_us =
+		std::max(kalman.health.max_kalman_loop_us, kalman_loop_elapsed_us);
+
+	// Pull the latest main-loop wall-clock values (published by
+	// kalman_note_main_loop_iteration_us on the previous super-loop iteration)
+	// into the snapshot so readers always observe a consistent record.
+	kalman.health.last_main_loop_iteration_us =
+		g_last_main_loop_iteration_us.load(std::memory_order_relaxed);
+	kalman.health.max_main_loop_iteration_us =
+		g_max_main_loop_iteration_us.load(std::memory_order_relaxed);
+
+	KalmanHealthStore::instance().set(kalman.health);
 
 	return drained;
+}
+
+void kalman_note_main_loop_iteration_us(uint32_t iteration_us) {
+	g_last_main_loop_iteration_us.store(iteration_us, std::memory_order_relaxed);
+
+	uint32_t observed_max =
+		g_max_main_loop_iteration_us.load(std::memory_order_relaxed);
+	while (iteration_us > observed_max &&
+		   !g_max_main_loop_iteration_us.compare_exchange_weak(
+			   observed_max,
+			   iteration_us,
+			   std::memory_order_relaxed,
+			   std::memory_order_relaxed)) {
+	}
+	// The next kalman_loop iteration folds these atomics into KalmanHealthStore.
+	// We deliberately avoid a read-modify-write on the store here to keep a
+	// single writer path (kalman_loop) and prevent momentary inconsistencies.
 }

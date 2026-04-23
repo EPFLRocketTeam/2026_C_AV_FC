@@ -11,11 +11,6 @@ using Drivers::InvIMU::ODR;
 using Drivers::InvIMU::InvIMU_Mock;
 using Drivers::InvIMU::InvIMU_Interface;
 
-// Host/unit-test builds do not generate these mutex globals from main.c.
-osMutexId_t imuData1MutexHandle = 0;
-osMutexId_t imuData2MutexHandle = 0;
-osMutexId_t imuData3MutexHandle = 0;
-
 class ImuModuleTest : public ::testing::Test {
 protected:
   InvIMU_Mock imu0;

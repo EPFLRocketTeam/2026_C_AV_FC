@@ -11,9 +11,6 @@
  * - A MockUARTDevice backs the UbxGpsInterface so no real hardware is needed.
  * - stm32sim_ticks provides HAL_GetTick() so the driver's internal timeout
  *   logic works correctly.
- * - gpsDataMutexHandle is set to nullptr; the cmsis_os host shim treats a
- *   null handle as a no-op (returns non-zero but the module does not check
- *   the return value), so mutex semantics are skipped in these unit tests.
  * - gpsData is already defined in Application/main.cpp (part of the
  *   flight_computer library) and satisfies the extern declaration in
  *   gps_module.hpp.
@@ -33,9 +30,6 @@
 // ---------------------------------------------------------------------------
 
 // gpsData is defined in Application/main.cpp (flight_computer library).
-// gpsDataMutexHandle is not generated on host builds; define it here as null
-// so that osMutexAcquire / osMutexRelease become safe no-ops.
-osMutexId_t gpsDataMutexHandle = 0;  // null handle → mutex ops are no-ops in tests
 
 // ---------------------------------------------------------------------------
 // Test fixture

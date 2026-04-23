@@ -17,22 +17,22 @@ This is implementation-grounded and reflects the current code state.
 ## 2. High-Level Runtime Topology
 
 Subsystem label: RTOS task topology
-- Producer side: defaultTask executes mainLoop, which ticks IMU drivers and pushes IMU frames into shared ring buffers.
-- Consumer side: kalmanTask waits on thread flags, then runs kalman_loop.
-- Synchronization: IMU ring buffers are protected by per-buffer mutexes on write and read.
+- Single-task super-loop: `superLoopTask` executes `app_super_loop_setup()` once, then calls `app_super_loop_iterate()` in a `while(1)` loop.
+- Per-iteration order mirrors ktp-soft shape: IMU/GPS producer servicing first, then `kalman_loop()` in the same task context.
+- Synchronization model: no producer-consumer mutex handoff for IMU/GPS rings because produce+consume happens in one task.
 
 Compared to other RTOS processes
-- This Kalman flow is hybrid wake-driven: IMU production, lifecycle events, and a 20 ms periodic RTOS timer all wake kalmanTask.
-- It is not a fixed-period vTaskDelay loop.
-- It drains all available IMU data in one wake cycle, then performs aiding ingestion and onTick processing.
-- It is stateful across calls (internal runtime singleton), unlike short stateless handlers.
+- This Kalman flow is iteration-driven, not thread-flag wake-driven.
+- `kalman_loop()` runs each super-loop iteration; backlog naturally drains over successive iterations.
+- Cooperative scheduling is explicit via `osThreadYield()` at the bottom of the super-loop.
+- Runtime remains stateful across calls (internal runtime singleton), like ktp-soft.
 
 ## 3. Data Circulation: Sensors -> Kalman -> Stores
 
 Subsystem label: IMU path
-1. InvIMU drivers produce IMUData frames in mainLoop.
-2. ImuModule appends IMUData frames to ring buffers (imuData1/2/3) under mutex.
-3. kalmanTask drains ring buffers under mutex and converts each IMUData to estimator ImuSample/ImuBatch format.
+1. InvIMU drivers produce IMUData frames during the super-loop's sensor-servicing phase.
+2. ImuModule appends IMUData frames to ring buffers (imuData1/2/3); no mutex is needed because produce and consume run in the same task.
+3. kalman_loop (called later in the same super-loop iteration) drains the ring buffers and converts each IMUData to estimator ImuSample/ImuBatch format.
 4. AppLayer EskfEstimator receives processImuBatch calls.
 5. Estimator internal pipeline performs VirtualImu preprocessing + ESKF ingestion + catchUp in onTick.
 
@@ -52,7 +52,6 @@ Subsystem label: Lifecycle events
 - AvState transition logic calls:
   - kalman_on_state_change(state)
   - kalman_on_liftoff(ts)
-- Lifecycle hooks also set the Kalman task wake flag so state/liftoff events are consumed even if IMU is temporarily silent.
 - kalman_loop drains IMU and aiding first, then consumes pending liftoff, then runs onTick.
 - State INIT transition performs a hard runtime reset (`estimator.reset()` + `apogee_hub.reset()`) so each mission starts from a clean estimator lifecycle.
 - Lifecycle INIT entry also clears sticky EventStore flags (`catastrophic_failure`, `apogee_detected`) before the next mission sequence.
@@ -86,10 +85,14 @@ Subsystem label: Health telemetry contract
   - imu_samples_consumed counter
   - baro_updates counter
   - gps_updates counter
+- Runtime also records super-loop diagnostics in KalmanHealthStore:
+  - `imu_ring_hwm[3]` producer-ring high-water marks
+  - `last_kalman_loop_us`, `max_kalman_loop_us`
+  - `last_main_loop_iteration_us`, `max_main_loop_iteration_us`
+  - `yieldable_imu_drops` from ESKF rewind stats
 - Runtime also sets event.catastrophic_failure if ESKF divergence is detected.
 - Flight FSM now consumes catastrophic_failure in IGNITION/BURN/ASCENT/DESCENT and transitions to ABORT_IN_FLIGHT.
 - Preflight states intentionally do not consume catastrophic_failure; the ignition gate enforces the abort if the flag is still present.
-- Wake counters (`wake_imu/lifecycle/timer/backlog`) are cumulative since the last actual transition to INIT.
 
 ## 5. Logging and Observability
 
@@ -133,10 +136,10 @@ Subsystem label: Producer ownership outside Kalman team
 - [x] Timebase ownership: producer timestamps and av_timestamp are aligned on the shared monotonic app timebase.
 
 Subsystem label: App/RTOS integration ownership
-- [x] Raised kalmanTask stack budget to 8 KB baseline; still validate high-water on hardware load tests.
-- [x] Ensure kalmanTask is not starved when IMU is silent by waking on lifecycle events and periodic timer.
-- [x] Keep MX_USB_DEVICE_Init single-owned from defaultTask startup (single post-kernel call).
-- [ ] Add one hardware validation pass with `-fstack-usage` artifacts plus FreeRTOS stack overflow check (`configCHECK_FOR_STACK_OVERFLOW=2`).
+- [x] Collapsed to single-task super-loop (`app_super_loop_iterate` -> `kalman_loop`) to remove cross-task wake/starvation class.
+- [x] Set super-loop task stack to 10 KB and enabled `configCHECK_FOR_STACK_OVERFLOW=2`.
+- [x] Keep MX_USB_DEVICE_Init single-owned from super-loop task startup (single post-kernel call).
+- [ ] Add one hardware validation pass with `-fstack-usage` artifacts and runtime high-water confirmation.
 
 Subsystem label: Flight-logic ownership
 - [ ] Consume event.apogee_detected in flight-state/actions path (parachute/deployment logic).

@@ -7,6 +7,8 @@ static constexpr uint8_t REG_BANK_SEL       = 0x76;
 static constexpr uint8_t REG_FIFO_COUNTH    = 0x12; 
 static constexpr uint8_t REG_FIFO_DATA      = 0x14; 
 static constexpr uint8_t REG_WHO_AM_I       = 0x72;
+static constexpr uint32_t INV_IMU_SPI_TX_TIMEOUT_MS = 2u;
+static constexpr uint32_t INV_IMU_SPI_FIFO_RX_TIMEOUT_MS = 5u;
 
 namespace Drivers {
 namespace InvIMU {
@@ -569,13 +571,16 @@ int InvIMU_STM32::spi_read_fifo(uint8_t reg, uint8_t* data, uint16_t len) {
 
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
 
-    if (HAL_SPI_Transmit(_hw.hspi, &reg_addr, 1, 10) != HAL_OK) {
+    if (HAL_SPI_Transmit(_hw.hspi, &reg_addr, 1, INV_IMU_SPI_TX_TIMEOUT_MS) != HAL_OK) {
         HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
         _status_flags |= IMU_STATUS_SPI_ERROR;
+        // No sample loss here: the hardware FIFO still holds the frames and
+        // the next tick() will re-issue the read. Do NOT bump _ring_overflow_count
+        // (that counter is reserved for true driver-ring drops in parseBurst()).
         return -1;
     }
 
-    int rc = HAL_SPI_Receive(_hw.hspi, data, len, 1000);
+    int rc = HAL_SPI_Receive(_hw.hspi, data, len, INV_IMU_SPI_FIFO_RX_TIMEOUT_MS);
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
 
     if (rc != HAL_OK) {
@@ -660,7 +665,7 @@ void InvIMU_STM32::tick() {
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
     uint8_t reg = REG_FIFO_DATA | 0x80;
 
-    if (HAL_SPI_Transmit(_hw.hspi, &reg, 1, 10) != HAL_OK) {
+    if (HAL_SPI_Transmit(_hw.hspi, &reg, 1, INV_IMU_SPI_TX_TIMEOUT_MS) != HAL_OK) {
         HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
         _dma_busy = false;
         _status_flags |= IMU_STATUS_SPI_ERROR;
@@ -702,7 +707,7 @@ bool InvIMU_STM32::ping() {
 int InvIMU_STM32::spi_write(uint8_t reg, uint8_t data) {
     uint8_t tx[2] = { reg, data };
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
-    int rc = HAL_SPI_Transmit(_hw.hspi, tx, 2, 10);
+    int rc = HAL_SPI_Transmit(_hw.hspi, tx, 2, INV_IMU_SPI_TX_TIMEOUT_MS);
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
     if (rc != HAL_OK) _status_flags |= IMU_STATUS_SPI_ERROR;
     return (rc == HAL_OK) ? 0 : -1;

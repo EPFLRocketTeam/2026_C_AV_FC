@@ -1,16 +1,11 @@
 #pragma once
 
-#include "cmsis_os.h"
 #include "Application/Data/ring_buffer.hpp"
 #include "Application/Modules/module.hpp"
 #include "Drivers/InvIMU/InvIMU.h"
 #include "Drivers/STM32HAL/stm32hal.h"
 #include "Application/Data/data.hpp"
 #include <cstdio>
-
-extern osMutexId_t imuData1MutexHandle;
-extern osMutexId_t imuData2MutexHandle;
-extern osMutexId_t imuData3MutexHandle;
 
 using namespace Drivers::InvIMU;
 
@@ -45,19 +40,6 @@ extern RingBuffer<IMUData, 100> imuData3;
 #ifndef APP_IMU_STALE_TIMEOUT_MS
 #define APP_IMU_STALE_TIMEOUT_MS 50u
 #endif
-
-inline osMutexId_t getImuLock(size_t index) {
-  switch (index) {
-    case 0:
-      return imuData1MutexHandle;
-    case 1:
-      return imuData2MutexHandle;
-    case 2:
-      return imuData3MutexHandle;
-    default:
-      return nullptr;
-  }
-}
 
 class ImuModule
     : public modules::Module<InvIMU_Interface, RingBuffer<IMUData, 100>, 3> {
@@ -219,20 +201,12 @@ private:
 
     IMUData frame{};
     size_t produced = 0;
-    osMutexId_t lock = getImuLock(sensor_index);
-
-    if (lock != nullptr) {
-      osMutexAcquire(lock, osWaitForever);
-    }
     while (drivers_[sensor_index]->getFrame(frame)) {
       buffers_[sensor_index]->append(frame);
       g.navSensorStore.set_imu(sensor_index, frame);
       sensor_state_[sensor_index].last_timestamp_us = frame.timestamp_us;
       ++produced_since_last_update_;
       ++produced;
-    }
-    if (lock != nullptr) {
-      osMutexRelease(lock);
     }
 
     sensor_state_[sensor_index].status_flags = drivers_[sensor_index]->statusFlags();

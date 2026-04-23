@@ -8,7 +8,8 @@
 extern "C" {
 #endif
 
-void mainLoop(void);
+void app_super_loop_setup(void);
+void app_super_loop_iterate(void);
 
 // Bridge functions called from HAL callbacks in Core/Src/main.c.
 void app_on_imu_exti(uint16_t gpio_pin);

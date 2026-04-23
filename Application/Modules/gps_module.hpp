@@ -1,14 +1,11 @@
 #pragma once
 
-#include "cmsis_os.h"
 #include "Application/Data/ring_buffer.hpp"
 #include "Application/Modules/module.hpp"
 #include "Application/app_timebase.h"
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
 #include "Application/Data/data.hpp"
 #include <cstdio>
-
-extern osMutexId_t gpsDataMutexHandle;
 
 extern RingBuffer<GpsBasicFixData, 100> gpsData;
 
@@ -53,14 +50,8 @@ public:
       gpsFix.timestamp_us = app_timebase_now_us();
     }
 
-    if (gpsDataMutexHandle != nullptr) {
-      osMutexAcquire(gpsDataMutexHandle, osWaitForever);
-    }
     buffers_[0]->append(gpsFix);
     g.gpsStore.set(gpsFix);
-    if (gpsDataMutexHandle != nullptr) {
-      osMutexRelease(gpsDataMutexHandle);
-    }
 
     last_fix_tick_ms_ = tick_ms;
     has_fix_ = true;
@@ -92,14 +83,8 @@ private:
     stale_fix.flags.gnssFixOK = false;
     stale_fix.flags.diffSoln = false;
 
-    if (gpsDataMutexHandle != nullptr) {
-      osMutexAcquire(gpsDataMutexHandle, osWaitForever);
-    }
     buffers_[0]->append(stale_fix);
     g.gpsStore.set(stale_fix);
-    if (gpsDataMutexHandle != nullptr) {
-      osMutexRelease(gpsDataMutexHandle);
-    }
 
     stale_no_fix_emitted_ = true;
   }
