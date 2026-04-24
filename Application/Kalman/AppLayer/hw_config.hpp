@@ -13,5 +13,5 @@
 #endif
 
 #ifndef APP_IMU_LOG_FORMAT
-#define APP_IMU_LOG_FORMAT 0
+#define APP_IMU_LOG_FORMAT 1  // 1 = float SI (IMUData from InvIMU is already float m/s², rad/s)
 #endif

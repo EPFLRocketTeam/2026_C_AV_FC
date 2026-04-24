@@ -15,6 +15,11 @@ using namespace eskf;
 
 // Tolerance for floating-point comparisons
 constexpr eskf_scalar kTol = 1e-9;
+
+// Use UINT32_MAX as budget when tests need catchUp to run to completion
+// without yielding. Under Valgrind (50-100x slower), even generous wall-clock
+// budgets like 1s can be exceeded during heavy Eigen operations.
+constexpr uint32_t kNoBudget = UINT32_MAX;
 constexpr eskf_scalar kTolF = 1e-5;
 
 // ============================================================
@@ -80,7 +85,7 @@ static void wakeFilterFromHibernation(EskfYieldable& filter,
   init_data.ground_reference_valid = false;
 
   filter.injectLiftoffSnap(init_data, rewind_to_ts);
-  filter.catchUp(rewind_to_ts, 100000);
+  filter.catchUp(rewind_to_ts, kNoBudget);
 }
 
 #if APP_TARGET_NATIVE
@@ -166,7 +171,7 @@ static void test_catchUp_processes_buffered_imu() {
 #endif
   
   // Call catchUp to process
-  bool caught_up = filter.catchUp(10000, 100000);
+  bool caught_up = filter.catchUp(10000, kNoBudget);
   TEST_ASSERT_TRUE(caught_up);
   TEST_ASSERT_EQUAL(10000, filter.kalmanTimestamp());
   
@@ -212,7 +217,7 @@ static void test_isBehind_returns_correct_status() {
   // Push and process IMU
   ImuFrame imu = createImuFrame(1000);
   filter.pushImu(imu, 0.001);
-  filter.catchUp(1000, 100000);
+  filter.catchUp(1000, kNoBudget);
   
   // Now should not be behind
   TEST_ASSERT_FALSE(filter.isBehind(1000));
@@ -243,7 +248,7 @@ static void test_baro_async_reserve_and_set() {
   // Process should now work
   ImuFrame imu = createImuFrame(5000);
   filter.pushImu(imu, 0.001);
-  filter.catchUp(5000, 100000);
+  filter.catchUp(5000, kNoBudget);
 }
 
 static void test_baro_on_time_replay_uses_direct_correction() {
@@ -268,7 +273,7 @@ static void test_baro_on_time_replay_uses_direct_correction() {
 
   // Measurement corresponding to altitude 0m (h ~= 0 when p_D=0 and b_baro=0).
   filter.completeBaro(0.0);
-  filter.catchUp(5000, 100000);
+  filter.catchUp(5000, kNoBudget);
 
   // With direct correction, state should remain close to current prediction.
   TEST_ASSERT_TRUE(std::abs(filter.state().p[2]) < 10.0);
@@ -292,8 +297,8 @@ static void test_baro_late_completion_uses_innovation_transport() {
     filter_a.pushImu(imu, 0.001);
     filter_b.pushImu(imu, 0.001);
   }
-  filter_a.catchUp(10000, 100000);
-  filter_b.catchUp(10000, 100000);
+  filter_a.catchUp(10000, kNoBudget);
+  filter_b.catchUp(10000, kNoBudget);
 
   // Increase vertical update gain so snapshot dependence is clearly observable.
   filter_a.core().resetPositionCovariance(1000.0);
@@ -320,8 +325,8 @@ static void test_baro_late_completion_uses_innovation_transport() {
 
   filter_a.setBaroMeasurement(slot_a, 0.0, 0.01);
   filter_b.setBaroMeasurement(slot_b, 0.0, 0.01);
-  filter_a.catchUp(11000, 100000);
-  filter_b.catchUp(11000, 100000);
+  filter_a.catchUp(11000, kNoBudget);
+  filter_b.catchUp(11000, kNoBudget);
 
   // Late path should depend on trigger snapshot; direct path would not.
   const eskf_scalar delta_pz =
@@ -352,7 +357,7 @@ static void test_gps_unified_timestamp_with_delay() {
     ImuFrame imu = createImuFrame((i + 1) * 1000);
     filter.pushImu(imu, 0.001);
   }
-  filter.catchUp(150000, 1000000);
+  filter.catchUp(150000, kNoBudget);
   TEST_ASSERT_EQUAL(150000, filter.kalmanTimestamp());
   
   // Push GPS with PPS at 200ms
@@ -371,7 +376,7 @@ static void test_gps_unified_timestamp_with_delay() {
   filter.pushGpsPosition(200000, pos, R);
   
   // Catch up to GPS timestamp (100ms, not 200ms since delay was applied)
-  filter.catchUp(100000, 1000000);
+  filter.catchUp(100000, kNoBudget);
   TEST_ASSERT_EQUAL(100000, filter.kalmanTimestamp());
 }
 
@@ -389,7 +394,7 @@ static void test_liftoff_snap_stored_and_replayed() {
     ImuFrame imu = createImuFrame((i + 1) * 1000);
     filter.pushImu(imu, 0.001);
   }
-  filter.catchUp(50000, 100000);
+  filter.catchUp(50000, kNoBudget);
   
   // Inject liftoff snap at 10ms using LiftoffInitData struct
   LiftoffInitData init_data{};
@@ -408,7 +413,7 @@ static void test_liftoff_snap_stored_and_replayed() {
   filter.injectLiftoffSnap(init_data, 10000);
   
   // Catch up
-  filter.catchUp(50000, 100000);
+  filter.catchUp(50000, kNoBudget);
   
   // The quaternion should reflect the injected orientation
   const State& s = filter.state();
@@ -449,7 +454,7 @@ static void test_buffer_overflow_during_rewind() {
   eskf_scalar lever[3] = {0, 0, 0};
   
   // First catch up to current time
-  filter.catchUp(ESKF_IMU_BUFFER_SIZE * 100, 1000000);
+  filter.catchUp(ESKF_IMU_BUFFER_SIZE * 100, kNoBudget);
   
   // Push GPS velocity with earlier timestamp
   filter.pushGpsVelocity(ESKF_IMU_BUFFER_SIZE * 100, vel, R, lever);
@@ -499,7 +504,7 @@ static void test_rewind_before_any_checkpoints_uses_initial() {
     ImuFrame imu = createImuFrame((i + 1) * 1000);
     filter.pushImu(imu, 0.001);
   }
-  filter.catchUp(10000, 100000);
+  filter.catchUp(10000, kNoBudget);
   
   // Push GPS that triggers rewind to t=5000
   eskf_scalar vel[3] = {0, 0, 0};
@@ -530,7 +535,7 @@ static void test_multiple_sequential_rewinds() {
     ImuFrame imu = createImuFrame((i + 1) * 1000);
     filter.pushImu(imu, 0.001);
   }
-  filter.catchUp(500000, 1000000);
+  filter.catchUp(500000, kNoBudget);
   
   eskf_scalar vel[3] = {0, 0, 0};
   eskf_scalar R[3] = {1, 1, 1};
@@ -538,17 +543,17 @@ static void test_multiple_sequential_rewinds() {
   
   // First GPS at PPS 500ms, velocity timestamp = 400ms
   filter.pushGpsVelocity(500000, vel, R, lever);
-  filter.catchUp(500000, 1000000);
+  filter.catchUp(500000, kNoBudget);
   TEST_ASSERT_EQUAL(1, filter.stats().rewind_count);
   
   // Second GPS at PPS 500ms (another measurement), rewind again
   filter.pushGpsVelocity(510000, vel, R, lever);
-  filter.catchUp(510000, 1000000);
+  filter.catchUp(510000, kNoBudget);
   TEST_ASSERT_EQUAL(2, filter.stats().rewind_count);
   
   // Third GPS at PPS 520ms
   filter.pushGpsVelocity(520000, vel, R, lever);
-  filter.catchUp(520000, 1000000);
+  filter.catchUp(520000, kNoBudget);
   TEST_ASSERT_EQUAL(3, filter.stats().rewind_count);
 }
 
@@ -571,7 +576,7 @@ static void test_completeBaro_vs_setBaroMeasurement_equivalence() {
   
   size_t slot = filter1.reserveBaro(5000);
   filter1.setBaroMeasurement(slot, 100.0, 4.0);  // Fixed R
-  filter1.catchUp(10000, 100000);
+  filter1.catchUp(10000, kNoBudget);
   eskf_scalar alt1 = filter1.state().p[2];
   
   // Second filter using triggerBaro/completeBaro
@@ -585,7 +590,7 @@ static void test_completeBaro_vs_setBaroMeasurement_equivalence() {
   
   filter2.triggerBaro(5000);
   filter2.completeBaro(100.0);  // Auto R from velocity
-  filter2.catchUp(10000, 100000);
+  filter2.catchUp(10000, kNoBudget);
   eskf_scalar alt2 = filter2.state().p[2];
   
   // Both should be on the same order of magnitude (R differs, so not exact)
@@ -611,7 +616,7 @@ static void test_mag_heading_outlier_is_rejected_by_state_machine() {
 
   // Large innovation should fail 3-sigma gate and be rejected.
   filter.pushMagHeading(3.0, 0.01, 10000);
-  filter.catchUp(10000, 200000);
+  filter.catchUp(10000, kNoBudget);
 
   const eskf_scalar yaw_after = yawFromState(filter.state());
   TEST_ASSERT_TRUE(std::abs(yaw_after - yaw_before) < 0.2);
@@ -638,7 +643,7 @@ static void test_completeBaro_stale_drop_counted_once() {
   for (int i = 0; i < 5; ++i) {
     filter.pushImu(createImuFrame((i + 1) * 1000ULL), 0.001);
   }
-  filter.catchUp(5000, 200000);
+  filter.catchUp(5000, kNoBudget);
   filter.resetStats();
 
   // Deliberately stale completion: trigger timestamp is behind Kalman time.
@@ -647,7 +652,7 @@ static void test_completeBaro_stale_drop_counted_once() {
   TEST_ASSERT_EQUAL(1, filter.stats().baro_drops);
 
   // Another catchUp pass should consume dropped slot without recounting.
-  filter.catchUp(6000, 200000);
+  filter.catchUp(6000, kNoBudget);
   TEST_ASSERT_EQUAL(1, filter.stats().baro_drops);
 }
 
@@ -670,7 +675,7 @@ static void test_yieldable_contract_01_liftoff_snap_precedes_tied_imu() {
 
   // Liftoff snap is injected at the same timestamp.
   wakeFilterFromHibernation(filter, 10000, 10000, 1.0, 0.0);
-  filter.catchUp(10000, 100000);
+  filter.catchUp(10000, kNoBudget);
 
   // If liftoff executes first (contract), tied IMU rotates away from identity.
   const State& s = filter.state();
@@ -699,7 +704,7 @@ static void test_yieldable_contract_01_same_timestamp_baro_then_event_fifo() {
   filter.pushGpsPosition(5000, pos, R_pos);
 
   filter.pushImu(createImuFrame(5000), 0.001);
-  filter.catchUp(5000, 100000);
+  filter.catchUp(5000, kNoBudget);
 
   // GPS position event should dominate the final vertical state if it runs last.
   TEST_ASSERT_TRUE(filter.state().p[2] > 30.0);
@@ -714,11 +719,11 @@ static void test_yieldable_contract_02_catchup_true_when_nothing_processable() {
   initFilterForContracts(filter, initial, 0, 0);
 
   filter.pushImu(createImuFrame(1000), 0.001);
-  filter.catchUp(1000, 100000);
+  filter.catchUp(1000, kNoBudget);
 
   // Reserve baro slot and leave it incomplete (ready=false).
   filter.reserveBaro(2000);
-  const bool caught_up = filter.catchUp(5000, 100000);
+  const bool caught_up = filter.catchUp(5000, kNoBudget);
 
   TEST_ASSERT_TRUE(caught_up);
   TEST_ASSERT_EQUAL(1000, filter.kalmanTimestamp());
@@ -744,7 +749,7 @@ static void test_yieldable_contract_03_budget_yield_cursor_integrity_determinist
     budgeted.pushImu(imu, 0.001);
   }
 
-  reference.catchUp(kTargetUs, 2000000);
+  reference.catchUp(kTargetUs, kNoBudget);
 
 #if APP_TARGET_NATIVE
   DeterministicClock clock;
@@ -797,7 +802,7 @@ static void test_yieldable_contract_04_rewind_replay_indices_match_checkpoint_co
     const size_t baro_slot = filter.reserveBaro(256000);
     filter.setBaroMeasurement(baro_slot, 120.0, 0.01);
     filter.pushMagHeading(0.3, 0.01, 256000);
-    filter.catchUp(300000, 2000000);
+    filter.catchUp(300000, kNoBudget);
     filter.resetStats();
     return filter;
   };
@@ -809,7 +814,7 @@ static void test_yieldable_contract_04_rewind_replay_indices_match_checkpoint_co
   const eskf_scalar R_vel[3] = {1e12, 1e12, 1e12};
   const eskf_scalar lever[3] = {0, 0, 0};
   rewound.pushGpsVelocity(256000, vel, R_vel, lever);
-  rewound.catchUp(300000, 2000000);
+  rewound.catchUp(300000, kNoBudget);
 
   TEST_ASSERT_EQUAL(1, rewound.stats().rewind_count);
   TEST_ASSERT_DOUBLE_WITHIN(1e-2, baseline.state().v[0], rewound.state().v[0]);
@@ -830,7 +835,7 @@ static void test_yieldable_contract_05_rewind_data_gap_detected() {
     filter.pushImu(createImuFrame((i + 1) * 100ULL, 1.0, -9.80665), 0.0001);
   }
   const uint64_t final_ts = static_cast<uint64_t>(total) * 100ULL;
-  filter.catchUp(final_ts, 2000000);
+  filter.catchUp(final_ts, kNoBudget);
   const eskf_scalar vx_before_rewind = filter.state().v[0];
 
   filter.resetStats();
@@ -838,7 +843,7 @@ static void test_yieldable_contract_05_rewind_data_gap_detected() {
   const eskf_scalar R_vel[3] = {1e12, 1e12, 1e12};
   const eskf_scalar lever[3] = {0, 0, 0};
   filter.pushGpsVelocity(100, vel, R_vel, lever);
-  filter.catchUp(final_ts, 4000000);
+  filter.catchUp(final_ts, kNoBudget);
 
   TEST_ASSERT_EQUAL(0, filter.stats().rewind_count);
   TEST_ASSERT_EQUAL(0, filter.stats().rewind_data_gap_count);
@@ -885,7 +890,7 @@ static void test_yieldable_contract_07_out_of_order_processed_chronologically() 
     reference.resetStats();
     reference.pushMagHeading(1.0, 0.001, 30000);
     reference.pushMagHeading(-1.0, 0.001, 50000);
-    reference.catchUp(60000, 200000);
+    reference.catchUp(60000, kNoBudget);
   }
 
   EskfYieldable filter;
@@ -898,7 +903,7 @@ static void test_yieldable_contract_07_out_of_order_processed_chronologically() 
 
   filter.pushMagHeading(-1.0, 0.001, 50000);
   filter.pushMagHeading(1.0, 0.001, 30000);  // Out of order by timestamp.
-  filter.catchUp(60000, 200000);
+  filter.catchUp(60000, kNoBudget);
 
   TEST_ASSERT_EQUAL(1, filter.stats().out_of_order_events);
   TEST_ASSERT_DOUBLE_WITHIN(1e-6,
@@ -921,13 +926,13 @@ static void test_yieldable_contract_11_trigger_complete_baro_pending_contract() 
   }
 
   filter.triggerBaro(15000);
-  const bool first_catch = filter.catchUp(20000, 200000);
+  const bool first_catch = filter.catchUp(20000, kNoBudget);
   const eskf_scalar z_before_complete = filter.state().p[2];
   const uint32_t rewinds_before = filter.stats().rewind_count;
 
   filter.completeBaro(80.0);
   filter.pushImu(createImuFrame(21000), 0.001);
-  filter.catchUp(21000, 200000);
+  filter.catchUp(21000, kNoBudget);
 
   TEST_ASSERT_TRUE(first_catch);
   TEST_ASSERT_EQUAL(21000, filter.kalmanTimestamp());
@@ -947,7 +952,7 @@ static void test_yieldable_contract_15_dual_timestamp_single_delay_for_packet_or
   for (int i = 0; i < 130; ++i) {
     filter.pushImu(createImuFrame((i + 1) * 1000ULL), 0.001);
   }
-  filter.catchUp(130000, 3000000);
+  filter.catchUp(130000, kNoBudget);
   filter.resetStats();
 
   const eskf_scalar pos[3] = {0, 0, 0};
@@ -961,7 +966,7 @@ static void test_yieldable_contract_15_dual_timestamp_single_delay_for_packet_or
   // Rewind must move Kalman time backward (single-delay ordering domain).
   TEST_ASSERT_TRUE(filter.kalmanTimestamp() <= 100000);
 
-  filter.catchUp(130000, 3000000);
+  filter.catchUp(130000, kNoBudget);
   TEST_ASSERT_EQUAL(130000, filter.kalmanTimestamp());
   TEST_ASSERT_EQUAL(1, filter.stats().rewind_count);
 }
@@ -980,7 +985,7 @@ static void test_yieldable_contract_16_drop_late_gps_older_than_retained_imu_his
   for (int i = 0; i < 3600; ++i) {
     filter.pushImu(createImuFrame((i + 1) * 1000ULL), 0.001);
   }
-  filter.catchUp(3600000, 4000000);
+  filter.catchUp(3600000, kNoBudget);
   filter.resetStats();
 
   const eskf_scalar pos[3] = {0, 0, 0};
@@ -997,7 +1002,7 @@ static void test_yieldable_contract_16_drop_late_gps_older_than_retained_imu_his
   TEST_ASSERT_EQUAL(0, filter.stats().rewind_count);
   TEST_ASSERT_EQUAL(0, filter.stats().rewind_data_gap_count);
 
-  filter.catchUp(3600000, 500000);
+  filter.catchUp(3600000, kNoBudget);
   TEST_ASSERT_EQUAL(0, filter.stats().rewind_count);
 }
 
@@ -1053,7 +1058,7 @@ static void test_yieldable_contract_18_liftoff_snap_survives_burst_pressure() {
     filter.pushMagHeading(0.0, 0.05, 220000 + static_cast<uint64_t>(i) * 1000ULL);
   }
 
-  filter.catchUp(320000, 4000000);
+  filter.catchUp(320000, kNoBudget);
 
   TEST_ASSERT_EQUAL(0, filter.stats().event_drops);
   TEST_ASSERT_TRUE(std::abs(filter.state().q[2]) > 0.05);
@@ -1089,7 +1094,7 @@ static void test_yieldable_contract_19_liftoff_rewind_skips_boot_gap_bridge() {
 
   filter.resetStats();
   filter.injectLiftoffSnap(init_data, rewind_to_ts);
-  filter.catchUp(init_data.liftoff_us, 5000000);
+  filter.catchUp(init_data.liftoff_us, kNoBudget);
 
   TEST_ASSERT_EQUAL(1, filter.stats().rewind_count);
   TEST_ASSERT_EQUAL(0, filter.stats().rewind_data_gap_count);

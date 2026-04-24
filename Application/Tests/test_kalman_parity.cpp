@@ -296,7 +296,7 @@ TEST(KalmanParityEstimator, Contract13FirstFixNoFuseAfterLateLiftoff) {
     est.onLiftoff(0);
 
     auto& filter = const_cast<eskf::EskfYieldable&>(est.filter());
-    filter.catchUp(0, 100000);
+    filter.catchUp(0, UINT32_MAX);
     eskf::State seeded = filter.state();
     seeded.p[0] = 42.0;
     seeded.p[1] = -17.0;

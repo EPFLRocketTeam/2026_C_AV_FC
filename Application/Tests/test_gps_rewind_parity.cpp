@@ -7,6 +7,10 @@
 
 using namespace eskf;
 
+// Use UINT32_MAX as budget when tests need catchUp to run to completion
+// without yielding. Under Valgrind, wall-clock budgets are easily exceeded.
+constexpr uint32_t kNoBudget = UINT32_MAX;
+
 namespace {
 
 State createDefaultState() {
@@ -62,7 +66,7 @@ void wakeFilterFromHibernation(EskfYieldable& filter,
   init_data.ground_reference_valid = false;
 
   filter.injectLiftoffSnap(init_data, rewind_to_ts);
-  filter.catchUp(rewind_to_ts, 100000);
+  filter.catchUp(rewind_to_ts, kNoBudget);
 }
 
 }  // namespace
@@ -95,7 +99,7 @@ TEST(KalmanGpsRewindParity, CatchUpProcessesBufferedImu) {
   EXPECT_EQ(filter.kalmanTimestamp(), 0u);
 #endif
 
-  const bool caught_up = filter.catchUp(10000, 100000);
+  const bool caught_up = filter.catchUp(10000, kNoBudget);
   EXPECT_TRUE(caught_up);
   EXPECT_EQ(filter.kalmanTimestamp(), 10000u);
   EXPECT_GT(filter.state().v[0], 0.005);
@@ -114,7 +118,7 @@ TEST(KalmanGpsRewindParity, BaroAsyncReserveAndSet) {
 
   const ImuFrame imu = createImuFrame(5000);
   filter.pushImu(imu, 0.001);
-  (void)filter.catchUp(5000, 100000);
+  (void)filter.catchUp(5000, kNoBudget);
 }
 
 TEST(KalmanGpsRewindParity, BaroOnTimeReplayUsesDirectCorrection) {
@@ -135,7 +139,7 @@ TEST(KalmanGpsRewindParity, BaroOnTimeReplayUsesDirectCorrection) {
   filter.core().setState(s);
 
   filter.completeBaro(0.0);
-  filter.catchUp(5000, 100000);
+  filter.catchUp(5000, kNoBudget);
 
   EXPECT_LT(std::abs(filter.state().p[2]), 10.0);
 }
@@ -156,8 +160,8 @@ TEST(KalmanGpsRewindParity, BaroLateCompletionUsesInnovationTransport) {
     filter_a.pushImu(imu, 0.001);
     filter_b.pushImu(imu, 0.001);
   }
-  filter_a.catchUp(10000, 100000);
-  filter_b.catchUp(10000, 100000);
+  filter_a.catchUp(10000, kNoBudget);
+  filter_b.catchUp(10000, kNoBudget);
 
   filter_a.core().resetPositionCovariance(1000.0);
   filter_b.core().resetPositionCovariance(1000.0);
@@ -181,8 +185,8 @@ TEST(KalmanGpsRewindParity, BaroLateCompletionUsesInnovationTransport) {
 
   filter_a.setBaroMeasurement(slot_a, 0.0, 0.01);
   filter_b.setBaroMeasurement(slot_b, 0.0, 0.01);
-  filter_a.catchUp(11000, 100000);
-  filter_b.catchUp(11000, 100000);
+  filter_a.catchUp(11000, kNoBudget);
+  filter_b.catchUp(11000, kNoBudget);
 
   const eskf_scalar delta_pz = std::abs(filter_a.state().p[2] - filter_b.state().p[2]);
   EXPECT_GT(delta_pz, 10.0);
@@ -199,7 +203,7 @@ TEST(KalmanGpsRewindParity, IsBehindStatus) {
 
   const ImuFrame imu = createImuFrame(1000);
   filter.pushImu(imu, 0.001);
-  filter.catchUp(1000, 100000);
+  filter.catchUp(1000, kNoBudget);
 
   EXPECT_FALSE(filter.isBehind(1000));
 }

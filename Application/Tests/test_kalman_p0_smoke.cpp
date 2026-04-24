@@ -20,5 +20,7 @@ TEST(KalmanP0Smoke, InitializesAndCatchesUpEmptyTimeline) {
     cfg.catchupBudgetUs = 1000;
     filter.configure(cfg);
 
-    EXPECT_TRUE(filter.catchUp(0, cfg.catchupBudgetUs));
+    // Use UINT32_MAX to avoid Valgrind wall-clock budget sensitivity.
+    // This test checks empty-timeline completion, not budget behavior.
+    EXPECT_TRUE(filter.catchUp(0, UINT32_MAX));
 }

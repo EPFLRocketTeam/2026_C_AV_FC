@@ -1155,7 +1155,7 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
         rail_shadow_.update(vout.nav_accel, vout.nav_gyro, dt_s,
                             vout.frame.timestamp_us);
         if (vout.frame.timestamp_us - last_rail_checkpoint_us_ >=
-            ESKF_RAIL_CHECKPOINT_INTERVAL_US) {
+            cfg_.rail_checkpoint_interval_us) {
           rail_shadow_.saveCheckpoint(vout.frame.timestamp_us);
           last_rail_checkpoint_us_ = vout.frame.timestamp_us;
         }

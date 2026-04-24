@@ -136,20 +136,23 @@ struct KalmanRuntime {
 	}
 
 	static app::ImuSample convertImuSample(const IMUData &sample) {
-		constexpr float kAccelScale = (INV_IMU_MAX_ACCEL_G * 9.80665f) / 32768.0f;
-		constexpr float kGyroScale =
-			(INV_IMU_MAX_GYRO_DPS * 3.14159265359f / 180.0f) / 32768.0f;
+		// IMUData already contains float SI values (m/s², rad/s, Kelvin).
+		// Pass them through directly to ImuSample; the estimator consumes
+		// these via the APP_IMU_LOG_FORMAT == 1 (float) path, avoiding a
+		// lossy reverse-scale/re-scale round-trip.
 		constexpr float kTempScale = 1.0f / 2.07f;
 		constexpr float kTempOffsetK = 25.0f + 273.15f;
 
 		app::ImuSample out{};
-		out.ax = sample.accel_x / kAccelScale;
-		out.ay = sample.accel_y / kAccelScale;
-		out.az = sample.accel_z / kAccelScale;
-		out.gx = sample.gyro_x / kGyroScale;
-		out.gy = sample.gyro_y / kGyroScale;
-		out.gz = sample.gyro_z / kGyroScale;
+		out.ax = sample.accel_x;
+		out.ay = sample.accel_y;
+		out.az = sample.accel_z;
+		out.gx = sample.gyro_x;
+		out.gy = sample.gyro_y;
+		out.gz = sample.gyro_z;
 
+		// Temperature: ICM FIFO convention is stored as int8_t in ImuSample
+		// to match the kalman library's expected format.
 		const float temp_raw = (sample.temperature - kTempOffsetK) / kTempScale;
 		const int temp_i = static_cast<int>(std::lround(temp_raw));
 		const int temp_clamped = std::max(-128, std::min(127, temp_i));
@@ -310,6 +313,20 @@ struct KalmanRuntime {
 			}
 		}
 
+		// TODO(parachute-trigger): Apogee detection is the Kalman subsystem's
+		// responsibility and is now complete (ConsensusApogeeDetector + ApogeeHub).
+		// The actual parachute deployment decision and FSM ASCENT->DESCENT
+		// transition should be handled by a higher-level module that:
+		//   1. Reads eventStore.apogee_detected (set above by kalman).
+		//   2. Applies additional robustness checks before triggering deployment:
+		//      - Minimum time-since-liftoff confirmation window.
+		//      - Independent altitude/velocity sanity bound.
+		//      - Redundant actuation confirmation (e.g. arm/fire sequencing).
+		//   3. Only then transitions FSM to DESCENT and fires actuation.
+		// Currently, av_state.cpp::fromAscent() reads dump.event.apogee_detected
+		// and transitions to DESCENT. The robustness checks listed above are
+		// NOT yet implemented there — this is a flight-safety TODO.
+
 		if (set_catastrophic_failure || set_apogee_detected) {
 			if (eventStoreMutexHandle != nullptr) {
 				osMutexAcquire(eventStoreMutexHandle, osWaitForever);
@@ -349,11 +366,15 @@ struct KalmanRuntime {
 		for (size_t i = 0; i < fix_count; ++i) {
 			const app::sensors::gnss::GnssSample sample =
 				convertGpsFixSample(staged_fixes[i], fallback_timestamp_us);
-			if (!sample.valid) {
-				continue;
-			}
+			// Forward ALL fixes to the estimator (including invalid ones) so
+			// the estimator's own stale/frozen detection and fix-drop
+			// diagnostics can observe the full GNSS health picture.
+			// The estimator has its own usability gate:
+			//   (sample.valid && sample.fix_type >= 2).
 			estimator.processGpsSample(sample);
-			health.gps_updates += 1;
+			if (sample.valid) {
+				health.gps_updates += 1;
+			}
 		}
 
 		// TODO(kalman): Wire barometer into estimator once BMP samples are exposed
@@ -384,7 +405,6 @@ int kalman_loop() {
 	bool source_healthy[3] = {false, false, false};
 	size_t healthy_source_count = 0;
 	int drained = 0;
-	uint64_t latest_imu_ts = 0;
 
 	for (size_t i = 0; i < 3; ++i) {
 		source_healthy[i] =
@@ -400,8 +420,6 @@ int kalman_loop() {
 		size_t source_samples = 0;
 		while (source_samples < kMaxImuSamplesPerSourcePerRun &&
 			   buffers[i]->pop(staged_samples[i][source_samples])) {
-			latest_imu_ts = std::max(latest_imu_ts,
-							  staged_samples[i][source_samples].timestamp_us);
 			++source_samples;
 		}
 
@@ -468,18 +486,22 @@ int kalman_loop() {
 		staged_index[best_source] += chunk_count;
 	}
 
-	if (latest_imu_ts == 0) {
-		latest_imu_ts = app_timebase_now_us();
-	}
 
-	kalman.ingestAidingFromStore();
-
+	// Liftoff must be consumed before aiding ingestion so that GPS
+	// samples arriving in the same tick see in_flight_==true and
+	// can anchor the NED origin immediately, matching ktp-soft ordering.
 	uint32_t liftoff_ms = 0;
 	if (kalman_take_pending_liftoff(&liftoff_ms) != 0U) {
 		kalman.onLiftoff(liftoff_ms);
 	}
 
-	kalman.onTick(latest_imu_ts);
+	kalman.ingestAidingFromStore();
+
+	// Use wall-clock time for onTick so the catchUp horizon matches real
+	// time, not the latest IMU sample timestamp (which may lag due to
+	// central-diff delay or empty batches).
+	const uint64_t tick_now_us = app_timebase_now_us();
+	kalman.onTick(tick_now_us);
 
 	const uint64_t kalman_loop_end_us = app_timebase_now_us();
 	const uint32_t kalman_loop_elapsed_us =
