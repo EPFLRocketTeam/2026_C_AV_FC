@@ -18,7 +18,7 @@
 #include "Application/Kalman/kalman/preprocessor/virtual_baro.hpp"
 #include "Application/Kalman/kalman/preprocessor/virtual_compass.hpp"
 #include "Application/Kalman/kalman/preprocessor/pressure_altitude.hpp"
-#include "Application/Kalman/AppLayer/descent_nav_filter.hpp"
+#include "Application/Kalman/kalman/descent_nav_filter.hpp"
 #include <vector>
 
 namespace app {

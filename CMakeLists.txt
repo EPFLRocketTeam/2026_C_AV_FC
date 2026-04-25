@@ -83,7 +83,7 @@ SET(FC_SOURCE_FILES
     Application/Kalman/AppLayer/apogee_hub.cpp
     Application/Kalman/AppLayer/consensus_apogee.cpp
     Application/Kalman/AppLayer/state_estimator.cpp
-    Application/Kalman/AppLayer/descent_nav_filter.cpp
+    Application/Kalman/kalman/descent_nav_filter.cpp
     Application/Kalman/AppLayer/eskf_estimator.cpp
     Application/Kalman/AppLayer/output_bridge.cpp
     Application/Kalman/kalman_health.cpp
