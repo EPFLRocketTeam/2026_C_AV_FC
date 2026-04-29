@@ -105,25 +105,32 @@ State AvState::fromIgnition(DataDump const &dump) {
     return State::ABORT_IN_FLIGHT;
   }
 
-  if (dump.uplinkCmd.id == 1 ||
-      (!dump.vehiculeOverview.no_cable_continuity &&
-       !dump.event.vertical_acc_hold)) // TODO: replace this with proper cmd id
-                                       // from the protocol and add the
-                                       // condition p_tanks > p_prvs
-  {
-    // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
+  if (dump.uplinkCmd.id == 1) { // ABORT command
     return State::ABORT_ON_GROUND;
   }
-  // If all the sensors are calibrated and ready for use we go to the MANUAL
-  // state
-  else if (dump.vehiculeOverview.no_cable_continuity ||
-           dump.event.vertical_acc_hold) // TODO: replace this with proper cmd
-                                         // id from the protocol and check
-                                         // additional condition
-  {
-    // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
+
+  // --- Liftoff detection (DONE: tri-state vertical_acc_hold) ---
+  // The cable is always authoritative: if the umbilical disconnects,
+  // the rocket has left the pad regardless of the IMU evaluation.
+  if (dump.vehiculeOverview.no_cable_continuity) {
     return State::BURN;
   }
+
+  // IMU-based liftoff: the Kalman subsystem evaluates whether the mean
+  // vertical acceleration exceeded ACCEL_LIFTOFF for ACCEL_LIFTOFF_DURATION_MS
+  // after entering IGNITION (post-RAMP_UP).  Three possible values:
+  //   ACC_HOLD_NOT_ELAPSED     – window still running → stay in IGNITION.
+  //   ACC_HOLD_DID_HOLD        – confirmed liftoff    → transition to BURN.
+  //   ACC_HOLD_DID_NOT_HOLD    – motor failed         → abort on ground.
+  if (dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
+    return State::BURN;
+  }
+
+  if (dump.event.vertical_acc_hold == ACC_HOLD_DID_NOT_HOLD) {
+    return State::ABORT_ON_GROUND;
+  }
+
+  // ACC_HOLD_NOT_ELAPSED – evaluation still in progress.
   return currentState;
 }
 

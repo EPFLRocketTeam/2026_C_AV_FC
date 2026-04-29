@@ -447,6 +447,19 @@ public:
   void set_baro(const bmp3_data &value);
 };
 
+/// Tri-state encoding for the vertical-acceleration-hold liftoff event.
+/// Used during IGNITION to decide whether the motor actually ignited:
+///   NOT_ELAPSED      – the evaluation window has not finished yet; no decision.
+///   ACC_DID_HOLD     – mean vertical accel exceeded the threshold for the
+///                      required duration → transition to BURN.
+///   ACC_DID_NOT_HOLD – the window elapsed but acceleration was insufficient
+///                      → transition to ABORT_ON_GROUND.
+enum AccHoldStatus : uint8_t {
+  ACC_HOLD_NOT_ELAPSED     = 0,
+  ACC_HOLD_DID_HOLD        = 1,
+  ACC_HOLD_DID_NOT_HOLD    = 2,
+};
+
 struct Event {
   bool command_updated;
   bool calibrated;
@@ -466,7 +479,12 @@ struct Event {
   bool cut_off_detected;   // TODO: update the store
   bool apogee_detected;    // TODO: update the store
   bool touchdown_detected; // TODO: update the store
-  bool vertical_acc_hold;  // TODO: update the store
+
+  /// Liftoff acceleration-hold evaluation result.
+  /// Written by the Kalman subsystem once the FSM enters IGNITION.
+  /// @see AccHoldStatus
+  uint8_t vertical_acc_hold;
+
   // bool ascent_max_duration;  // TODO: update the store
   // bool descent_max_duration; // TODO: update the store
 

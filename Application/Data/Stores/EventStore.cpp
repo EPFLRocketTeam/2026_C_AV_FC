@@ -20,7 +20,7 @@ Event::Event()
     cut_off_detected(false),
     apogee_detected(false),
     touchdown_detected(false),
-    vertical_acc_hold(false)
+    vertical_acc_hold(ACC_HOLD_NOT_ELAPSED)
 {}
 
 EventStore::EventStore() {}

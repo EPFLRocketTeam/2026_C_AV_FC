@@ -23,7 +23,7 @@
 #define IGNITER_DURATION                 1.5f    // s
 #define IGNITION_DELAY                   0.5f    // s
 #define RAMP_UP_DURATION                 3.0f    // s
-#define ACCEL_LIFTOFF_DURATION_MS        100.0f  // s
+#define ACCEL_LIFTOFF_DURATION_MS        100.0f  // ms
 #define ACCEL_LIFTOFF                    15.0f   // m/s²
 #define RAMP_UP_CHECK_PRESSURE           22.0f   // bar
 #define ISP                              280.0f  // s

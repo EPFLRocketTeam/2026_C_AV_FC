@@ -10,6 +10,7 @@
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Data/fsm.hpp"
 #include "Application/Data/data.hpp"
+#include "Application/FlightControl/threshold.h"
 #include "Application/Modules/imu_modlue.hpp"
 
 extern "C" {
@@ -51,6 +52,98 @@ constexpr uint32_t kNominalImuDtUs = 1000U;
 std::atomic<uint32_t> g_last_main_loop_iteration_us{0u};
 std::atomic<uint32_t> g_max_main_loop_iteration_us{0u};
 
+// ---------------------------------------------------------------
+// Liftoff acceleration-hold evaluator.
+//
+// After the FSM enters IGNITION, this waits RAMP_UP_DURATION seconds
+// (motor spin-up), then evaluates whether the mean vertical
+// acceleration exceeds ACCEL_LIFTOFF for at least
+// ACCEL_LIFTOFF_DURATION_MS milliseconds.  The result is written
+// as a tri-state AccHoldStatus into the GOATStore eventStore so
+// that the FSM can decide between BURN and ABORT_ON_GROUND.
+// ---------------------------------------------------------------
+struct LiftoffAccHold {
+	bool active = false;         ///< Evaluation in progress
+	uint64_t ignition_enter_us = 0;  ///< Timestamp when IGNITION was entered
+
+	// Accumulator for the evaluation window.
+	double accel_sum = 0.0;
+	uint32_t accel_count = 0;
+	uint64_t window_start_us = 0;  ///< Timestamp when the evaluation window began
+	bool in_window = false;        ///< True once ramp-up has elapsed
+
+	void reset() {
+		active = false;
+		ignition_enter_us = 0;
+		accel_sum = 0.0;
+		accel_count = 0;
+		window_start_us = 0;
+		in_window = false;
+	}
+
+	void onIgnitionEnter(uint64_t now_us) {
+		reset();
+		active = true;
+		ignition_enter_us = now_us;
+	}
+
+	/// Call every Kalman tick while in IGNITION.
+	/// @param vertical_accel_mps2  Kalman-filtered vertical acceleration
+	///                             (positive = upward / away from ground).
+	/// @param now_us               Current wall-clock time in microseconds.
+	/// @return ACC_HOLD_NOT_ELAPSED while still evaluating,
+	///         ACC_HOLD_DID_HOLD / ACC_HOLD_DID_NOT_HOLD when done.
+	flight_computer::AccHoldStatus evaluate(
+		double vertical_accel_mps2, uint64_t now_us)
+	{
+		using flight_computer::AccHoldStatus;
+		using flight_computer::ACC_HOLD_NOT_ELAPSED;
+		using flight_computer::ACC_HOLD_DID_HOLD;
+		using flight_computer::ACC_HOLD_DID_NOT_HOLD;
+
+		if (!active) {
+			return ACC_HOLD_NOT_ELAPSED;
+		}
+
+		constexpr uint64_t ramp_up_us =
+			static_cast<uint64_t>(RAMP_UP_DURATION * 1000000.0f);
+		constexpr uint64_t window_us =
+			static_cast<uint64_t>(ACCEL_LIFTOFF_DURATION_MS * 1000.0f);
+
+		// Phase 1: wait for motor ramp-up to complete.
+		if (!in_window) {
+			if ((now_us - ignition_enter_us) < ramp_up_us) {
+				return ACC_HOLD_NOT_ELAPSED;
+			}
+			in_window = true;
+			window_start_us = now_us;
+			accel_sum = 0.0;
+			accel_count = 0;
+		}
+
+		// Phase 2: accumulate vertical acceleration samples.
+		accel_sum += vertical_accel_mps2;
+		accel_count++;
+
+		// Phase 3: has the evaluation window elapsed?
+		if ((now_us - window_start_us) < window_us) {
+			return ACC_HOLD_NOT_ELAPSED;
+		}
+
+		// Window complete — compute mean and decide.
+		active = false;
+		if (accel_count == 0) {
+			return ACC_HOLD_DID_NOT_HOLD;
+		}
+
+		const double mean_accel = accel_sum / static_cast<double>(accel_count);
+		if (mean_accel > static_cast<double>(ACCEL_LIFTOFF)) {
+			return ACC_HOLD_DID_HOLD;
+		}
+		return ACC_HOLD_DID_NOT_HOLD;
+	}
+};
+
 struct KalmanRuntime {
 	app::EskfEstimator estimator;
 	app::ApogeeHub apogee_hub;
@@ -64,6 +157,7 @@ struct KalmanRuntime {
 	flight_computer::Vector3 last_body_accel_mps2{};
 	KalmanHealthSnapshot health{};
 	size_t active_imu_sources = 3u;
+	LiftoffAccHold acc_hold;  ///< Liftoff acceleration-hold evaluator
 
 	void initIfNeeded() {
 		if (initialized) {
@@ -114,7 +208,13 @@ struct KalmanRuntime {
 			liftoff_ms = 0;
 			apogee_detected = false;
 			last_body_accel_mps2 = {};
+			acc_hold.reset();
 			KalmanHealthStore::instance().reset();
+		}
+
+		// DONE: Start liftoff acceleration-hold evaluation on IGNITION entry.
+		if (state == flight_computer::State::IGNITION) {
+			acc_hold.onIgnitionEnter(app_timebase_now_us());
 		}
 	}
 
@@ -294,6 +394,22 @@ struct KalmanRuntime {
 			osMutexRelease(navigationDataMutexHandle);
 		}
 
+		// --- Liftoff acceleration-hold evaluation (DONE) ---
+		// While in IGNITION, feed the evaluator with the latest body-X
+		// acceleration (thrust axis ≈ vertical on the pad).  When the
+		// evaluation window completes, write the result to eventStore.
+		flight_computer::AccHoldStatus acc_hold_result =
+			flight_computer::ACC_HOLD_NOT_ELAPSED;
+		bool acc_hold_terminal = false;
+		if (acc_hold.active) {
+			// body_accel_mps2.x is the thrust-axis (body-X) accel from the
+			// latest IMU sample — positive along thrust direction.
+			const double vertical_accel = last_body_accel_mps2.x;
+			acc_hold_result = acc_hold.evaluate(vertical_accel, now_us);
+			acc_hold_terminal =
+				(acc_hold_result != flight_computer::ACC_HOLD_NOT_ELAPSED);
+		}
+
 		const bool set_catastrophic_failure = eskf_diverged;
 		bool set_apogee_detected = false;
 
@@ -327,7 +443,7 @@ struct KalmanRuntime {
 		// and transitions to DESCENT. The robustness checks listed above are
 		// NOT yet implemented there — this is a flight-safety TODO.
 
-		if (set_catastrophic_failure || set_apogee_detected) {
+		if (set_catastrophic_failure || set_apogee_detected || acc_hold_terminal) {
 			if (eventStoreMutexHandle != nullptr) {
 				osMutexAcquire(eventStoreMutexHandle, osWaitForever);
 			}
@@ -338,6 +454,9 @@ struct KalmanRuntime {
 			}
 			if (set_apogee_detected) {
 				event.apogee_detected = true;
+			}
+			if (acc_hold_terminal) {
+				event.vertical_acc_hold = static_cast<uint8_t>(acc_hold_result);
 			}
 			goat.eventStore.set(event);
 

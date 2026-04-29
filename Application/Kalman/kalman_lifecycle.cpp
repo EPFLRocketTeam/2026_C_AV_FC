@@ -44,6 +44,7 @@ extern "C" void kalman_on_state_change(uint32_t state) {
         auto event = goat.eventStore.get();
         event.catastrophic_failure = false;
         event.apogee_detected = false;
+        event.vertical_acc_hold = flight_computer::ACC_HOLD_NOT_ELAPSED;
         goat.eventStore.set(event);
 
         if (eventStoreMutexHandle != nullptr) {

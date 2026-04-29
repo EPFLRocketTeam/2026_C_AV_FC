@@ -324,7 +324,7 @@ TEST_F(AvStateIgnitionTest, TransitionsToBurnWhenCableDisconnected) {
 
 TEST_F(AvStateIgnitionTest, TransitionsToBurnWhenVerticalAccHoldDetected) {
   DataDump d = neutralDump();
-  d.event.vertical_acc_hold = true;
+  d.event.vertical_acc_hold = ACC_HOLD_DID_HOLD;
   fsm_.update(d);
   EXPECT_EQ(fsm_.getCurrentState(), State::BURN);
 }
@@ -343,10 +343,19 @@ TEST_F(AvStateIgnitionTest, AbortInFlightWhenCatastrophicFailureRaised) {
   EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_IN_FLIGHT);
 }
 
-TEST_F(AvStateIgnitionTest, AbortOnGroundWhenNeitherCableNorAccDetected) {
-  // Default neutral dump has no_cable_continuity=0 and vertical_acc_hold=false
-  // → engine did not ignite, safety abort.
-  fsm_.update(neutralDump());
+TEST_F(AvStateIgnitionTest, StaysInIgnitionWhenAccHoldNotElapsed) {
+  // ACC_HOLD_NOT_ELAPSED (default) = evaluation still in progress → stay.
+  DataDump d = neutralDump();
+  d.event.vertical_acc_hold = ACC_HOLD_NOT_ELAPSED;
+  fsm_.update(d);
+  EXPECT_EQ(fsm_.getCurrentState(), State::IGNITION);
+}
+
+TEST_F(AvStateIgnitionTest, AbortOnGroundWhenAccDidNotHold) {
+  // ACC_HOLD_DID_NOT_HOLD = motor failed to generate enough thrust.
+  DataDump d = neutralDump();
+  d.event.vertical_acc_hold = ACC_HOLD_DID_NOT_HOLD;
+  fsm_.update(d);
   EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_ON_GROUND);
 }
 
