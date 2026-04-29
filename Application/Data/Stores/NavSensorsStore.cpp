@@ -8,7 +8,9 @@ NavSensors::NavSensors()
     adxl_aux{0, 0, 0},
     imu{},
     bmp{0, 0},
-    bmp_aux{0, 0}
+    bmp_aux{0, 0},
+    bmp_3{0, 0},
+    bmp_4{0, 0}
 {}
 
 NavSensorsStore::NavSensorsStore() {}
@@ -29,8 +31,37 @@ void NavSensorsStore::set_imu(size_t index, const Drivers::InvIMU::IMUData& d) {
     data_.imu[index] = d;
 }
 
-bmp3_data NavSensorsStore::get_bmp() const { return data_.bmp; }
-void NavSensorsStore::set_bmp(const bmp3_data& d) { data_.bmp = d; }
+bmp3_data NavSensorsStore::get_bmp() const { return get_bmp(0); }
+void NavSensorsStore::set_bmp(const bmp3_data& d) { set_bmp(0, d); }
 
-bmp3_data NavSensorsStore::get_bmp_aux() const { return data_.bmp_aux; }
-void NavSensorsStore::set_bmp_aux(const bmp3_data& d) { data_.bmp_aux = d; }
+bmp3_data NavSensorsStore::get_bmp_aux() const { return get_bmp(1); }
+void NavSensorsStore::set_bmp_aux(const bmp3_data& d) { set_bmp(1, d); }
+
+bmp3_data NavSensorsStore::get_bmp(size_t index) const {
+    switch (index) {
+    case 0: return data_.bmp;
+    case 1: return data_.bmp_aux;
+    case 2: return data_.bmp_3;
+    case 3: return data_.bmp_4;
+    default: return bmp3_data{};
+    }
+}
+
+void NavSensorsStore::set_bmp(size_t index, const bmp3_data& d) {
+    switch (index) {
+    case 0:
+        data_.bmp = d;
+        break;
+    case 1:
+        data_.bmp_aux = d;
+        break;
+    case 2:
+        data_.bmp_3 = d;
+        break;
+    case 3:
+        data_.bmp_4 = d;
+        break;
+    default:
+        break;
+    }
+}

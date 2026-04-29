@@ -96,6 +96,7 @@ SET(FC_SOURCE_FILES
     Drivers/STM32HAL/Simulations/stm32sim_spi.cpp
 
     Drivers/InvIMU/Impl/InvIMU_mock.cpp
+    Drivers/BMP390/Impl/BMP390_mock.cpp
     Drivers/STM32HAL/Simulations/stm32sim_ticks.cpp
     Drivers/STM32HAL/Simulations/stm32sim_uart.cpp
 
@@ -168,4 +169,5 @@ add_subdirectory(Application/Tests)
 add_subdirectory(Drivers/UBX_GPS/Tests)
 add_subdirectory(Drivers/STM32HAL/Tests)
 add_subdirectory(Drivers/InvIMU/Tests)
+add_subdirectory(Drivers/BMP390/Tests)
 

@@ -43,7 +43,7 @@
 #endif
 
 #ifndef ESKF_APP_BARO_COUNT
-#define ESKF_APP_BARO_COUNT 1
+#define ESKF_APP_BARO_COUNT 4
 #endif
 
 #ifndef ESKF_LAUNCH_LATITUDE_DEG

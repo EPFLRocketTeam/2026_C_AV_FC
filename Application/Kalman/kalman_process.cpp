@@ -11,6 +11,7 @@
 #include "Application/Data/fsm.hpp"
 #include "Application/Data/data.hpp"
 #include "Application/FlightControl/threshold.h"
+#include "Application/Modules/baro_module.hpp"
 #include "Application/Modules/imu_modlue.hpp"
 
 extern "C" {
@@ -40,7 +41,10 @@ extern RingBuffer<GpsBasicFixData, 100> gpsData;
 
 namespace {
 
+using BaroData = Drivers::BMP390::BaroData;
+
 constexpr size_t kMaxImuSamplesPerSourcePerRun = 32u;
+constexpr size_t kMaxBaroSamplesPerSourcePerRun = 8u;
 constexpr size_t kMaxGpsSamplesPerRun = 8u;
 #if APP_IMU_PRIMARY_ODR_HZ > 0
 constexpr uint32_t kNominalImuDtUs =
@@ -51,6 +55,7 @@ constexpr uint32_t kNominalImuDtUs = 1000U;
 
 std::atomic<uint32_t> g_last_main_loop_iteration_us{0u};
 std::atomic<uint32_t> g_max_main_loop_iteration_us{0u};
+std::atomic<uint64_t> g_pending_baro_trigger_us{0u};
 
 // ---------------------------------------------------------------
 // Liftoff acceleration-hold evaluator.
@@ -157,6 +162,7 @@ struct KalmanRuntime {
 	flight_computer::Vector3 last_body_accel_mps2{};
 	KalmanHealthSnapshot health{};
 	size_t active_imu_sources = 3u;
+	static constexpr size_t kActiveBaroSources = 4u;
 	LiftoffAccHold acc_hold;  ///< Liftoff acceleration-hold evaluator
 
 	void initIfNeeded() {
@@ -165,7 +171,7 @@ struct KalmanRuntime {
 		}
 
 		estimator.reset();
-		estimator.configureReplaySensorCounts(3, 0);
+		estimator.configureReplaySensorCounts(3, kActiveBaroSources);
 		if (!apogee_ready) {
 			const int idx = apogee_hub.addAlgorithm(app::createConsensusApogeeDetector());
 			apogee_hub.setPrimary(idx);
@@ -196,7 +202,7 @@ struct KalmanRuntime {
 
 		if (state == flight_computer::State::INIT) {
 			estimator.reset();
-			estimator.configureReplaySensorCounts(3u, 0u);
+			estimator.configureReplaySensorCounts(3u, kActiveBaroSources);
 			active_imu_sources = 3u;
 			apogee_hub.reset();
 			last_imu_ts_us[0] = 0;
@@ -231,7 +237,7 @@ struct KalmanRuntime {
 		if (imu_sources == active_imu_sources) {
 			return;
 		}
-		estimator.configureReplaySensorCounts(imu_sources, 0u);
+		estimator.configureReplaySensorCounts(imu_sources, kActiveBaroSources);
 		active_imu_sources = imu_sources;
 	}
 
@@ -320,6 +326,16 @@ struct KalmanRuntime {
 			fix.flags.gnssFixOK &&
 			(sample.fix_type >= static_cast<uint8_t>(GpsFixType::FIX_2D));
 		return sample;
+	}
+
+	static app::BaroSample convertBaroSample(const BaroData &sample,
+											 size_t source_index) {
+		app::BaroSample out{};
+		out.pressurePa = sample.pressure_pa;
+		out.temperatureC = sample.temperature_c;
+		out.timestamp_us = sample.timestamp_us;
+		out.source = static_cast<uint8_t>(source_index);
+		return out;
 	}
 
 	void ingestImuChunk(size_t source_index, const IMUData *samples, size_t count) {
@@ -472,6 +488,52 @@ struct KalmanRuntime {
 	}
 
 	void ingestAidingFromStore() {
+		const uint64_t baro_trigger_us =
+			g_pending_baro_trigger_us.exchange(0u, std::memory_order_relaxed);
+		if (baro_trigger_us > 0u) {
+			estimator.onBaroTrigger(baro_trigger_us);
+		}
+
+		RingBuffer<BaroData, 100> *baro_buffers[] = {
+			&baroData1, &baroData2, &baroData3, &baroData4};
+		BaroData staged_baros[kActiveBaroSources][kMaxBaroSamplesPerSourcePerRun] = {};
+		size_t staged_baro_count[kActiveBaroSources] = {0, 0, 0, 0};
+		size_t staged_baro_index[kActiveBaroSources] = {0, 0, 0, 0};
+
+		for (size_t source = 0; source < kActiveBaroSources; ++source) {
+			while (staged_baro_count[source] < kMaxBaroSamplesPerSourcePerRun &&
+				   baro_buffers[source]->pop(
+					   staged_baros[source][staged_baro_count[source]])) {
+				++staged_baro_count[source];
+			}
+		}
+
+		for (;;) {
+			size_t best_source = kActiveBaroSources;
+			uint64_t best_ts = UINT64_MAX;
+			for (size_t source = 0; source < kActiveBaroSources; ++source) {
+				if (staged_baro_index[source] >= staged_baro_count[source]) {
+					continue;
+				}
+				const uint64_t ts =
+					staged_baros[source][staged_baro_index[source]].timestamp_us;
+				if (ts < best_ts) {
+					best_ts = ts;
+					best_source = source;
+				}
+			}
+			if (best_source >= kActiveBaroSources) {
+				break;
+			}
+
+			const app::BaroSample sample = convertBaroSample(
+				staged_baros[best_source][staged_baro_index[best_source]],
+				best_source);
+			estimator.processBaroSample(sample);
+			health.baro_updates += 1;
+			++staged_baro_index[best_source];
+		}
+
 		GpsBasicFixData staged_fixes[kMaxGpsSamplesPerRun] = {};
 		size_t fix_count = 0;
 
@@ -495,9 +557,6 @@ struct KalmanRuntime {
 				health.gps_updates += 1;
 			}
 		}
-
-		// TODO(kalman): Wire barometer into estimator once BMP samples are exposed
-		// through a dedicated timestamped queue/ring-buffer.
 	}
 };
 
@@ -657,4 +716,8 @@ void kalman_note_main_loop_iteration_us(uint32_t iteration_us) {
 	// The next kalman_loop iteration folds these atomics into KalmanHealthStore.
 	// We deliberately avoid a read-modify-write on the store here to keep a
 	// single writer path (kalman_loop) and prevent momentary inconsistencies.
+}
+
+void kalman_note_baro_trigger(uint64_t trigger_us) {
+	g_pending_baro_trigger_us.store(trigger_us, std::memory_order_relaxed);
 }

@@ -556,16 +556,16 @@ void EskfEstimator::setupVirtualBaro() {
   // Uses static storage since VirtualBaro stores pointer, not copy
   static eskf::BaroCalibration baro_cals[ESKF_MAX_BAROS];
   for (size_t i = 0; i < ESKF_MAX_BAROS; ++i) {
-  baro_cals[i] = eskf::BaroCalibration{};
-  baro_cals[i].pressure_scale = 1.0;
-  }
-  if (cfg.baro_count > 0) {
-  baro_cals[0].pressure_bias_pa =
-    static_cast<eskf_scalar>(calib_cfg_.baro.pressure_bias_pa);
-  baro_cals[0].pressure_scale =
-    static_cast<eskf_scalar>(calib_cfg_.baro.pressure_scale);
-  baro_cals[0].temperature_bias_k =
-    static_cast<eskf_scalar>(calib_cfg_.baro.temperature_bias_k);
+    baro_cals[i] = eskf::BaroCalibration{};
+    baro_cals[i].pressure_scale = 1.0;
+    if (i < cfg.baro_count && i < appcfg::kMaxCalibBaros) {
+      baro_cals[i].pressure_bias_pa =
+        static_cast<eskf_scalar>(calib_cfg_.baro[i].pressure_bias_pa);
+      baro_cals[i].pressure_scale =
+        static_cast<eskf_scalar>(calib_cfg_.baro[i].pressure_scale);
+      baro_cals[i].temperature_bias_k =
+        static_cast<eskf_scalar>(calib_cfg_.baro[i].temperature_bias_k);
+    }
   }
   cfg.calibration = baro_cals;
 
@@ -1408,6 +1408,11 @@ void EskfEstimator::processBaroObservation(uint8_t source,
                                            bool trigger_before_complete) {
   const size_t baro_count_cfg = std::max<size_t>(
       size_t(1), std::min<size_t>(active_baro_sources_, ESKF_MAX_BAROS));
+  const bool sample_valid =
+      std::isfinite(pressure_pa) && std::isfinite(temperature_k) &&
+      pressure_pa > static_cast<eskf_sensor_t>(0);
+  const eskf::SensorStatus sample_status =
+      sample_valid ? eskf::SensorStatus::OK : eskf::SensorStatus::HARD_FAIL;
 
   auto fuse_output = [&](const eskf::BaroOutput &bout, uint64_t ts) {
     logBaroHealthTransitions(bout);
@@ -1466,7 +1471,7 @@ void EskfEstimator::processBaroObservation(uint8_t source,
   };
 
   if (baro_count_cfg <= 1) {
-    eskf::SensorStatus status = eskf::SensorStatus::OK;
+    eskf::SensorStatus status = sample_status;
     eskf::BaroOutput bout =
         virtual_baro_.process(&pressure_pa, &temperature_k, &status, timestamp_us);
     fuse_output(bout, timestamp_us);
@@ -1477,6 +1482,7 @@ void EskfEstimator::processBaroObservation(uint8_t source,
   const size_t src = std::min<size_t>(source, kMaxBaroSources - 1);
   pending_baro_[src].pressure_pa = pressure_pa;
   pending_baro_[src].temperature_k = temperature_k;
+  pending_baro_[src].status = sample_status;
   pending_baro_[src].timestamp_us = timestamp_us;
   pending_baro_[src].valid = true;
 
@@ -1509,7 +1515,7 @@ void EskfEstimator::processBaroObservation(uint8_t source,
   for (size_t i = 0; i < baro_count_cfg; ++i) {
     pressure[i] = pending_baro_[i].pressure_pa;
     temp[i] = pending_baro_[i].temperature_k;
-    status[i] = eskf::SensorStatus::OK;
+    status[i] = pending_baro_[i].status;
     pending_baro_[i].valid = false;
   }
 
@@ -1532,11 +1538,7 @@ void EskfEstimator::processBaroBatch(const BaroBatch &batch) {
   for (size_t i = 0; i < batch.count; ++i) {
     const BaroSample &sample = batch.data[i];
     const uint64_t sample_ts = batch.t0_us + static_cast<uint64_t>(i) * dt_us;
-#if APP_TARGET_NATIVE
     const uint8_t source = sample.source;
-#else
-    const uint8_t source = 0;
-#endif
     processBaroObservation(source, sample.pressurePa,
                            sample.temperatureC + 273.15f, sample_ts, dt_s,
                            true);
@@ -1564,11 +1566,7 @@ void EskfEstimator::processBaroSample(const BaroSample &sample) {
   if (!initialized_)
     return;
 
-#if APP_TARGET_NATIVE
   const uint8_t source = sample.source;
-#else
-  const uint8_t source = 0;
-#endif
   processBaroObservation(source, sample.pressurePa,
                          sample.temperatureC + 273.15f, sample.timestamp_us,
                          0.020f, false);

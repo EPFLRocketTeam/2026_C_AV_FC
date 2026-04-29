@@ -4,7 +4,7 @@
 // This file contains lab calibration values for the specific sensors used
 // in the flight computer:
 //   - 2x ICM-45605 IMUs
-//   - 1x BMP581 Barometer  
+//   - 4x BMP390 Barometers
 //   - 1x MMC5983MA Magnetometer
 //
 // CALIBRATION STATUS:
@@ -139,10 +139,10 @@ inline const ImuCalibration& getImuCalibration(size_t index) {
 }
 
 // ============================================================
-// Barometer Calibration Data (1x BMP581)
+// Barometer Calibration Data (4x BMP390)
 // ============================================================
 //
-// The BMP581 has excellent factory calibration. These values are for
+// The BMP390 has excellent factory calibration. These values are for
 // additional fine-tuning if cross-sensor taring shows residual offset.
 //
 // Current status: Using factory defaults (zero bias, unity scale)
@@ -150,27 +150,43 @@ inline const ImuCalibration& getImuCalibration(size_t index) {
 namespace detail {
 
 constexpr BaroCalibration kBaro0Calibration = {
-  // Pressure bias (Pa) - additive offset from factory truth
-  .pressure_bias_pa = 0.0,  // TODO: Compare against reference barometer
-  
-  // Pressure scale factor - typically 1.0 for Bosch sensors
+  .pressure_bias_pa = 0.0,
   .pressure_scale = 1.0,
-  
-  // Temperature bias (K) - offset in internal temp sensor
+  .temperature_bias_k = 0.0
+};
+
+constexpr BaroCalibration kBaro1Calibration = {
+  .pressure_bias_pa = 0.0,
+  .pressure_scale = 1.0,
+  .temperature_bias_k = 0.0
+};
+
+constexpr BaroCalibration kBaro2Calibration = {
+  .pressure_bias_pa = 0.0,
+  .pressure_scale = 1.0,
+  .temperature_bias_k = 0.0
+};
+
+constexpr BaroCalibration kBaro3Calibration = {
+  .pressure_bias_pa = 0.0,
+  .pressure_scale = 1.0,
   .temperature_bias_k = 0.0
 };
 
 } // namespace detail
 
 /// Get barometer calibration for sensor at given index.
-/// @param index Sensor index (0 = BMP581)
+/// @param index Sensor index (0-3, BMP390)
 /// @return Reference to calibration data
 inline const BaroCalibration& getBaroCalibration(size_t index) {
-  static constexpr BaroCalibration kBaroCalibrations[1] = {
-    detail::kBaro0Calibration
+  static constexpr BaroCalibration kBaroCalibrations[4] = {
+    detail::kBaro0Calibration,
+    detail::kBaro1Calibration,
+    detail::kBaro2Calibration,
+    detail::kBaro3Calibration
   };
   static constexpr BaroCalibration kDefaultCal{};
-  return (index < 1) ? kBaroCalibrations[index] : kDefaultCal;
+  return (index < 4) ? kBaroCalibrations[index] : kDefaultCal;
 }
 
 // ============================================================
@@ -428,11 +444,13 @@ inline CalibrationConfig getDefaultCalibrationConfig() {
       static_cast<float>(imu.thermal_valid_max_temp_k);
   }
   
-  // --- Barometer Calibration ---
-  const auto& baro = eskf::getBaroCalibration(0);
-  cfg.baro.pressure_bias_pa = static_cast<float>(baro.pressure_bias_pa);
-  cfg.baro.pressure_scale = static_cast<float>(baro.pressure_scale);
-  cfg.baro.temperature_bias_k = static_cast<float>(baro.temperature_bias_k);
+  // --- Barometer Calibration (4x BMP390) ---
+  for (size_t i = 0; i < appcfg::kMaxCalibBaros; ++i) {
+    const auto& baro = eskf::getBaroCalibration(i);
+    cfg.baro[i].pressure_bias_pa = static_cast<float>(baro.pressure_bias_pa);
+    cfg.baro[i].pressure_scale = static_cast<float>(baro.pressure_scale);
+    cfg.baro[i].temperature_bias_k = static_cast<float>(baro.temperature_bias_k);
+  }
   
   // --- Static Pressure Compensation ---
   const auto& static_p = eskf::getStaticPressureCompensation();

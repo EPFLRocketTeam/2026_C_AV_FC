@@ -9,6 +9,7 @@ extern "C" {
 
 int kalman_loop(void);
 void kalman_note_main_loop_iteration_us(uint32_t iteration_us);
+void kalman_note_baro_trigger(uint64_t trigger_us);
 
 #ifdef __cplusplus
 }

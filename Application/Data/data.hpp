@@ -97,8 +97,10 @@ struct NavSensors {
   adxl375_data adxl;
   adxl375_data adxl_aux;
   Drivers::InvIMU::IMUData imu[3];  // imu[0]=imu_1, imu[1]=imu_2, imu[2]=imu_3
-  bmp3_data bmp;
-  bmp3_data bmp_aux;
+  bmp3_data bmp;      // bmp_1
+  bmp3_data bmp_aux;  // bmp_2, retained for telemetry compatibility
+  bmp3_data bmp_3;
+  bmp3_data bmp_4;
 
   NavSensors();
 };
@@ -334,6 +336,10 @@ public:
 
   bmp3_data get_bmp_aux() const;
   void set_bmp_aux(const bmp3_data &data);
+
+  // index 0 = bmp_1, ..., 3 = bmp_4. Out-of-bounds: get returns bmp3_data{}, set is a no-op.
+  bmp3_data get_bmp(size_t index) const;
+  void set_bmp(size_t index, const bmp3_data &data);
 };
 
 class PropSensorsStore : public IStore<PropSensors> {

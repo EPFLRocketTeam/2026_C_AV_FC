@@ -307,6 +307,7 @@ private:
   struct PendingBaroSample {
     eskf_sensor_t pressure_pa = 0;
     eskf_sensor_t temperature_k = 0;
+    eskf::SensorStatus status = eskf::SensorStatus::HARD_FAIL;
     uint64_t timestamp_us = 0;
     bool valid = false;
   };

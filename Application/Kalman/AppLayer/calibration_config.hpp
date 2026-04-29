@@ -21,6 +21,9 @@ constexpr size_t kMaxCgTableEntries = 8;
 /// Maximum number of IMUs supported
 constexpr size_t kMaxCalibImus = 2;
 
+/// Maximum number of barometers supported
+constexpr size_t kMaxCalibBaros = 4;
+
 /// Time-varying CG lookup table entry
 struct CgTableEntry {
   uint32_t time_ms;     ///< Time since liftoff (ms)
@@ -93,7 +96,7 @@ struct CalibrationConfig {
     float pressure_scale;           ///< Pressure scale factor
     float temperature_bias_k;       ///< Temperature bias (K)
   };
-  BaroCal baro;                     // ~12 bytes
+  BaroCal baro[kMaxCalibBaros];            // ~12 bytes × 4 = ~48 bytes
 
   // ============================================================
   // Static Pressure Compensation
