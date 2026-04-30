@@ -57,6 +57,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define BMP3_CS1_Pin GPIO_PIN_11
+#define BMP3_CS1_GPIO_Port GPIOF
+#define BMP_CS1_Pin GPIO_PIN_8
+#define BMP_CS1_GPIO_Port GPIOE
 #define ICM_CS4_Pin GPIO_PIN_14
 #define ICM_CS4_GPIO_Port GPIOE
 #define ICM_INT4_Pin GPIO_PIN_15
@@ -64,6 +68,8 @@ void Error_Handler(void);
 #define ICM_INT4_EXTI_IRQn EXTI15_10_IRQn
 #define BUZZER_Pin GPIO_PIN_11
 #define BUZZER_GPIO_Port GPIOB
+#define GNSS_RST_Pin GPIO_PIN_4
+#define GNSS_RST_GPIO_Port GPIOG
 #define PYROS_4_Pin GPIO_PIN_0
 #define PYROS_4_GPIO_Port GPIOE
 #define PYROS_3_Pin GPIO_PIN_1
