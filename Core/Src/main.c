@@ -25,6 +25,7 @@
 #include "usbd_cdc_if.h"
 #include "../../Drivers/InvIMU/Tests/Hardware/imu_manual_test.h"
 #include "../../Drivers/BMP390/Tests/Manual/bmp390_manual_test.h"
+#include "../../Drivers/UBX_GPS/Tests/Hardware/gps_manual_test.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -140,6 +141,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  //manual_test_imu();
 	  BMP390_ManualTest_Run();
+	  manual_test_gps();
 	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_0);
 	  //printf("Print from DFU 2\n");
 	  HAL_Delay(500);

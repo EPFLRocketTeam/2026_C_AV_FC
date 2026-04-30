@@ -5,7 +5,7 @@
  *      Author: maxime
  */
 
-#include "ubx_gps_interface.h"
+#include "../../ubx_gps_interface.h"
 #include "main.h"
 #include "gps_manual_test.h"
 #include "stm32h7xx_hal.h"

@@ -1,0 +1,118 @@
+Configuration	FC_TEST
+STM32CubeMX 	6.15.0
+Date	04/30/2026
+MCU	STM32H743ZITx
+
+
+
+PERIPHERALS	MODES	FUNCTIONS	PINS
+DEBUG	Serial Wire	DEBUG_JTCK-SWCLK	PA14 (JTCK/SWCLK)
+DEBUG	Serial Wire	DEBUG_JTMS-SWDIO	PA13 (JTMS/SWDIO)
+SPI4	Full-Duplex Master	SPI4_MISO	PE5
+SPI4	Full-Duplex Master	SPI4_MOSI	PE6
+SPI4	Full-Duplex Master	SPI4_SCK	PE2
+SPI5	Full-Duplex Master	SPI5_MISO	PF8
+SPI5	Full-Duplex Master	SPI5_MOSI	PF9
+SPI5	Full-Duplex Master	SPI5_SCK	PF7
+SYS	SysTick	SYS_VS_Systick	VP_SYS_VS_Systick
+USART6	Asynchronous	USART6_RX	PC7
+USART6	Asynchronous	USART6_TX	PC6
+USB_OTG_FS	Device_Only	USB_OTG_FS_DM	PA11
+USB_OTG_FS	Device_Only	USB_OTG_FS_DP	PA12
+USB_OTG_HS	Device_Only	USB_OTG_HS_DM	PB14
+USB_OTG_HS	Device_Only	USB_OTG_HS_DP	PB15
+
+
+
+Pin Nb	PINs	FUNCTIONs	LABELs
+1	PE2	SPI4_SCK	
+4	PE5	SPI4_MISO	
+5	PE6	SPI4_MOSI	
+19	PF7	SPI5_SCK	
+20	PF8	SPI5_MISO	
+21	PF9	SPI5_MOSI	
+49	PF11	GPIO_Output	BMP3_CS1
+59	PE8	GPIO_Output	BMP_CS1
+67	PE14	GPIO_Output	ICM_CS4
+68	PE15	GPIO_EXTI15	ICM_INT4
+70	PB11	GPIO_Output	BUZZER
+75	PB14	USB_OTG_HS_DM	
+76	PB15	USB_OTG_HS_DP	
+89	PG4	GPIO_Output	GNSS_RST
+96	PC6	USART6_TX	
+97	PC7	USART6_RX	
+103	PA11	USB_OTG_FS_DM	
+104	PA12	USB_OTG_FS_DP	
+105	PA13 (JTMS/SWDIO)	DEBUG_JTMS-SWDIO	
+109	PA14 (JTCK/SWCLK)	DEBUG_JTCK-SWCLK	
+141	PE0	GPIO_Output	PYROS_4
+142	PE1	GPIO_Output	PYROS_3
+PERIPHERALS	MODES	FUNCTIONS	PINS
+DEBUG	Serial Wire	DEBUG_JTCK-SWCLK	PA14 (JTCK/SWCLK)
+DEBUG	Serial Wire	DEBUG_JTMS-SWDIO	PA13 (JTMS/SWDIO)
+SPI4	Full-Duplex Master	SPI4_MISO	PE5
+SPI4	Full-Duplex Master	SPI4_MOSI	PE6
+SPI4	Full-Duplex Master	SPI4_SCK	PE2
+SPI5	Full-Duplex Master	SPI5_MISO	PF8
+SPI5	Full-Duplex Master	SPI5_MOSI	PF9
+SPI5	Full-Duplex Master	SPI5_SCK	PF7
+SYS	SysTick	SYS_VS_Systick	VP_SYS_VS_Systick
+USART6	Asynchronous	USART6_RX	PC7
+USART6	Asynchronous	USART6_TX	PC6
+USB_OTG_FS	Device_Only	USB_OTG_FS_DM	PA11
+USB_OTG_FS	Device_Only	USB_OTG_FS_DP	PA12
+USB_OTG_HS	Device_Only	USB_OTG_HS_DM	PB14
+USB_OTG_HS	Device_Only	USB_OTG_HS_DP	PB15
+
+
+
+Pin Nb	PINs	FUNCTIONs	LABELs
+1	PE2	SPI4_SCK	
+4	PE5	SPI4_MISO	
+5	PE6	SPI4_MOSI	
+19	PF7	SPI5_SCK	
+20	PF8	SPI5_MISO	
+21	PF9	SPI5_MOSI	
+49	PF11	GPIO_Output	BMP3_CS1
+59	PE8	GPIO_Output	BMP_CS1
+67	PE14	GPIO_Output	ICM_CS4
+68	PE15	GPIO_EXTI15	ICM_INT4
+70	PB11	GPIO_Output	BUZZER
+75	PB14	USB_OTG_HS_DM	
+76	PB15	USB_OTG_HS_DP	
+89	PG4	GPIO_Output	GNSS_RST
+96	PC6	USART6_TX	
+97	PC7	USART6_RX	
+103	PA11	USB_OTG_FS_DM	
+104	PA12	USB_OTG_FS_DP	
+105	PA13 (JTMS/SWDIO)	DEBUG_JTMS-SWDIO	
+109	PA14 (JTCK/SWCLK)	DEBUG_JTCK-SWCLK	
+141	PE0	GPIO_Output	PYROS_4
+142	PE1	GPIO_Output	PYROS_3
+
+
+
+SOFTWARE PROJECT
+
+Project Settings : 
+Project Name : FC_TEST
+Project Folder : /home/maxime/Documents/ert/FC_TEST/FC_TEST
+Toolchain / IDE : STM32CubeIDE
+Firmware Package Name and Version : STM32Cube FW_H7 V1.12.1
+
+
+Code Generation Settings : 
+STM32Cube MCU packages and embedded software packs : Copy only the necessary library files
+Generate peripheral initialization as a pair of '.c/.h' files per peripheral : No
+Backup previously generated files when re-generating : No
+Delete previously generated files when not re-generated : Yes
+Set all free pins as analog (to optimize the power consumption) : No
+
+
+Toolchains Settings : 
+Compiler Optimizations : 
+
+
+
+
+
