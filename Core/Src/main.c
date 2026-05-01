@@ -126,9 +126,12 @@ int main(void)
   MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_Delay(500); // Small delay to let USB enumerate
+  HAL_Delay(1500); // Small delay to let USB enumerate
+  printf("Start Init super loop\n");
+  app_super_loop_setup();
+  printf("Finished Init super loop\n");
+  HAL_Delay(500);
 
-  printf("STM32 USB VCP Ready!\r\n");
 
   /* USER CODE END 2 */
 
@@ -139,11 +142,12 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  //manual_test_imu();
-	  BMP390_ManualTest_Run();
-	  manual_test_gps();
+	  // manual_test_imu();
+	  // BMP390_ManualTest_Run();
+	  // manual_test_gps();
 	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_0);
-	  //printf("Print from DFU 2\n");
+	  app_super_loop_iterate();
+	  printf("Completed an iteration\n");
 	  HAL_Delay(500);
   }
   /* USER CODE END 3 */

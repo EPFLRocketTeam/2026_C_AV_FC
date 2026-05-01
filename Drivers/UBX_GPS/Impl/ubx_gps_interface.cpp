@@ -29,7 +29,17 @@ GpsStatus UbxGpsInterface::init() {
   if (status != GpsStatus::OK)
     return status;
 
-  // 3. Set configured rate
+  // 3. Switch GPS UART to 115200 baud, then re-init STM32 UART to match.
+  //    The config message is sent at the current (9600) baud rate; the GPS
+  //    switches immediately after ACKing, so we reconfigure our side right after.
+  status = writeCfgVal32(CFG_KEY_UART1_BAUDRATE, UBX_BAUDRATE);
+  if (status != GpsStatus::OK)
+    return status;
+  uart_handle_->Init.BaudRate = 115200;
+  if (HAL_UART_Init(uart_handle_) != HAL_OK)
+    return GpsStatus::ERROR_UART;
+
+  // 4. Set configured measurement rate
   status = setRate(rate_ms_);
 
   // Allow GPS to process configs
@@ -63,129 +73,53 @@ void printPayload(const uint8_t *payload, size_t payloadLen) {
 
 GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
                                   uint32_t timeout_ms) {
+  // UBX packet after the two sync bytes:
+  // class(1) + id(1) + len_lsb(1) + len_msb(1) + payload(92) + ck_a(1) + ck_b(1) = 98
+  static constexpr uint16_t REST_LEN = 4 + UBX_NAV_PVT_PAYLOAD_LEN + 2;
+
   uint32_t start_tick = HAL_GetTick();
   uint8_t rx_byte;
-  ParserState step = STATE_SYNC_1;
 
-  // Buffers
-  uint8_t payload_buf[UBX_NAV_PVT_PAYLOAD_LEN];
-  uint16_t payload_idx = 0;
-  uint8_t ck_a_calc = 0, ck_b_calc = 0;
-#ifdef DEBUG_MODE
-  uint8_t header_part[4];
-#endif
   while ((HAL_GetTick() - start_tick) < timeout_ms) {
+    // Scan for sync1
+    if (HAL_UART_Receive(uart_handle_, &rx_byte, 1, GPS_RX_POLL_TIMEOUT) != HAL_OK)
+      continue;
+    if (rx_byte != UBX_SYNC_CHAR_1)
+      continue;
 
-    // Read 1 byte at a time
-    if (HAL_UART_Receive(uart_handle_, &rx_byte, 1, GPS_RX_POLL_TIMEOUT) ==
-        HAL_OK) {
+    // Check sync2
+    if (HAL_UART_Receive(uart_handle_, &rx_byte, 1, GPS_RX_POLL_TIMEOUT) != HAL_OK)
+      continue;
+    if (rx_byte != UBX_SYNC_CHAR_2)
+      continue;
 
-      switch (step) {
-      case STATE_SYNC_1:
-        if (rx_byte == UBX_SYNC_CHAR_1) {
-          step = STATE_SYNC_2;
+    // Bulk-read the rest of the packet
+    uint8_t buf[REST_LEN];
+    uint32_t elapsed = HAL_GetTick() - start_tick;
+    if (elapsed >= timeout_ms)
+      break;
+    if (HAL_UART_Receive(uart_handle_, buf, REST_LEN, timeout_ms) != HAL_OK)
+      return GpsStatus::ERROR_TIMEOUT;
+
+    // Verify class, id, and length fields
+    if (buf[0] != UBX_CLASS_NAV || buf[1] != UBX_ID_NAV_PVT)
+      continue;
+    uint16_t payload_len = (uint16_t)buf[2] | ((uint16_t)buf[3] << 8);
+    if (payload_len != UBX_NAV_PVT_PAYLOAD_LEN)
+      continue;
+
+    // Verify checksum (covers class + id + len + payload)
+    uint8_t ck_a, ck_b;
+    calcChecksum(buf, 4 + UBX_NAV_PVT_PAYLOAD_LEN, &ck_a, &ck_b);
+    if (buf[4 + UBX_NAV_PVT_PAYLOAD_LEN] != ck_a ||
+        buf[4 + UBX_NAV_PVT_PAYLOAD_LEN + 1] != ck_b)
+      continue;
+
 #ifdef DEBUG_MODE
-          header_part[0] = rx_byte;
+    printPayload(buf + 4, UBX_NAV_PVT_PAYLOAD_LEN);
 #endif
-        }
-        break;
-
-      case STATE_SYNC_2:
-    	  // printf("header second: %02X \r\n", rx_byte);
-        if (rx_byte == UBX_SYNC_CHAR_2) {
-          step = STATE_CLASS;
-#ifdef DEBUG_MODE
-          header_part[1] = rx_byte;
-#endif
-        }
-        else
-          step = STATE_SYNC_1;
-        break;
-
-      case STATE_CLASS:
-    	 // printf("State class: %02X \r\n", rx_byte);
-        if (rx_byte == UBX_CLASS_NAV) {
-          step = STATE_ID;
-#ifdef DEBUG_MODE
-          header_part[2] = rx_byte;
-#endif
-          ck_a_calc = rx_byte;
-          ck_b_calc = rx_byte;
-        } else {
-          step = STATE_SYNC_1;
-        }
-        break;
-
-      case STATE_ID:
-    	  //printf("State id: %02X \r\n", rx_byte);
-        if (rx_byte == UBX_ID_NAV_PVT) {
-          step = STATE_LEN_LSB;
-#ifdef DEBUG_MODE
-          header_part[3] = rx_byte;
-#endif
-          ck_a_calc += rx_byte;
-          ck_b_calc += ck_a_calc;
-        } else {
-          step = STATE_SYNC_1;
-        }
-        break;
-
-      case STATE_LEN_LSB:
-        if (rx_byte == (uint8_t)(UBX_NAV_PVT_PAYLOAD_LEN & 0xFF)) {
-          step = STATE_LEN_MSB;
-          ck_a_calc += rx_byte;
-          ck_b_calc += ck_a_calc;
-        } else {
-          step = STATE_SYNC_1;
-        }
-        break;
-
-      case STATE_LEN_MSB:
-        if (rx_byte == (uint8_t)(UBX_NAV_PVT_PAYLOAD_LEN >> 8)) {
-          step = STATE_PAYLOAD;
-          ck_a_calc += rx_byte;
-          ck_b_calc += ck_a_calc;
-          payload_idx = 0;
-        } else {
-          step = STATE_SYNC_1;
-        }
-        break;
-
-      case STATE_PAYLOAD:
-        payload_buf[payload_idx++] = rx_byte;
-        ck_a_calc += rx_byte;
-        ck_b_calc += ck_a_calc;
-        if (payload_idx == UBX_NAV_PVT_PAYLOAD_LEN) {
-          step = STATE_CK_A;
-        }
-        break;
-
-      case STATE_CK_A:
-
-        if (rx_byte == ck_a_calc) {
-          step = STATE_CK_B;
-        } else {
-          step = STATE_SYNC_1;
-        }
-        break;
-
-      case STATE_CK_B:
-        if (rx_byte == ck_b_calc) {
-          // --- SUCCESS ---
-#ifdef DEBUG_MODE
-        	printPayload(header_part, 4);
-#endif
-          parseBasicFix(payload_buf, pvt_data);
-          return GpsStatus::OK;
-        }
-        step = STATE_SYNC_1;
-        break;
-
-      default:
-        step = STATE_SYNC_1;
-        break;
-      }
-    }
+    parseBasicFix(buf + 4, pvt_data);
+    return GpsStatus::OK;
   }
 
   return GpsStatus::ERROR_TIMEOUT;
@@ -315,6 +249,32 @@ GpsStatus UbxGpsInterface::writeCfgVal16(uint32_t key_id, uint16_t value) {
   // Value (2 bytes Little Endian)
   *p++ = (uint8_t)(value & 0xFF);
   *p++ = (uint8_t)((value >> 8) & 0xFF);
+
+  return sendCommand(UBX_CLASS_CFG, UBX_ID_CFG_VALSET, payload,
+                     sizeof(payload));
+}
+
+GpsStatus UbxGpsInterface::writeCfgVal32(uint32_t key_id, uint32_t value) {
+  uint8_t payload[UBX_PAYLOAD_LEN_CFG_VALSET32];
+  uint8_t *p = payload;
+
+  // Version(1) + Layer(1) + Reserved(2)
+  *p++ = 0x00;
+  *p++ = UBX_CFG_LAYER_RAM;
+  *p++ = 0x00;
+  *p++ = 0x00;
+
+  // Key ID (Little Endian)
+  *p++ = (uint8_t)(key_id & 0xFF);
+  *p++ = (uint8_t)((key_id >> 8) & 0xFF);
+  *p++ = (uint8_t)((key_id >> 16) & 0xFF);
+  *p++ = (uint8_t)((key_id >> 24) & 0xFF);
+
+  // Value (4 bytes Little Endian)
+  *p++ = (uint8_t)(value & 0xFF);
+  *p++ = (uint8_t)((value >> 8) & 0xFF);
+  *p++ = (uint8_t)((value >> 16) & 0xFF);
+  *p++ = (uint8_t)((value >> 24) & 0xFF);
 
   return sendCommand(UBX_CLASS_CFG, UBX_ID_CFG_VALSET, payload,
                      sizeof(payload));

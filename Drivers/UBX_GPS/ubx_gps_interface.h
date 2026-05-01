@@ -16,6 +16,8 @@
 // CONSTANTS & SCALING FACTORS
 // ============================================================================
 
+#define UBX_BAUDRATE 115200
+
 /** Protocol Constants */
 #define UBX_SYNC_CHAR_1 0xB5
 #define UBX_SYNC_CHAR_2 0x62
@@ -32,6 +34,9 @@
 
 /** CFG-RATE-MEAS: Measurement Rate in ms (Key ID: 0x30210001) */
 #define CFG_KEY_RATE_MEAS 0x30210001
+
+/** CFG-UART1-BAUDRATE: UART1 baud rate (Key ID: 0x40520001) */
+#define CFG_KEY_UART1_BAUDRATE 0x40520001
 
 /** Scaling Factors (See Docs Section 3.15.11) */
 #define UBX_SCALE_LAT_LON 1e-7
@@ -216,7 +221,7 @@ private:
   // Constants
   static constexpr uint32_t GPS_TX_TIMEOUT = 100;
   static constexpr uint32_t GPS_BOOT_DELAY_MS = 200;
-  static constexpr uint32_t GPS_RX_POLL_TIMEOUT = 10;
+  static constexpr uint32_t GPS_RX_POLL_TIMEOUT = 20;
 
   static constexpr uint8_t UBX_CLASS_CFG = 0x06;
   static constexpr uint8_t UBX_ID_CFG_VALSET = 0x8A;
@@ -226,23 +231,12 @@ private:
 
   static constexpr uint8_t UBX_PAYLOAD_LEN_CFG_VALSET8 = 9;
   static constexpr uint8_t UBX_PAYLOAD_LEN_CFG_VALSET16 = 10;
+  static constexpr uint8_t UBX_PAYLOAD_LEN_CFG_VALSET32 = 12;
   static constexpr uint8_t UBX_NAV_PVT_PAYLOAD_LEN = 92;
   static constexpr uint8_t UBX_CFG_RST_PAYLOAD_LEN = 4;
 
   static constexpr uint8_t PKT_OFF_CLASS = 2;
 
-  // Parser states
-  enum ParserState {
-    STATE_SYNC_1 = 0,
-    STATE_SYNC_2,
-    STATE_CLASS,
-    STATE_ID,
-    STATE_LEN_LSB,
-    STATE_LEN_MSB,
-    STATE_PAYLOAD,
-    STATE_CK_A,
-    STATE_CK_B
-  };
 
   // Member variables
   UART_HandleTypeDef *uart_handle_;
@@ -253,6 +247,7 @@ private:
                     uint8_t *ck_b);
   GpsStatus writeCfgVal8(uint32_t key_id, uint8_t value);
   GpsStatus writeCfgVal16(uint32_t key_id, uint16_t value);
+  GpsStatus writeCfgVal32(uint32_t key_id, uint32_t value);
   GpsStatus sendCommand(uint8_t msg_class, uint8_t msg_id,
                         const uint8_t *payload, uint16_t payload_len);
   GpsStatus resetReceiver(uint8_t reset_mode, uint16_t nav_bbr_mask);
