@@ -49,7 +49,7 @@ RingBuffer<BaroData, 100> baroData4;
 // Set to the matching GPIO pin number (e.g. GPIO_PIN_13) when EXTI is wired.
 // Keep at 0 when no hardware interrupt line is available.
 #ifndef APP_IMU1_INT_PIN
-#define APP_IMU1_INT_PIN ICM_INT4_EXTI_IRQn
+#define APP_IMU1_INT_PIN ICM_INT4_Pin
 #endif
 
 #ifndef APP_IMU2_INT_PIN
@@ -74,11 +74,10 @@ uint32_t g_baro_status_flags[4] = {
 };
 
 #if APP_GPS_UPDATE_RATE_HZ > 0
-//constexpr uint16_t kGpsRateMs = static_cast<uint16_t>(
-//    (1000u + (APP_GPS_UPDATE_RATE_HZ / 2u)) / APP_GPS_UPDATE_RATE_HZ);
-constexpr uint16_t kGpsRateMs = 50u;
+constexpr uint16_t kGpsRateMs = static_cast<uint16_t>(
+    (1000u + (APP_GPS_UPDATE_RATE_HZ / 2u)) / APP_GPS_UPDATE_RATE_HZ);
 #else
-constexpr uint16_t kGpsRateMs = 50u;
+constexpr uint16_t kGpsRateMs = 1000u;
 #endif
 
 constexpr uint16_t kImuIntPins[3] = {
@@ -87,24 +86,22 @@ constexpr uint16_t kImuIntPins[3] = {
     APP_IMU3_INT_PIN,
 };
 
-Config makeImuConfig(GPIO_TypeDef* cs_port, uint16_t cs_pin) {
+Config makeImuConfig(SPI_HandleTypeDef* hspi, GPIO_TypeDef* cs_port, uint16_t cs_pin) {
     Config cfg{};
-    cfg.hspi = &hspi4;
+    cfg.hspi = hspi;
     cfg.cs_port = cs_port;
     cfg.cs_pin = cs_pin;
-    // cfg.use_dwt_timestamps = true;
-    cfg.use_dwt_timestamps = false;
-    // cfg.use_dma = (APP_IMU_USE_DMA != 0u);
+    cfg.use_dwt_timestamps = true;
+    cfg.use_dma = (APP_IMU_USE_DMA != 0u);
     return cfg;
 }
 
 #ifndef UNIT_TEST_ENV
-Drivers::BMP390::BMP390_SDK::Config makeBaroConfig(GPIO_TypeDef* cs_port,
+Drivers::BMP390::BMP390_SDK::Config makeBaroConfig(SPI_HandleTypeDef* hspi,
+                                                   GPIO_TypeDef* cs_port,
                                                    uint16_t cs_pin) {
     Drivers::BMP390::BMP390_SDK::Config cfg{};
-    // TODO(baro-hw): Confirm all four BMP390 chip selects share SPI4 on the
-    // flight PCB. Override this factory if any sensor is on another SPI bus.
-    cfg.hspi = &hspi5;
+    cfg.hspi = hspi;
     cfg.cs_port = cs_port;
     cfg.cs_pin = cs_pin;
     return cfg;
@@ -112,9 +109,9 @@ Drivers::BMP390::BMP390_SDK::Config makeBaroConfig(GPIO_TypeDef* cs_port,
 #endif
 
 struct SuperLoopContext {
-    Config imu_cfg1 = makeImuConfig(ICM_CS4_GPIO_Port, ICM_CS4_Pin);
-//    Config imu_cfg2 = makeImuConfig(BMI3_NSS_GPIO_Port, BMI3_NSS_Pin);
-//    Config imu_cfg3 = makeImuConfig(BMI2_NSS_GPIO_Port, BMI2_NSS_Pin);
+    Config imu_cfg1 = makeImuConfig(&hspi4, ICM_CS4_GPIO_Port, ICM_CS4_Pin);
+//    Config imu_cfg2 = makeImuConfig(&hspi4, BMI3_NSS_GPIO_Port, BMI3_NSS_Pin);
+//    Config imu_cfg3 = makeImuConfig(&hspi5, BMI2_NSS_GPIO_Port, BMI2_NSS_Pin);
 
     InvIMU_STM32 invImu1{imu_cfg1};
 //    InvIMU_STM32 invImu2{imu_cfg2};
@@ -133,13 +130,13 @@ struct SuperLoopContext {
     Drivers::BMP390::BMP390_Mock baro4{};
 #else
     Drivers::BMP390::BMP390_SDK::Config baro_cfg1 =
-        makeBaroConfig(BMP3_CS1_GPIO_Port, BMP3_CS1_Pin);
+        makeBaroConfig(&hspi5, BMP3_CS1_GPIO_Port, BMP3_CS1_Pin);
 //    Drivers::BMP390::BMP390_SDK::Config baro_cfg2 =
-//        makeBaroConfig(BMP2_NSS_GPIO_Port, BMP2_NSS_Pin);
+//        makeBaroConfig(&hspi5, BMP2_NSS_GPIO_Port, BMP2_NSS_Pin);
 //    Drivers::BMP390::BMP390_SDK::Config baro_cfg3 =
-//        makeBaroConfig(BMP3_NSS_GPIO_Port, BMP3_NSS_Pin);
+//        makeBaroConfig(&hspi4, BMP3_NSS_GPIO_Port, BMP3_NSS_Pin);
 //    Drivers::BMP390::BMP390_SDK::Config baro_cfg4 =
-//        makeBaroConfig(BMP4_NSS_GPIO_Port, BMP4_NSS_Pin);
+//        makeBaroConfig(&hspi4, BMP4_NSS_GPIO_Port, BMP4_NSS_Pin);
 
     Drivers::BMP390::BMP390_SDK baro1{baro_cfg1};
     // Drivers::BMP390::BMP390_SDK baro2{baro_cfg2};
@@ -191,7 +188,7 @@ extern "C" void app_on_imu_spi_rx_complete(SPI_HandleTypeDef* hspi) {
         return;
     }
 
-    // Current ERT wiring uses SPI1 for all three IMUs.
+    // Current flight-test wiring has the enabled IMU on SPI4.
     if (hspi != &hspi4) {
         return;
     }

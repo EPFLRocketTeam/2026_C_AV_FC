@@ -74,6 +74,10 @@ namespace InvIMU {
         virtual void enableFsync() = 0;
         
         virtual bool getFrame(IMUData& out_data) = 0;
+
+        // Optional observability hooks for module-level health monitoring.
+        virtual uint32_t statusFlags() const { return IMU_STATUS_OK; }
+        virtual uint32_t dropCount() const { return 0u; }
         
         virtual void onInterrupt() = 0;   // Called by ISR (Sets flag)
         virtual void tick() = 0;          // Called by Main Loop (Processes flag)

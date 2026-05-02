@@ -2,14 +2,14 @@
 #include <cstring>
 
 // ── SPI transport ─────────────────────────────────────────────────────────────
-// BMP390 SPI read protocol: [addr|0x80] [dummy rx] [data × len]
-// The SDK already ORs 0x80 onto reg before calling read, so we pass it through.
-// Transaction size = 1 (addr) + 1 (dummy) + len.
+// BMP390 SPI read protocol: [addr|0x80] [dummy rx] [data...].
+// Bosch's SDK already ORs 0x80 into reg and includes the dummy byte in len
+// for SPI reads, so the transport sends one address byte plus len clock bytes.
 
 static constexpr size_t kBufMax = 32; // calibration (21 B) + 2 overhead + margin
 
 BMP3_INTF_RET_TYPE bmp3_spi_read(uint8_t reg, uint8_t* dst, uint32_t len, void* ctx) {
-    if (!ctx || !dst || len == 0 || (len + 2) > kBufMax) return -1;
+    if (!ctx || !dst || len == 0 || (len + 1) > kBufMax) return -1;
     auto* c = static_cast<Bmp3SpiCtx*>(ctx);
 
     uint8_t tx[kBufMax] = {};
@@ -22,7 +22,7 @@ BMP3_INTF_RET_TYPE bmp3_spi_read(uint8_t reg, uint8_t* dst, uint32_t len, void* 
     HAL_GPIO_WritePin(c->cs_port, c->cs_pin, GPIO_PIN_SET);
 
     if (st != HAL_OK) return -1;
-    memcpy(dst, rx + 1, len); // skip addr-echo + dummy byte
+    memcpy(dst, rx + 1, len); // skip addr-echo; SDK strips dummy from dst
     return BMP3_INTF_RET_SUCCESS;
 }
 

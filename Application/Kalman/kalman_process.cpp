@@ -274,22 +274,22 @@ struct KalmanRuntime {
 		app::sensors::gnss::GnssSample sample{};
 
 		sample.timestamp_us =
-//			(fix.timestamp_us > 0u) ? fix.timestamp_us : fallback_timestamp_us;
-//		sample.pps_timestamp_us = fix.pps_timestamp_us;
-//		sample.lat_deg7 = fix.lat;
-//		sample.lon_deg7 = fix.lon;
-//		sample.alt_msl_mm = fix.hMSL;
-//		sample.alt_ellipsoid_mm = fix.height;
-//		sample.vel_n_mms = fix.velN;
-//		sample.vel_e_mms = fix.velE;
-//		sample.vel_d_mms = fix.velD;
-//		sample.ground_speed_mms = fix.gSpeed;
-//		sample.heading_deg5 = fix.headMot;
-//		sample.h_acc_mm = fix.hAcc;
-//		sample.v_acc_mm = fix.vAcc;
-//		sample.s_acc_mms = fix.sAcc;
-//		sample.head_acc_deg5 = fix.headAcc;
-//		sample.pdop = fix.pDOP;
+			(fix.timestamp_us > 0u) ? fix.timestamp_us : fallback_timestamp_us;
+		sample.pps_timestamp_us = fix.pps_timestamp_us;
+		sample.lat_deg7 = fix.lat;
+		sample.lon_deg7 = fix.lon;
+		sample.alt_msl_mm = fix.hMSL;
+		sample.alt_ellipsoid_mm = fix.height;
+		sample.vel_n_mms = fix.velN;
+		sample.vel_e_mms = fix.velE;
+		sample.vel_d_mms = fix.velD;
+		sample.ground_speed_mms = fix.gSpeed;
+		sample.heading_deg5 = fix.headMot;
+		sample.h_acc_mm = fix.hAcc;
+		sample.v_acc_mm = fix.vAcc;
+		sample.s_acc_mms = fix.sAcc;
+		sample.head_acc_deg5 = fix.headAcc;
+		sample.pdop = fix.pDOP;
 		sample.fix_type = static_cast<uint8_t>(fix.fixType);
 		sample.num_sv = fix.numSV;
 		sample.flags = 0;
@@ -300,14 +300,14 @@ struct KalmanRuntime {
 			sample.flags |= 0x02u;
 		}
 
-//		sample.year = fix.year;
-//		sample.month = fix.month;
-//		sample.day = fix.day;
-//		sample.hour = fix.hour;
-//		sample.min = fix.min;
-//		sample.sec = fix.sec;
-//		sample.nano = fix.nano;
-//		sample.time_valid = 0;
+		sample.year = fix.year;
+		sample.month = fix.month;
+		sample.day = fix.day;
+		sample.hour = fix.hour;
+		sample.min = fix.min;
+		sample.sec = fix.sec;
+		sample.nano = fix.nano;
+		sample.time_valid = 0;
 		if (fix.valid.validDate) {
 			sample.time_valid |= 0x01u;
 		}
@@ -320,7 +320,7 @@ struct KalmanRuntime {
 		if (fix.valid.validMag) {
 			sample.time_valid |= 0x08u;
 		}
-//		sample.itow_ms = fix.iTOW;
+		sample.itow_ms = fix.iTOW;
 
 		sample.valid =
 			fix.flags.gnssFixOK &&

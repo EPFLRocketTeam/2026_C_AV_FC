@@ -3,8 +3,12 @@
 #include "Application/app_timebase.h"
 #include "Drivers/STM32HAL/stm32hal.h"
 
-#if !defined(UNIT_TEST_ENV)
-// #include "cmsis_os.h"
+#ifndef APP_ENABLE_RTOS_STORE_LOCKS
+#define APP_ENABLE_RTOS_STORE_LOCKS 0u
+#endif
+
+#if !defined(UNIT_TEST_ENV) && (APP_ENABLE_RTOS_STORE_LOCKS != 0u)
+#include "cmsis_os.h"
 #else
 using osMutexId_t = void *;
 constexpr uint32_t osWaitForever = 0xFFFFFFFFu;
@@ -12,12 +16,12 @@ inline int32_t osMutexAcquire(osMutexId_t, uint32_t) { return 0; }
 inline int32_t osMutexRelease(osMutexId_t) { return 0; }
 #endif
 
-#if defined(UNIT_TEST_ENV)
+#if defined(UNIT_TEST_ENV) || (APP_ENABLE_RTOS_STORE_LOCKS == 0u)
 osMutexId_t eventStoreMutexHandle = nullptr;
 osMutexId_t navigationDataMutexHandle = nullptr;
 #else
-//extern osMutexId_t eventStoreMutexHandle;
-//extern osMutexId_t navigationDataMutexHandle;
+extern osMutexId_t eventStoreMutexHandle;
+extern osMutexId_t navigationDataMutexHandle;
 #endif
 
 namespace {
@@ -34,27 +38,27 @@ struct AppTimebaseState {
 AppTimebaseState g_app_timebase{};
 
 inline void lock_event_store() {
-//  if (eventStoreMutexHandle != nullptr) {
-//    osMutexAcquire(eventStoreMutexHandle, osWaitForever);
-//  }
+  if (eventStoreMutexHandle != nullptr) {
+    osMutexAcquire(eventStoreMutexHandle, osWaitForever);
+  }
 }
 
 inline void unlock_event_store() {
-//  if (eventStoreMutexHandle != nullptr) {
-//    osMutexRelease(eventStoreMutexHandle);
-//  }
+  if (eventStoreMutexHandle != nullptr) {
+    osMutexRelease(eventStoreMutexHandle);
+  }
 }
 
 inline void lock_navigation_data() {
-//  if (navigationDataMutexHandle != nullptr) {
-//    osMutexAcquire(navigationDataMutexHandle, osWaitForever);
-//  }
+  if (navigationDataMutexHandle != nullptr) {
+    osMutexAcquire(navigationDataMutexHandle, osWaitForever);
+  }
 }
 
 inline void unlock_navigation_data() {
-//  if (navigationDataMutexHandle != nullptr) {
-//    osMutexRelease(navigationDataMutexHandle);
-//  }
+  if (navigationDataMutexHandle != nullptr) {
+    osMutexRelease(navigationDataMutexHandle);
+  }
 }
 
 #if !defined(UNIT_TEST_ENV)

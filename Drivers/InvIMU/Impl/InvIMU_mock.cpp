@@ -86,6 +86,21 @@ bool InvIMU_Mock::getFrame(IMUData& out_data) {
     return true;
 }
 
+uint32_t InvIMU_Mock::statusFlags() const {
+    uint32_t flags = IMU_STATUS_OK;
+    if (_spi_error) {
+        flags |= IMU_STATUS_SPI_ERROR;
+    }
+    if (_fifo_overflow) {
+        flags |= IMU_STATUS_FIFO_OVERFLOW;
+    }
+    return flags;
+}
+
+uint32_t InvIMU_Mock::dropCount() const {
+    return _fifo_overflow ? 1u : 0u;
+}
+
 void InvIMU_Mock::setFifoWatermark(size_t watermark) {
     _fifo_watermark = watermark;
 }

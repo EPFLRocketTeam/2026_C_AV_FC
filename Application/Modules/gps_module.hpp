@@ -10,10 +10,10 @@
 extern RingBuffer<GpsBasicFixData, 100> gpsData;
 
 #ifndef APP_GPS_POLL_TIMEOUT_MS
-#define APP_GPS_POLL_TIMEOUT_MS 50u
+#define APP_GPS_POLL_TIMEOUT_MS 0u
 #endif
 
-#ifndef APP_GPS_STALE_TIMEOUT_MSkGpsRateMs
+#ifndef APP_GPS_STALE_TIMEOUT_MS
 #define APP_GPS_STALE_TIMEOUT_MS 2000u
 #endif
 
@@ -39,7 +39,6 @@ public:
       drivers_[0]->getPvt(&gpsFix, APP_GPS_POLL_TIMEOUT_MS);
     if (status == GpsStatus::ERROR_TIMEOUT) {
       publishStaleNoFixIfNeeded(tick_ms, g);
-      printf("GPS_MODULE - Timed OUT\n");
       return;
     }
     if (status != GpsStatus::OK) {
@@ -47,10 +46,10 @@ public:
       return;
     }
 
-//    if (gpsFix.timestamp_us == 0u) {
-//      gpsFix.timestamp_us = app_timebase_now_us();
-//    }
-//    printf("GPS_MODULE - Got a Response\n");
+    if (gpsFix.timestamp_us == 0u) {
+      gpsFix.timestamp_us = app_timebase_now_us();
+    }
+
     buffers_[0]->append(gpsFix);
     g.gpsStore.set(gpsFix);
 
@@ -74,8 +73,8 @@ private:
     }
 
     GpsBasicFixData stale_fix = g.gpsStore.get();
-//    stale_fix.timestamp_us = app_timebase_now_us();
-//    stale_fix.pps_timestamp_us = 0ULL;
+    stale_fix.timestamp_us = app_timebase_now_us();
+    stale_fix.pps_timestamp_us = 0ULL;
     stale_fix.fixType = GpsFixType::NO_FIX;
     stale_fix.valid.validDate = false;
     stale_fix.valid.validTime = false;

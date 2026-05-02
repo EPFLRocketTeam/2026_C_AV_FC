@@ -76,15 +76,16 @@ int _write(int file, char *ptr, int len) {
     return len;
 }
 
-//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-//	if (GPIO_Pin == ICM_INT4_Pin) {
-//		imu_exti_callback();
-//	}
-//}
-//
-//void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hdma) {
-//	imu_dma_callback();
-//}
+void app_on_imu_exti(uint16_t gpio_pin);
+void app_on_imu_spi_rx_complete(SPI_HandleTypeDef *hspi);
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  app_on_imu_exti(GPIO_Pin);
+}
+
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
+  app_on_imu_spi_rx_complete(hspi);
+}
 /* USER CODE END 0 */
 
 /**

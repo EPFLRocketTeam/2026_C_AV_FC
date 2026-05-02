@@ -2,7 +2,7 @@
 
 #include "InvIMU.h"
 #include <cstring>
-#include "stm32h7xx_hal.h" //
+#include "stm32h7xx_hal.h"
 
 // ======================================================================
 // MODEL SELECTION & TDK INCLUDES
@@ -51,6 +51,29 @@ namespace InvIMU {
     #define INVIMU_DMA_SECTION ".ram_d2"
     #endif
 
+    // Optional DMA mode for FIFO burst reads.
+    // 0 = blocking SPI reads (safe default), 1 = HAL SPI RX DMA path.
+    #ifndef INVIMU_USE_DMA_DEFAULT
+    #define INVIMU_USE_DMA_DEFAULT 0u
+    #endif
+
+    // KTP-aligned digital filtering defaults.
+    #ifndef INVIMU_ACCEL_BW_DIV
+    #define INVIMU_ACCEL_BW_DIV 0u
+    #endif
+
+    #ifndef INVIMU_GYRO_BW_DIV
+    #define INVIMU_GYRO_BW_DIV 0u
+    #endif
+
+    #ifndef INVIMU_ACCEL_LP_AVG
+    #define INVIMU_ACCEL_LP_AVG 1u
+    #endif
+
+    #ifndef INVIMU_GYRO_LP_AVG
+    #define INVIMU_GYRO_LP_AVG 1u
+    #endif
+
     struct Config {
         SPI_HandleTypeDef* hspi;      
         GPIO_TypeDef* cs_port;        
@@ -63,6 +86,11 @@ namespace InvIMU {
         };
 
         bool use_dwt_timestamps = true;
+        bool use_dma = (INVIMU_USE_DMA_DEFAULT != 0u);
+        uint8_t accel_bw_div = INVIMU_ACCEL_BW_DIV;
+        uint8_t gyro_bw_div = INVIMU_GYRO_BW_DIV;
+        uint8_t accel_lp_avg = INVIMU_ACCEL_LP_AVG;
+        uint8_t gyro_lp_avg = INVIMU_GYRO_LP_AVG;
     };
 
     class InvIMU_STM32 : public InvIMU_Interface {
@@ -77,6 +105,8 @@ namespace InvIMU {
         void enableFsync() override;
         
         bool getFrame(IMUData& out_data) override;
+        uint32_t statusFlags() const override { return _status_flags; }
+        uint32_t dropCount() const override { return _ring_overflow_count; }
 
         uint32_t getStatusFlags() const { return _status_flags; }
         void clearStatusFlags(uint32_t mask = 0xFFFFFFFFu) { _status_flags &= ~mask; }
@@ -150,6 +180,10 @@ namespace InvIMU {
         gyro_config0_gyro_ui_fs_sel_t   toGyroFsr(GyroRange gr);
         accel_config0_accel_odr_t       toAccelOdr(ODR odr);
         gyro_config0_gyro_odr_t         toGyroOdr(ODR odr);
+        ipreg_sys2_reg_131_accel_ui_lpfbw_t toAccelBwDiv(uint8_t div);
+        ipreg_sys1_reg_172_gyro_ui_lpfbw_sel_t toGyroBwDiv(uint8_t div);
+        ipreg_sys2_reg_129_accel_lp_avg_sel_t toAccelLpAvg(uint8_t avg);
+        ipreg_sys1_reg_170_gyro_lp_avg_sel_t toGyroLpAvg(uint8_t avg);
         
         void processPendingRx();
         bool parseFrameInto(IMUData& out, const uint8_t* p, uint8_t frame_size);

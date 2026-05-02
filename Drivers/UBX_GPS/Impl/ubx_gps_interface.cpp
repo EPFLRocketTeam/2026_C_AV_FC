@@ -1,4 +1,5 @@
 #include "../ubx_gps_interface.h"
+#include "Application/app_timebase.h"
 #include <cstring>
 #include <cstdlib>
 #include <stdio.h>
@@ -10,13 +11,16 @@
 
 UbxGpsInterface::UbxGpsInterface(UART_HandleTypeDef *huart,
                                  uint16_t rate_ms)
-    : uart_handle_(huart), rate_ms_(rate_ms) {}
+    : uart_handle_(huart), rate_ms_(rate_ms) {
+  resetParserState();
+}
 
 // ============================================================================
 // PUBLIC METHODS
 // ============================================================================
 
 GpsStatus UbxGpsInterface::init() {
+  resetParserState();
   GpsStatus status;
 
   // 1. Disable NMEA on UART1
@@ -24,22 +28,37 @@ GpsStatus UbxGpsInterface::init() {
   if (status != GpsStatus::OK)
     return status;
 
-  // 2. Enable UBX-NAV-PVT on UART1
-  status = writeCfgVal8(CFG_KEY_MSGOUT_NAV_PVT_UART1, 1);
-  if (status != GpsStatus::OK)
-    return status;
-
-  // 3. Switch GPS UART to 115200 baud, then re-init STM32 UART to match.
+  // 2. Switch GPS UART to 115200 baud, then re-init STM32 UART to match.
   //    The config message is sent at the current (9600) baud rate; the GPS
   //    switches immediately after ACKing, so we reconfigure our side right after.
   status = writeCfgVal32(CFG_KEY_UART1_BAUDRATE, UBX_BAUDRATE);
   if (status != GpsStatus::OK)
     return status;
-  uart_handle_->Init.BaudRate = 115200;
+  uart_handle_->Init.BaudRate = UBX_BAUDRATE;
   if (HAL_UART_Init(uart_handle_) != HAL_OK)
     return GpsStatus::ERROR_UART;
 
-  // 4. Set configured measurement rate
+  // 3. Configure power mode (ktp-soft parity: high performance by default)
+  status = configurePowerMode();
+  if (status != GpsStatus::OK)
+    return status;
+
+  // 4. Configure constellation set
+  status = configureConstellations();
+  if (status != GpsStatus::OK)
+    return status;
+
+  // 5. Configure dynamic model
+  status = configureDynamics();
+  if (status != GpsStatus::OK)
+    return status;
+
+  // 6. Configure auto-output messages
+  status = configureMessages();
+  if (status != GpsStatus::OK)
+    return status;
+
+  // 7. Set configured measurement rate
   status = setRate(rate_ms_);
 
   // Allow GPS to process configs
@@ -73,59 +92,140 @@ void printPayload(const uint8_t *payload, size_t payloadLen) {
 
 GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
                                   uint32_t timeout_ms) {
-  // UBX packet after the two sync bytes:
-  // class(1) + id(1) + len_lsb(1) + len_msb(1) + payload(92) + ck_a(1) + ck_b(1) = 98
-  static constexpr uint16_t REST_LEN = 4 + UBX_NAV_PVT_PAYLOAD_LEN + 2;
+  if (pvt_data == nullptr) {
+    return GpsStatus::ERROR_CONFIG;
+  }
 
-  uint32_t start_tick = HAL_GetTick();
-  uint8_t rx_byte;
+  uint8_t rx_byte = 0;
+  const uint32_t start_tick = HAL_GetTick();
 
-  while ((HAL_GetTick() - start_tick) < timeout_ms) {
-    // Scan for sync1
-    if (HAL_UART_Receive(uart_handle_, &rx_byte, 1, GPS_RX_POLL_TIMEOUT) != HAL_OK)
-      continue;
-    if (rx_byte != UBX_SYNC_CHAR_1)
-      continue;
-
-    // Check sync2
-    if (HAL_UART_Receive(uart_handle_, &rx_byte, 1, GPS_RX_POLL_TIMEOUT) != HAL_OK)
-      continue;
-    if (rx_byte != UBX_SYNC_CHAR_2)
-      continue;
-
-    // Bulk-read the rest of the packet
-    uint8_t buf[REST_LEN];
-    uint32_t elapsed = HAL_GetTick() - start_tick;
-    if (elapsed >= timeout_ms)
+  auto processByte = [&](uint8_t byte) -> bool {
+    switch (parser_state_) {
+    case STATE_SYNC_1:
+      if (byte == UBX_SYNC_CHAR_1) {
+        parser_state_ = STATE_SYNC_2;
+      }
       break;
-    if (HAL_UART_Receive(uart_handle_, buf, REST_LEN, timeout_ms) != HAL_OK)
-      return GpsStatus::ERROR_TIMEOUT;
 
-    // Verify class, id, and length fields
-    if (buf[0] != UBX_CLASS_NAV || buf[1] != UBX_ID_NAV_PVT)
-      continue;
-    uint16_t payload_len = (uint16_t)buf[2] | ((uint16_t)buf[3] << 8);
-    if (payload_len != UBX_NAV_PVT_PAYLOAD_LEN)
-      continue;
+    case STATE_SYNC_2:
+      if (byte == UBX_SYNC_CHAR_2) {
+        parser_state_ = STATE_CLASS;
+      } else {
+        resetParserState();
+      }
+      break;
 
-    // Verify checksum (covers class + id + len + payload)
-    uint8_t ck_a, ck_b;
-    calcChecksum(buf, 4 + UBX_NAV_PVT_PAYLOAD_LEN, &ck_a, &ck_b);
-    if (buf[4 + UBX_NAV_PVT_PAYLOAD_LEN] != ck_a ||
-        buf[4 + UBX_NAV_PVT_PAYLOAD_LEN + 1] != ck_b)
-      continue;
+    case STATE_CLASS:
+      if (byte == UBX_CLASS_NAV) {
+        parser_state_ = STATE_ID;
+        parser_ck_a_calc_ = byte;
+        parser_ck_b_calc_ = byte;
+      } else {
+        resetParserState();
+      }
+      break;
 
-#ifdef DEBUG_MODE
-    printPayload(buf + 4, UBX_NAV_PVT_PAYLOAD_LEN);
-#endif
-    parseBasicFix(buf + 4, pvt_data);
-    return GpsStatus::OK;
+    case STATE_ID:
+      if (byte == UBX_ID_NAV_PVT) {
+        parser_state_ = STATE_LEN_LSB;
+        parser_ck_a_calc_ += byte;
+        parser_ck_b_calc_ += parser_ck_a_calc_;
+      } else {
+        resetParserState();
+      }
+      break;
+
+    case STATE_LEN_LSB:
+      if (byte == static_cast<uint8_t>(UBX_NAV_PVT_PAYLOAD_LEN & 0xFFU)) {
+        parser_state_ = STATE_LEN_MSB;
+        parser_ck_a_calc_ += byte;
+        parser_ck_b_calc_ += parser_ck_a_calc_;
+      } else {
+        resetParserState();
+      }
+      break;
+
+    case STATE_LEN_MSB:
+      if (byte == static_cast<uint8_t>(UBX_NAV_PVT_PAYLOAD_LEN >> 8)) {
+        parser_state_ = STATE_PAYLOAD;
+        parser_ck_a_calc_ += byte;
+        parser_ck_b_calc_ += parser_ck_a_calc_;
+        parser_payload_idx_ = 0;
+      } else {
+        resetParserState();
+      }
+      break;
+
+    case STATE_PAYLOAD:
+      parser_payload_buf_[parser_payload_idx_++] = byte;
+      parser_ck_a_calc_ += byte;
+      parser_ck_b_calc_ += parser_ck_a_calc_;
+      if (parser_payload_idx_ == UBX_NAV_PVT_PAYLOAD_LEN) {
+        parser_state_ = STATE_CK_A;
+      }
+      break;
+
+    case STATE_CK_A:
+      if (byte == parser_ck_a_calc_) {
+        parser_state_ = STATE_CK_B;
+      } else {
+        resetParserState();
+      }
+      break;
+
+    case STATE_CK_B:
+      if (byte == parser_ck_b_calc_) {
+        parseBasicFix(parser_payload_buf_, pvt_data);
+        pvt_data->timestamp_us = app_timebase_now_us();
+        pvt_data->pps_timestamp_us = 0ULL;
+        resetParserState();
+        return true;
+      }
+      resetParserState();
+      break;
+
+    default:
+      resetParserState();
+      break;
+    }
+
+    return false;
+  };
+
+  if (timeout_ms == 0u) {
+    uint32_t bytes_polled = 0;
+    while (bytes_polled < GPS_RX_NONBLOCKING_MAX_BYTES &&
+           HAL_UART_Receive(uart_handle_, &rx_byte, 1, 0u) == HAL_OK) {
+      ++bytes_polled;
+      if (processByte(rx_byte)) {
+        return GpsStatus::OK;
+      }
+    }
+    return GpsStatus::ERROR_TIMEOUT;
+  }
+
+  while (true) {
+    const uint32_t elapsed_ms = HAL_GetTick() - start_tick;
+    if (elapsed_ms >= timeout_ms) {
+      break;
+    }
+
+    const uint32_t remaining_ms = timeout_ms - elapsed_ms;
+    const uint32_t poll_timeout_ms =
+        (remaining_ms < GPS_RX_POLL_TIMEOUT) ? remaining_ms : GPS_RX_POLL_TIMEOUT;
+
+    if (HAL_UART_Receive(uart_handle_, &rx_byte, 1, poll_timeout_ms) == HAL_OK) {
+      if (processByte(rx_byte)) {
+        return GpsStatus::OK;
+      }
+    }
   }
 
   return GpsStatus::ERROR_TIMEOUT;
 }
 
 GpsStatus UbxGpsInterface::stop() {
+  resetParserState();
   GpsStatus status;
 
   // 1. Disable UBX-NAV-PVT message output
@@ -143,9 +243,76 @@ GpsStatus UbxGpsInterface::stop() {
   return GpsStatus::OK;
 }
 
+void UbxGpsInterface::resetParserState() {
+  parser_state_ = STATE_SYNC_1;
+  parser_payload_idx_ = 0;
+  parser_ck_a_calc_ = 0;
+  parser_ck_b_calc_ = 0;
+}
+
 // ============================================================================
 // PRIVATE HELPER METHODS
 // ============================================================================
+
+GpsStatus UbxGpsInterface::configurePowerMode() {
+#if APP_GPS_HIGH_PERFORMANCE != 0u
+  // 0 = full power / high performance mode.
+  return writeCfgVal8(CFG_KEY_PM_OPERATEMODE, 0u);
+#else
+  return GpsStatus::OK;
+#endif
+}
+
+GpsStatus UbxGpsInterface::configureConstellations() {
+  const uint8_t constellations = static_cast<uint8_t>(APP_GPS_CONSTELLATIONS);
+
+  GpsStatus status =
+      writeCfgVal8(CFG_KEY_SIGNAL_GPS_ENA,
+                   (constellations & GPS_CONSTELLATION_GPS) ? 1u : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  status = writeCfgVal8(CFG_KEY_SIGNAL_GAL_ENA,
+                        (constellations & GPS_CONSTELLATION_GALILEO) ? 1u : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  status = writeCfgVal8(CFG_KEY_SIGNAL_GLO_ENA,
+                        (constellations & GPS_CONSTELLATION_GLONASS) ? 1u : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  return writeCfgVal8(CFG_KEY_SIGNAL_BDS_ENA,
+                      (constellations & GPS_CONSTELLATION_BEIDOU) ? 1u : 0u);
+}
+
+GpsStatus UbxGpsInterface::configureDynamics() {
+  return writeCfgVal8(CFG_KEY_NAVSPG_DYNMODEL,
+                      static_cast<uint8_t>(APP_GPS_DYNAMIC_MODEL));
+}
+
+GpsStatus UbxGpsInterface::configureMessages() {
+  const uint16_t messages = static_cast<uint16_t>(APP_GPS_MESSAGES);
+
+  GpsStatus status =
+      writeCfgVal8(CFG_KEY_MSGOUT_NAV_PVT_UART1,
+                   (messages & GPS_MESSAGE_PVT) ? 1u : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  status = writeCfgVal8(CFG_KEY_MSGOUT_NAV_DOP_UART1,
+                        (messages & GPS_MESSAGE_DOP) ? 1u : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  status = writeCfgVal8(CFG_KEY_MSGOUT_NAV_STATUS_UART1,
+                        (messages & GPS_MESSAGE_STATUS) ? 1u : 0u);
+  if (status != GpsStatus::OK)
+    return status;
+
+  return writeCfgVal8(CFG_KEY_MSGOUT_NAV_TIMEUTC_UART1,
+                      (messages & GPS_MESSAGE_TIMEUTC) ? 1u : 0u);
+}
 
 GpsStatus UbxGpsInterface::sendCommand(uint8_t msg_class, uint8_t msg_id,
                                        const uint8_t *payload,
@@ -369,51 +536,37 @@ void UbxGpsInterface::parsePvt(const uint8_t *payload, GpsPvtData *data) {
 
 void UbxGpsInterface::parseBasicFix(const uint8_t *payload,
                                     GpsBasicFixData *data) {
-  const uint8_t *p = payload;
-#ifdef DEBUG_MODE
-  printPayload(payload, 92);
-#endif
-  // Skip to validity flags (offset 11)
-  p += 11;
+  GpsPvtData pvt{};
+  parsePvt(payload, &pvt);
 
-  // --- Validity ---
-  uint8_t validByte = *p++;
-  data->valid.validDate = (validByte & 0x01);
-  data->valid.validTime = (validByte & 0x02);
-  data->valid.fullyResolved = (validByte & 0x04);
-  data->valid.validMag = (validByte & 0x08);
+  data->iTOW = pvt.iTOW;
+  data->year = pvt.year;
+  data->month = pvt.month;
+  data->day = pvt.day;
+  data->hour = pvt.hour;
+  data->min = pvt.min;
+  data->sec = pvt.sec;
+  data->nano = pvt.nano;
 
-  // Skip tAcc (4 bytes) and nano (4 bytes)
-  p += 8;
+  data->valid = pvt.valid;
+  data->fixType = pvt.fixType;
+  data->flags = pvt.flags;
+  data->numSV = pvt.numSV;
 
-  // --- Fix Info ---
-  data->fixType = static_cast<GpsFixType>(*p++);
+  data->lon = pvt.lon;
+  data->lat = pvt.lat;
+  data->height = pvt.height;
+  data->hMSL = pvt.hMSL;
+  data->hAcc = pvt.hAcc;
+  data->vAcc = pvt.vAcc;
 
-  // --- Flags ---
-  uint8_t flags = *p++;
-  data->flags.gnssFixOK = (flags & 0x01);
-  data->flags.diffSoln = (flags & 0x02);
-  data->flags.psmState = static_cast<GpsPowerSaveMode>((flags >> 2) & 0x07);
-  data->flags.headVehValid = (flags & 0x20);
-  data->flags.carrSoln =
-      static_cast<GpsCarrierPhaseStatus>((flags >> 6) & 0x03);
+  data->velN = pvt.velN;
+  data->velE = pvt.velE;
+  data->velD = pvt.velD;
+  data->gSpeed = pvt.gSpeed;
+  data->headMot = pvt.headMot;
+  data->sAcc = pvt.sAcc;
+  data->headAcc = pvt.headAcc;
 
-  p++; // Skip flags2
-
-  // --- numSV ---
-  data->numSV = *p++;
-
-  // --- Position ---
-  data->lon = getI4(p);
-  p += 4;
-  data->lat = getI4(p);
-  p += 4;
-
-  // Skip height and hMSL
-  p += 8;
-
-  // hAcc
-  data->hAcc = getU4(p);
-  p += 4;
-
+  data->pDOP = pvt.pDOP;
 }

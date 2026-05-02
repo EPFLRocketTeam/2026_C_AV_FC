@@ -21,6 +21,8 @@ public:
     void enableFsync() override;
 
     bool getFrame(IMUData& out_data) override;
+    uint32_t statusFlags() const override;
+    uint32_t dropCount() const override;
 
     void onInterrupt() override;
     void tick() override;
