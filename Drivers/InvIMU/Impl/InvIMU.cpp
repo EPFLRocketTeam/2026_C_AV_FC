@@ -1,5 +1,4 @@
 #include "InvIMU.hpp"
-#include "Application/app_timebase.h"
 #include <stdio.h>
 
 // Registers used for manual SPI access
@@ -7,8 +6,6 @@ static constexpr uint8_t REG_BANK_SEL       = 0x76;
 static constexpr uint8_t REG_FIFO_COUNTH    = 0x12; 
 static constexpr uint8_t REG_FIFO_DATA      = 0x14; 
 static constexpr uint8_t REG_WHO_AM_I       = 0x72;
-static constexpr uint32_t INV_IMU_SPI_TX_TIMEOUT_MS = 2u;
-static constexpr uint32_t INV_IMU_SPI_FIFO_RX_TIMEOUT_MS = 5u;
 
 namespace Drivers {
 namespace InvIMU {
@@ -39,9 +36,22 @@ bool InvIMU_STM32::dwt_is_running() {
 
 uint64_t InvIMU_STM32::now_us(bool use_dwt) {
     if (use_dwt) {
-        return app_timebase_now_us();
+        static uint32_t last_cyccnt = 0u;
+        static uint64_t acc_us = 0u;
+        const uint32_t cycles_per_us = (SystemCoreClock / 1000000u);
+        if (cycles_per_us == 0u) return acc_us;
+        const uint32_t cyccnt = DWT->CYCCNT;
+        const uint32_t delta_cycles = (uint32_t)(cyccnt - last_cyccnt);
+        last_cyccnt = cyccnt;
+        acc_us += (uint64_t)(delta_cycles / cycles_per_us);
+        return acc_us;
     }
-    return static_cast<uint64_t>(HAL_GetTick()) * 1000ULL;
+    static uint32_t last_ms = 0u;
+    static uint64_t acc_us = 0u;
+    const uint32_t ms = HAL_GetTick();
+    acc_us += (uint64_t)((uint32_t)(ms - last_ms)) * 1000ull;
+    last_ms = ms;
+    return acc_us;
 }
 
 void InvIMU_STM32::applyAlignment(IMUData& d) {
@@ -120,70 +130,6 @@ gyro_config0_gyro_odr_t InvIMU_STM32::toGyroOdr(ODR odr) {
         case ODR::_1_6kHz: return GYRO_CONFIG0_GYRO_ODR_1600_HZ;
         case ODR::_800Hz:  return GYRO_CONFIG0_GYRO_ODR_800_HZ;
         default:           return GYRO_CONFIG0_GYRO_ODR_100_HZ;
-    }
-}
-
-ipreg_sys2_reg_131_accel_ui_lpfbw_t InvIMU_STM32::toAccelBwDiv(uint8_t div) {
-    switch (div) {
-        case 0:   return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_NO_FILTER;
-        case 4:   return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_4;
-        case 8:   return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_8;
-        case 16:  return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_16;
-        case 32:  return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_32;
-        case 64:  return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_64;
-        case 128: return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_128;
-        default:  return IPREG_SYS2_REG_131_ACCEL_UI_LPFBW_DIV_4;
-    }
-}
-
-ipreg_sys1_reg_172_gyro_ui_lpfbw_sel_t InvIMU_STM32::toGyroBwDiv(uint8_t div) {
-    switch (div) {
-        case 0:   return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_NO_FILTER;
-        case 4:   return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_4;
-        case 8:   return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_8;
-        case 16:  return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_16;
-        case 32:  return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_32;
-        case 64:  return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_64;
-        case 128: return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_128;
-        default:  return IPREG_SYS1_REG_172_GYRO_UI_LPFBW_DIV_4;
-    }
-}
-
-ipreg_sys2_reg_129_accel_lp_avg_sel_t InvIMU_STM32::toAccelLpAvg(uint8_t avg) {
-    switch (avg) {
-        case 1:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_1;
-        case 2:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_2;
-        case 4:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_4;
-        case 5:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_5;
-        case 7:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_7;
-        case 8:  return IPREG_SYS2_REG_129_ACCEL_LP_AVG_8;
-        case 10: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_10;
-        case 11: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_11;
-        case 16: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_16;
-        case 18: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_18;
-        case 20: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_20;
-        case 32: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_32;
-        case 64: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_64;
-        default: return IPREG_SYS2_REG_129_ACCEL_LP_AVG_1;
-    }
-}
-
-ipreg_sys1_reg_170_gyro_lp_avg_sel_t InvIMU_STM32::toGyroLpAvg(uint8_t avg) {
-    switch (avg) {
-        case 1:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_1;
-        case 2:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_2;
-        case 4:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_4;
-        case 5:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_5;
-        case 7:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_7;
-        case 8:  return IPREG_SYS1_REG_170_GYRO_LP_AVG_8;
-        case 10: return IPREG_SYS1_REG_170_GYRO_LP_AVG_10;
-        case 11: return IPREG_SYS1_REG_170_GYRO_LP_AVG_11;
-        case 16: return IPREG_SYS1_REG_170_GYRO_LP_AVG_16;
-        case 18: return IPREG_SYS1_REG_170_GYRO_LP_AVG_18;
-        case 20: return IPREG_SYS1_REG_170_GYRO_LP_AVG_20;
-        case 32: return IPREG_SYS1_REG_170_GYRO_LP_AVG_32;
-        case 64: return IPREG_SYS1_REG_170_GYRO_LP_AVG_64;
-        default: return IPREG_SYS1_REG_170_GYRO_LP_AVG_1;
     }
 }
 
@@ -290,10 +236,6 @@ void InvIMU_STM32::configure(AccelRange ar, GyroRange gr, ODR odr) {
     inv_imu_set_gyro_fsr(&_dev, tdk_gyro_fsr);
     inv_imu_set_accel_frequency(&_dev, tdk_accel_odr);
     inv_imu_set_gyro_frequency(&_dev, tdk_gyro_odr);
-    inv_imu_set_accel_ln_bw(&_dev, toAccelBwDiv(_hw.accel_bw_div));
-    inv_imu_set_accel_lp_avg(&_dev, toAccelLpAvg(_hw.accel_lp_avg));
-    inv_imu_set_gyro_ln_bw(&_dev, toGyroBwDiv(_hw.gyro_bw_div));
-    inv_imu_set_gyro_lp_avg(&_dev, toGyroLpAvg(_hw.gyro_lp_avg));
     inv_imu_set_accel_mode(&_dev, PWR_MGMT0_ACCEL_MODE_LN);
     inv_imu_set_gyro_mode(&_dev, PWR_MGMT0_GYRO_MODE_LN);
 
@@ -571,13 +513,13 @@ int InvIMU_STM32::spi_read_fifo(uint8_t reg, uint8_t* data, uint16_t len) {
 
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
 
-    if (HAL_SPI_Transmit(_hw.hspi, &reg_addr, 1, INV_IMU_SPI_TX_TIMEOUT_MS) != HAL_OK) {
+    if (HAL_SPI_Transmit(_hw.hspi, &reg_addr, 1, 10) != HAL_OK) {
         HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
         _status_flags |= IMU_STATUS_SPI_ERROR;
         return -1;
     }
 
-    int rc = HAL_SPI_Receive(_hw.hspi, data, len, INV_IMU_SPI_FIFO_RX_TIMEOUT_MS);
+    int rc = HAL_SPI_Receive(_hw.hspi, data, len, 1000);
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
 
     if (rc != HAL_OK) {
@@ -637,32 +579,14 @@ void InvIMU_STM32::tick() {
 
     if (count == 0u) return;
 
+    _dma_busy = true;
     _last_dma_size = count;
     _dma_irq_time_us = _irq_time_us;
-
-#ifndef UNIT_TEST_ENV
-    const bool dma_hw_ready = (_hw.hspi != nullptr) && (_hw.hspi->hdmarx != nullptr);
-#else
-    const bool dma_hw_ready = false;
-#endif
-    const bool use_dma_path = _hw.use_dma && dma_hw_ready;
-
-    if (!use_dma_path) {
-        if (spi_read_fifo(REG_FIFO_DATA, _dma_rx_buffer, count) != 0) {
-            _status_flags |= IMU_STATUS_SPI_ERROR;
-            return;
-        }
-        _rx_pending = true;
-        processPendingRx();
-        return;
-    }
-
-    _dma_busy = true;
 
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
     uint8_t reg = REG_FIFO_DATA | 0x80;
 
-    if (HAL_SPI_Transmit(_hw.hspi, &reg, 1, INV_IMU_SPI_TX_TIMEOUT_MS) != HAL_OK) {
+    if (HAL_SPI_Transmit(_hw.hspi, &reg, 1, 10) != HAL_OK) {
         HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
         _dma_busy = false;
         _status_flags |= IMU_STATUS_SPI_ERROR;
@@ -680,9 +604,6 @@ void InvIMU_STM32::tick() {
 }
 
 void InvIMU_STM32::onDmaComplete() {
-    if (!_dma_busy) {
-        return;
-    }
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
     const uint16_t total_bytes = _last_dma_size;
     _invalidate_size = (total_bytes > 0u) ? ((uint32_t)total_bytes + 31u) & ~31u : (uint32_t)kRawBufferSize;
@@ -704,7 +625,7 @@ bool InvIMU_STM32::ping() {
 int InvIMU_STM32::spi_write(uint8_t reg, uint8_t data) {
     uint8_t tx[2] = { reg, data };
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
-    int rc = HAL_SPI_Transmit(_hw.hspi, tx, 2, INV_IMU_SPI_TX_TIMEOUT_MS);
+    int rc = HAL_SPI_Transmit(_hw.hspi, tx, 2, 10);
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
     if (rc != HAL_OK) _status_flags |= IMU_STATUS_SPI_ERROR;
     return (rc == HAL_OK) ? 0 : -1;

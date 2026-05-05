@@ -86,6 +86,16 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
   app_on_imu_spi_rx_complete(hspi);
 }
+
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+//	if (GPIO_Pin == ICM_INT4_Pin) {
+//		imu_exti_callback();
+//	}
+//}
+//
+//void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hdma) {
+//	imu_dma_callback();
+//}
 /* USER CODE END 0 */
 
 /**

@@ -10,7 +10,7 @@
 extern RingBuffer<GpsBasicFixData, 100> gpsData;
 
 #ifndef APP_GPS_POLL_TIMEOUT_MS
-#define APP_GPS_POLL_TIMEOUT_MS 0u
+#define APP_GPS_POLL_TIMEOUT_MS 50u
 #endif
 
 #ifndef APP_GPS_STALE_TIMEOUT_MS
