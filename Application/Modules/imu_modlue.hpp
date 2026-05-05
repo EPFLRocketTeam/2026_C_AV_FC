@@ -9,9 +9,15 @@
 
 using namespace Drivers::InvIMU;
 
-extern RingBuffer<IMUData, 1000> imuData1;
-extern RingBuffer<IMUData, 1000> imuData2;
-extern RingBuffer<IMUData, 1000> imuData3;
+#ifndef APP_IMU_RING_CAPACITY
+#define APP_IMU_RING_CAPACITY 128u
+#endif
+
+using AppImuRingBuffer = RingBuffer<IMUData, APP_IMU_RING_CAPACITY>;
+
+extern AppImuRingBuffer imuData1;
+extern AppImuRingBuffer imuData2;
+extern AppImuRingBuffer imuData3;
 
 #ifndef APP_IMU_ENABLE_FSYNC
 #define APP_IMU_ENABLE_FSYNC 1u
@@ -41,12 +47,22 @@ extern RingBuffer<IMUData, 1000> imuData3;
 #define APP_IMU_STALE_TIMEOUT_MS 50u
 #endif
 
+template <size_t NumSensors = 1u,
+          size_t BufferCapacity = APP_IMU_RING_CAPACITY>
 class ImuModule
-    : public modules::Module<InvIMU_Interface, RingBuffer<IMUData, 1000>, 1> {
+    : public modules::Module<InvIMU_Interface,
+                             RingBuffer<IMUData, BufferCapacity>,
+                             NumSensors> {
 public:
-  explicit ImuModule(InvIMU_Interface *(&drivers)[1],
-                     RingBuffer<IMUData, 1000> *(&buffers)[1])
-      : Module(drivers, buffers) {}
+  using BufferT = RingBuffer<IMUData, BufferCapacity>;
+  using Base = modules::Module<InvIMU_Interface, BufferT, NumSensors>;
+  using Base::buffers_;
+  using Base::drivers_;
+  static constexpr size_t kNumSensors = NumSensors;
+
+  explicit ImuModule(InvIMU_Interface *(&drivers)[NumSensors],
+                     BufferT *(&buffers)[NumSensors])
+      : Base(drivers, buffers) {}
 
   bool init() override {
     for (size_t i = 0; i < kNumSensors; ++i) {
@@ -145,7 +161,7 @@ public:
     return produced;
   }
 
-  const RingBuffer<IMUData, 1000> &getBuffer(size_t i) const {
+  const BufferT &getBuffer(size_t i) const {
     return *buffers_[i];
   }
 
@@ -208,7 +224,6 @@ private:
       ++produced_since_last_update_;
       ++produced;
     }
-    printf("We got a drain of %d el\n", produced);
     sensor_state_[sensor_index].status_flags = drivers_[sensor_index]->statusFlags();
     sensor_state_[sensor_index].drop_count = drivers_[sensor_index]->dropCount();
     if (produced > 0u) {

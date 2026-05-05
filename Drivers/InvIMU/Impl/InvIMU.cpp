@@ -640,24 +640,24 @@ void InvIMU_STM32::tick() {
     _last_dma_size = count;
     _dma_irq_time_us = _irq_time_us;
 
-//#ifndef UNIT_TEST_ENV
-//    const bool dma_hw_ready = (_hw.hspi != nullptr) && (_hw.hspi->hdmarx != nullptr);
-//#else
-//    const bool dma_hw_ready = false;
-//#endif
-//    const bool use_dma_path = _hw.use_dma && dma_hw_ready;
-//
-//    if (!use_dma_path) {
-//        if (spi_read_fifo(REG_FIFO_DATA, _dma_rx_buffer, count) != 0) {
-//            _status_flags |= IMU_STATUS_SPI_ERROR;
-//            return;
-//        }
-//        _rx_pending = true;
-//        processPendingRx();
-//        return;
-//    }
-//
-//    _dma_busy = true;
+#ifndef UNIT_TEST_ENV
+    const bool dma_hw_ready = (_hw.hspi != nullptr) && (_hw.hspi->hdmarx != nullptr);
+#else
+    const bool dma_hw_ready = false;
+#endif
+    const bool use_dma_path = _hw.use_dma && dma_hw_ready;
+
+    if (!use_dma_path) {
+        if (spi_read_fifo(REG_FIFO_DATA, _dma_rx_buffer, count) != 0) {
+            _status_flags |= IMU_STATUS_SPI_ERROR;
+            return;
+        }
+        _rx_pending = true;
+        processPendingRx();
+        return;
+    }
+
+    _dma_busy = true;
 
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
     uint8_t reg = REG_FIFO_DATA | 0x80;
@@ -680,9 +680,9 @@ void InvIMU_STM32::tick() {
 }
 
 void InvIMU_STM32::onDmaComplete() {
-//    if (!_dma_busy) {
-//        return;
-//    }
+    if (!_dma_busy) {
+        return;
+    }
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
     const uint16_t total_bytes = _last_dma_size;
     _invalidate_size = (total_bytes > 0u) ? ((uint32_t)total_bytes + 31u) & ~31u : (uint32_t)kRawBufferSize;

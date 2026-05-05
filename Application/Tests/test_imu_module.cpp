@@ -24,7 +24,7 @@ protected:
   InvIMU_Interface* drivers[3] = {&imu0, &imu1, &imu2};
   RingBuffer<IMUData, 100>* buffers[3] = {&rb0, &rb1, &rb2};
 
-  ImuModule module{drivers, buffers};
+  ImuModule<3, 100> module{drivers, buffers};
 
   static IMUData makeSample(uint64_t ts) {
     IMUData d{};
