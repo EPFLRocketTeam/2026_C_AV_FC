@@ -8,6 +8,7 @@
 #include "Application/Kalman/AppLayer/hw_config.hpp"
 #include "Application/Kalman/AppLayer/output_bridge.hpp"
 #include "Application/Kalman/kalman_health.hpp"
+#include "Application/Kalman/kalman_debug.hpp"
 #include "Application/Data/fsm.hpp"
 #include "Application/Data/data.hpp"
 #include "Application/FlightControl/threshold.h"
@@ -165,6 +166,15 @@ struct KalmanRuntime {
 	size_t active_imu_sources = 3u;
 	static constexpr size_t kActiveBaroSources = 4u;
 	LiftoffAccHold acc_hold;  ///< Liftoff acceleration-hold evaluator
+
+#if KALMAN_DEBUG_PRINT
+	kalman_debug::RawSensorSnapshot debug_raw_sensor_{};
+#endif
+
+#if KALMAN_DEBUG_FORCE_FLIGHT
+	uint32_t force_flight_tick_counter_ = 0;
+	bool force_flight_done_ = false;
+#endif
 
 	void initIfNeeded() {
 		if (initialized) {
@@ -389,6 +399,17 @@ struct KalmanRuntime {
 			last_body_accel_mps2.y = slice[slice_count - 1u].accel_y;
 			last_body_accel_mps2.z = slice[slice_count - 1u].accel_z;
 			health.imu_samples_consumed += static_cast<uint32_t>(slice_count);
+
+#if KALMAN_DEBUG_PRINT
+			// Capture last raw IMU sample for debug output
+			const auto& last_raw = slice[slice_count - 1u];
+			debug_raw_sensor_.ax = last_raw.accel_x;
+			debug_raw_sensor_.ay = last_raw.accel_y;
+			debug_raw_sensor_.az = last_raw.accel_z;
+			debug_raw_sensor_.gx = last_raw.gyro_x;
+			debug_raw_sensor_.gy = last_raw.gyro_y;
+			debug_raw_sensor_.gz = last_raw.gyro_z;
+#endif
 			offset += slice_count;
 		}
 	}
@@ -544,6 +565,12 @@ struct KalmanRuntime {
 			estimator.processBaroSample(sample);
 			health.baro_updates += 1;
 			++staged_baro_index[best_source];
+
+#if KALMAN_DEBUG_PRINT
+			// Capture last baro sample for debug output
+			debug_raw_sensor_.baro_pa = sample.pressurePa;
+			debug_raw_sensor_.baro_tempC = sample.temperatureC;
+#endif
 		}
 
 		GpsBasicFixData staged_fixes[kMaxGpsSamplesPerRun] = {};
@@ -704,6 +731,39 @@ int kalman_loop() {
 		g_max_main_loop_iteration_us.load(std::memory_order_relaxed);
 
 	KalmanHealthStore::instance().set(kalman.health);
+
+	// -----------------------------------------------------------------
+	// KALMAN_DEBUG_FORCE_FLIGHT: auto-transition to BURN for bench test.
+	// After a configurable settling period the force-flight logic
+	// synthetically pushes the Kalman lifecycle through the same path
+	// as a normal INIT → BURN transition, so the ESKF initialises from
+	// the Rail Shadow and begins tracking attitude.
+	// -----------------------------------------------------------------
+#if KALMAN_DEBUG_FORCE_FLIGHT
+	if (!kalman.force_flight_done_) {
+		++kalman.force_flight_tick_counter_;
+		if (kalman.force_flight_tick_counter_ == KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS) {
+			printf("[KAL-DBG] Force-flight: injecting BURN state + liftoff\n");
+			kalman_on_state_change(
+				static_cast<uint32_t>(flight_computer::State::BURN));
+			kalman_on_liftoff(HAL_GetTick());
+			kalman.force_flight_done_ = true;
+		}
+	}
+#endif
+
+	// -----------------------------------------------------------------
+	// KALMAN_DEBUG_PRINT: human-readable console diagnostics.
+	// -----------------------------------------------------------------
+#if KALMAN_DEBUG_PRINT
+	kalman_debug::printDebugLine(
+		kalman.estimator,
+		kalman.health,
+		kalman.last_state,
+		kalman_loop_elapsed_us,
+		static_cast<uint32_t>(drained),
+		kalman.debug_raw_sensor_);
+#endif
 
 	return drained;
 }
