@@ -870,6 +870,7 @@ void EskfEstimator::enterDescentMode(uint64_t timestamp_us) {
 }
 
 void EskfEstimator::processImuBatch(const ImuBatch &batch) {
+	printf("IMU Process - 0");
   if (!initialized_ || !batch.data || batch.count == 0)
     return;
 
@@ -878,11 +879,12 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
 
   // If we already have a pending batch for this source, flush it first to
   // avoid overwriting.
+  printf("IMU Process - 1");
   if (pending_imu_[src].valid) {
     processBufferedImuBatch(pending_imu_[src]);
     pending_imu_[src].valid = false;
   }
-
+  printf("IMU Process - 2");
   PendingImuBatch &pending = pending_imu_[src];
 
   // Deep copy samples (original may be released after this call)
@@ -894,9 +896,10 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
   pending.dt_us = batch.dt_us > 0 ? batch.dt_us : 1000;
   pending.source = static_cast<uint8_t>(src);
   pending.valid = true;
-
+  printf("IMU Process - 3");
   // Check for stale batches from other sources (flush before pairing)
   flushPendingImuIfStale(batch.t0_us);
+  printf("IMU Process - 4");
 
   const size_t target_group_size =
       std::max<size_t>(1, std::min<size_t>(active_imu_sources_,
@@ -906,7 +909,7 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
     pending_imu_[src].valid = false;
     return;
   }
-
+  printf("IMU Process - 5");
   size_t valid_count = 0;
   uint64_t anchor_t0 = std::numeric_limits<uint64_t>::max();
   for (size_t i = 0; i < kMaxImuSources; ++i) {
@@ -921,7 +924,7 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
   if (valid_count < target_group_size) {
     return;
   }
-
+  printf("IMU Process - 6");
   const PendingImuBatch *group[kMaxImuSources] = {};
   size_t group_count = 0;
   for (size_t i = 0; i < kMaxImuSources; ++i) {
@@ -937,7 +940,7 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
       }
     }
   }
-
+  printf("IMU Process - 7");
   if (group_count >= target_group_size) {
     processSyncedImuGroup(group, target_group_size);
     for (size_t gi = 0; gi < target_group_size; ++gi) {

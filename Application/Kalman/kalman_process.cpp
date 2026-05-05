@@ -32,9 +32,9 @@ extern "C" {
 // extern osMutexId_t navigationDataMutexHandle;
 
 
-extern RingBuffer<IMUData, 100> imuData1;
-extern RingBuffer<IMUData, 100> imuData2;
-extern RingBuffer<IMUData, 100> imuData3;
+extern RingBuffer<IMUData, 1000> imuData1;
+extern RingBuffer<IMUData, 1000> imuData2;
+extern RingBuffer<IMUData, 1000> imuData3;
 
 extern RingBuffer<GpsBasicFixData, 100> gpsData;
 
@@ -339,6 +339,7 @@ struct KalmanRuntime {
 	}
 
 	void ingestImuChunk(size_t source_index, const IMUData *samples, size_t count) {
+
 		initIfNeeded();
 		if (samples == nullptr || count == 0u) {
 			return;
@@ -376,12 +377,17 @@ struct KalmanRuntime {
 		batch.source = static_cast<uint8_t>(source_index);
 		batch.slot = 0xFF;
 
+		auto mfp = &app::EskfEstimator::processImuBatch;
+		printf("Before IMU Batch: %p\n", (void*)&mfp);
+		// uintptr_t vptr = *(reinterpret_cast<uintptr_t*>(&estimator)); printf("vptr value (points to vtable): 0x%lx\n", vptr);
 		estimator.processImuBatch(batch);
+		printf("After Process ImuBatch\n");
 
 		last_body_accel_mps2.x = samples[count - 1u].accel_x;
 		last_body_accel_mps2.y = samples[count - 1u].accel_y;
 		last_body_accel_mps2.z = samples[count - 1u].accel_z;
 		health.imu_samples_consumed += static_cast<uint32_t>(count);
+		printf("We are at the end of IMU chunk");
 	}
 
 	void onTick(uint64_t now_us) {
@@ -571,14 +577,17 @@ KalmanRuntime &runtime() {
 } // namespace
 
 int kalman_loop() {
+
 	KalmanRuntime &kalman = runtime();
 	kalman.initIfNeeded();
 	const uint64_t kalman_loop_start_us = app_timebase_now_us();
+	//uintptr_t vptr = *(reinterpret_cast<uintptr_t*>(&kalman.estimator)); printf("vptr value (points to vtable): 0x%lx\n", vptr);
+	//printf("Pointer to the processImuBatch: %p\n", (void*)&vptr);
 
 	const uint32_t current_state = kalman_current_state();
 	kalman.onStateChange(current_state);
 
-	RingBuffer<IMUData, 100> *buffers[] = {&imuData1, &imuData2, &imuData3};
+	RingBuffer<IMUData, 1000> *buffers[] = {&imuData1, &imuData2, &imuData3};
 
 	IMUData staged_samples[3][kMaxImuSamplesPerSourcePerRun] = {};
 	size_t staged_count[3] = {0, 0, 0};
@@ -586,7 +595,7 @@ int kalman_loop() {
 	bool source_healthy[3] = {false, false, false};
 	size_t healthy_source_count = 0;
 	int drained = 0;
-
+	printf("In loop 1\n");
 	for (size_t i = 0; i < 3; ++i) {
 		source_healthy[i] =
 			(app_imu_sensor_healthy(static_cast<uint8_t>(i)) != 0U);
@@ -607,7 +616,7 @@ int kalman_loop() {
 		staged_count[i] = source_samples;
 		drained += static_cast<int>(source_samples);
 	}
-
+	printf("In loop 2\n");
 	kalman.setActiveImuSources(healthy_source_count);
 
 	for (;;) {
@@ -629,9 +638,11 @@ int kalman_loop() {
 			}
 		}
 
+		printf("Best source is %d \n", best_source);
 		if (best_source >= 3) {
 			break;
 		}
+
 
 		uint64_t next_other_ts = UINT64_MAX;
 		for (size_t i = 0; i < 3; ++i) {
@@ -647,6 +658,7 @@ int kalman_loop() {
 
 		const size_t start_idx = staged_index[best_source];
 		size_t chunk_count = 0;
+		printf("next other ts is %lu , best ts is %lu\n", next_other_ts, best_ts);
 		while ((start_idx + chunk_count) < staged_count[best_source]) {
 			const uint64_t ts =
 				staged_samples[best_source][start_idx + chunk_count].timestamp_us;
@@ -655,18 +667,22 @@ int kalman_loop() {
 			}
 			++chunk_count;
 		}
+		printf("Exited while \n");
+
+
 
 		if (chunk_count == 0u) {
 			chunk_count = 1u;
 		}
-
+		printf("Ingest chunck count %d\n", chunk_count);
 		kalman.ingestImuChunk(
 			best_source,
 			&staged_samples[best_source][start_idx],
 			chunk_count);
+		printf("Ingested the chunk \n");
 		staged_index[best_source] += chunk_count;
 	}
-
+	printf("In loop 3\n");
 
 	// Liftoff must be consumed before aiding ingestion so that GPS
 	// samples arriving in the same tick see in_flight_==true and
@@ -690,7 +706,7 @@ int kalman_loop() {
 	kalman.health.last_kalman_loop_us = kalman_loop_elapsed_us;
 	kalman.health.max_kalman_loop_us =
 		std::max(kalman.health.max_kalman_loop_us, kalman_loop_elapsed_us);
-
+	printf("In loop 4\n");
 	// Pull the latest main-loop wall-clock values (published by
 	// kalman_note_main_loop_iteration_us on the previous super-loop iteration)
 	// into the snapshot so readers always observe a consistent record.

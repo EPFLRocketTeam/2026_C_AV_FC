@@ -9,9 +9,9 @@
 
 using namespace Drivers::InvIMU;
 
-extern RingBuffer<IMUData, 100> imuData1;
-extern RingBuffer<IMUData, 100> imuData2;
-extern RingBuffer<IMUData, 100> imuData3;
+extern RingBuffer<IMUData, 1000> imuData1;
+extern RingBuffer<IMUData, 1000> imuData2;
+extern RingBuffer<IMUData, 1000> imuData3;
 
 #ifndef APP_IMU_ENABLE_FSYNC
 #define APP_IMU_ENABLE_FSYNC 1u
@@ -42,10 +42,10 @@ extern RingBuffer<IMUData, 100> imuData3;
 #endif
 
 class ImuModule
-    : public modules::Module<InvIMU_Interface, RingBuffer<IMUData, 100>, 1> {
+    : public modules::Module<InvIMU_Interface, RingBuffer<IMUData, 1000>, 1> {
 public:
   explicit ImuModule(InvIMU_Interface *(&drivers)[1],
-                     RingBuffer<IMUData, 100> *(&buffers)[1])
+                     RingBuffer<IMUData, 1000> *(&buffers)[1])
       : Module(drivers, buffers) {}
 
   bool init() override {
@@ -145,7 +145,7 @@ public:
     return produced;
   }
 
-  const RingBuffer<IMUData, 100> &getBuffer(size_t i) const {
+  const RingBuffer<IMUData, 1000> &getBuffer(size_t i) const {
     return *buffers_[i];
   }
 

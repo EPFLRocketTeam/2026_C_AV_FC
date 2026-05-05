@@ -32,9 +32,9 @@ using Drivers::InvIMU::InvIMU_STM32;
 using Drivers::BMP390::BaroData;
 
 
-RingBuffer<IMUData, 100> imuData1;
-RingBuffer<IMUData, 100> imuData2;
-RingBuffer<IMUData, 100> imuData3;
+RingBuffer<IMUData, 1000> imuData1;
+RingBuffer<IMUData, 1000> imuData2;
+RingBuffer<IMUData, 1000> imuData3;
 
 RingBuffer<GpsBasicFixData, 100> gpsData;
 RingBuffer<BaroData, 100> baroData1;
@@ -120,7 +120,7 @@ struct SuperLoopContext {
     //InvIMU_Interface* invArr[3] = {&invImu1, &invImu2, &invImu3};
     InvIMU_Interface* invArr[1] = {&invImu1};
     // RingBuffer<IMUData, 100>* ringArr[3] = {&imuData1, &imuData2, &imuData3};
-    RingBuffer<IMUData, 100>* ringArr[1] = {&imuData1};
+    RingBuffer<IMUData, 1000>* ringArr[1] = {&imuData1};
     ImuModule imuModule{invArr, ringArr};
 
 #ifdef UNIT_TEST_ENV
@@ -275,7 +275,9 @@ extern "C" void app_super_loop_iterate(void) {
     (void)g_superloop.baroModule.takeProducedCount();
     g_superloop.gpsModule.update(now_ms);
 
+    printf("Entering kalman loop\n");
     (void)kalman_loop();
+    printf("Exit kalman loop\n");
 
     const uint64_t iteration_end_us = app_timebase_now_us();
     const uint64_t elapsed_us = iteration_end_us - iteration_start_us;
