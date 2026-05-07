@@ -20,23 +20,23 @@
 // ============================================================================
 
 #ifndef KALMAN_DEBUG_PRINT
-#define KALMAN_DEBUG_PRINT 1
+#define KALMAN_DEBUG_PRINT 0
 #endif
 
 #ifndef KALMAN_DEBUG_FORCE_FLIGHT
-#define KALMAN_DEBUG_FORCE_FLIGHT 1
+#define KALMAN_DEBUG_FORCE_FLIGHT 0
 #endif
 
 /// Print rate decimation: console output happens every N super-loop ticks.
 /// At ~1 kHz loop rate, 500 → ~2 Hz.  Tune if output is too fast/slow.
 #ifndef KALMAN_DEBUG_PRINT_DECIMATION
-#define KALMAN_DEBUG_PRINT_DECIMATION 15
+#define KALMAN_DEBUG_PRINT_DECIMATION 500
 #endif
 
 /// Delay (super-loop ticks) before force-flight auto-transitions.
 /// Gives the Rail Shadow time to converge on gravity before seeding ESKF.
 #ifndef KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS
-#define KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS 1000
+#define KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS 3000
 #endif
 
 #if KALMAN_DEBUG_PRINT
@@ -111,6 +111,11 @@ struct RawSensorSnapshot {
     float gx, gy, gz;  // Last raw gyro sample (body, rad/s)
     float baro_pa;     // Last baro pressure seen (Pa), 0 if none
     float baro_tempC;  // Last baro temperature (°C), 0 if none
+    uint32_t frame_h78;  // Count of 0x78 frames (normal hires)
+    uint32_t frame_hF0;  // Count of 0xF0 frames (ext_header)
+    uint32_t frame_other; // Count of other/unknown frames
+    uint32_t imu_status_flags; // IMU driver status flags (SPI errors etc)
+    uint32_t imu_drop_count;   // IMU ring buffer overflow count
 };
 
 inline void printDebugLine(
@@ -209,13 +214,19 @@ inline void printDebugLine(
            rail.isHeadingInitialized() ? "OK" : "NO");
 
     // Line 5: Raw sensor values (last sample this tick)
+    const double amag = std::sqrt(
+        static_cast<double>(raw.ax) * raw.ax +
+        static_cast<double>(raw.ay) * raw.ay +
+        static_cast<double>(raw.az) * raw.az);
     printf("[KAL] raw: ax=%+7.2f ay=%+7.2f az=%+7.2f  "
            "gx=%+6.3f gy=%+6.3f gz=%+6.3f  "
+           "|a|=%.2f  "
            "P=%.0fPa T=%.1fC\n",
            static_cast<double>(raw.ax), static_cast<double>(raw.ay),
            static_cast<double>(raw.az),
            static_cast<double>(raw.gx), static_cast<double>(raw.gy),
            static_cast<double>(raw.gz),
+           amag,
            static_cast<double>(raw.baro_pa),
            static_cast<double>(raw.baro_tempC));
 
@@ -224,6 +235,23 @@ inline void printDebugLine(
            static_cast<double>(gb[0]),
            static_cast<double>(gb[1]),
            static_cast<double>(gb[2]));
+
+    // Line 7: IMU FIFO frame header statistics
+    printf("[KAL] fifoHdr: 0x78=%lu  0xF0=%lu  other=%lu  "
+           "imuFlags=0x%lX  imuDrvDrop=%lu\n",
+           static_cast<unsigned long>(raw.frame_h78),
+           static_cast<unsigned long>(raw.frame_hF0),
+           static_cast<unsigned long>(raw.frame_other),
+           static_cast<unsigned long>(raw.imu_status_flags),
+           static_cast<unsigned long>(raw.imu_drop_count));
+
+    // Line 8: CatchUp budget details
+    printf("[KAL] catchUp: budget=%luus  last=%luus  events=%lu  "
+           "dtClamp=%lu\n",
+           static_cast<unsigned long>(estimator.catchupBudgetUs()),
+           static_cast<unsigned long>(estimator.lastCatchupDurationUs()),
+           static_cast<unsigned long>(estimator.lastCatchupEventsProcessed()),
+           static_cast<unsigned long>(estimator.predictDtClampedCount()));
 
     // Separator for readability
     printf("---\n");

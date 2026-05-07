@@ -1484,13 +1484,44 @@ void EskfEstimator::processBaroObservation(uint8_t source,
   pending_baro_[src].status = sample_status;
   pending_baro_[src].timestamp_us = timestamp_us;
   pending_baro_[src].valid = true;
+  baro_source_last_seen_us_[src] = timestamp_us;
 
   flushPendingBaroIfStale(timestamp_us);
 
+  // Determine how many sources are actually alive (reported recently).
+  // Sources that have never reported or haven't reported within the alive
+  // timeout are considered dead and excluded from the readiness check.
+  // This prevents dead sensors from blocking the baro pipeline forever.
+  size_t alive_count = 0;
+  for (size_t i = 0; i < baro_count_cfg; ++i) {
+    if (baro_source_last_seen_us_[i] > 0 &&
+        timestamp_us >= baro_source_last_seen_us_[i] &&
+        (timestamp_us - baro_source_last_seen_us_[i]) < kBaroSourceAliveTimeoutUs) {
+      ++alive_count;
+    }
+  }
+
+  // If only one source is alive, use the single-baro fast path.
+  if (alive_count <= 1) {
+    eskf::SensorStatus status = sample_status;
+    eskf::BaroOutput bout =
+        virtual_baro_.process(&pressure_pa, &temperature_k, &status, timestamp_us);
+    fuse_output(bout, timestamp_us);
+    output_dirty_ = true;
+    return;
+  }
+
+  // Multi-baro path: wait for all ALIVE sources to have pending data.
   bool ready = true;
   uint64_t min_ts = std::numeric_limits<uint64_t>::max();
   uint64_t max_ts = 0;
   for (size_t i = 0; i < baro_count_cfg; ++i) {
+    // Skip dead sources — don't wait for sensors that haven't reported.
+    if (baro_source_last_seen_us_[i] == 0 ||
+        timestamp_us < baro_source_last_seen_us_[i] ||
+        (timestamp_us - baro_source_last_seen_us_[i]) >= kBaroSourceAliveTimeoutUs) {
+      continue;
+    }
     if (!pending_baro_[i].valid) {
       ready = false;
       break;

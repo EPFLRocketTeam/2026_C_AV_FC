@@ -78,6 +78,11 @@ namespace InvIMU {
         // Optional observability hooks for module-level health monitoring.
         virtual uint32_t statusFlags() const { return IMU_STATUS_OK; }
         virtual uint32_t dropCount() const { return 0u; }
+
+        // Frame header statistics for FIFO parsing diagnostics.
+        virtual uint32_t frameCount0x78() const { return 0u; }
+        virtual uint32_t frameCount0xF0() const { return 0u; }
+        virtual uint32_t frameCountOther() const { return 0u; }
         
         virtual void onInterrupt() = 0;   // Called by ISR (Sets flag)
         virtual void tick() = 0;          // Called by Main Loop (Processes flag)

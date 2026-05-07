@@ -312,6 +312,12 @@ private:
     bool valid = false;
   };
   PendingBaroSample pending_baro_[kMaxBaroSources];
+  /// Per-source wall-clock timestamp of last received baro sample.
+  /// Used by processBaroObservation to detect which sources are alive
+  /// and skip dead sources in the multi-baro batch readiness check.
+  uint64_t baro_source_last_seen_us_[kMaxBaroSources] = {};
+  /// A baro source is considered "alive" if it reported within this window.
+  static constexpr uint64_t kBaroSourceAliveTimeoutUs = 2000000; // 2 seconds
   size_t active_imu_sources_ = 2;
   size_t active_baro_sources_ = 1;
 

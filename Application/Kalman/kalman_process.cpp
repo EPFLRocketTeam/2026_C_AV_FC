@@ -530,8 +530,8 @@ struct KalmanRuntime {
 		RingBuffer<BaroData, 100> *baro_buffers[] = {
 			&baroData1, &baroData2, &baroData3, &baroData4};
 		BaroData staged_baros[kActiveBaroSources][kMaxBaroSamplesPerSourcePerRun] = {};
-		size_t staged_baro_count[kActiveBaroSources] = {0, 0, 0, 0};
-		size_t staged_baro_index[kActiveBaroSources] = {0, 0, 0, 0};
+		size_t staged_baro_count[kActiveBaroSources] = {};
+		size_t staged_baro_index[kActiveBaroSources] = {};
 
 		for (size_t source = 0; source < kActiveBaroSources; ++source) {
 			while (staged_baro_count[source] < kMaxBaroSamplesPerSourcePerRun &&
@@ -756,6 +756,17 @@ int kalman_loop() {
 	// KALMAN_DEBUG_PRINT: human-readable console diagnostics.
 	// -----------------------------------------------------------------
 #if KALMAN_DEBUG_PRINT
+	// Populate IMU driver diagnostics for debug output
+	app_imu_frame_counts(
+		&kalman.debug_raw_sensor_.frame_h78,
+		&kalman.debug_raw_sensor_.frame_hF0,
+		&kalman.debug_raw_sensor_.frame_other);
+	kalman.debug_raw_sensor_.imu_status_flags =
+		app_imu_sensor_status_flags(0);
+	// Use the health snapshot's yieldable_imu_drops as it's already tracked
+	kalman.debug_raw_sensor_.imu_drop_count =
+		kalman.health.yieldable_imu_drops;
+
 	kalman_debug::printDebugLine(
 		kalman.estimator,
 		kalman.health,

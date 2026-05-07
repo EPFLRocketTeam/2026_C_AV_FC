@@ -410,6 +410,11 @@ bool InvIMU_STM32::parseFrameInto(IMUData& out, const uint8_t* p, uint8_t /*fram
     uint8_t header = p[0];
     bool hires = (header & 0x10u) != 0u;
 
+    // Track frame header types for diagnostics
+    if (header == 0x78) ++_frame_count_0x78;
+    else if (header == 0xF0) ++_frame_count_0xF0;
+    else ++_frame_count_other;
+
     // Empty packet: no accel AND no gyro bits set.
     if (!(header & 0x60u)) {
         _status_flags |= IMU_STATUS_EMPTY_PACKET;
@@ -640,24 +645,38 @@ void InvIMU_STM32::tick() {
     _last_dma_size = count;
     _dma_irq_time_us = _irq_time_us;
 
-//#ifndef UNIT_TEST_ENV
-//    const bool dma_hw_ready = (_hw.hspi != nullptr) && (_hw.hspi->hdmarx != nullptr);
-//#else
-//    const bool dma_hw_ready = false;
-//#endif
-//    const bool use_dma_path = _hw.use_dma && dma_hw_ready;
-//
-//    if (!use_dma_path) {
-//        if (spi_read_fifo(REG_FIFO_DATA, _dma_rx_buffer, count) != 0) {
-//            _status_flags |= IMU_STATUS_SPI_ERROR;
-//            return;
-//        }
-//        _rx_pending = true;
-//        processPendingRx();
-//        return;
-//    }
-//
-//    _dma_busy = true;
+#ifndef UNIT_TEST_ENV
+    const bool dma_hw_ready = (_hw.hspi != nullptr) && (_hw.hspi->hdmarx != nullptr);
+#else
+    const bool dma_hw_ready = false;
+#endif
+    const bool use_dma_path = _hw.use_dma && dma_hw_ready;
+
+    if (!use_dma_path) {
+        // Blocking SPI FIFO read.
+        // If this returns != 0, the HAL likely returned HAL_BUSY because
+        // CubeMX has DMA streams configured for this SPI peripheral.
+        // Fix: remove DMA request rows for SPI_RX/TX in the .ioc file,
+        // or call HAL_DMA_DeInit(hspi->hdmarx) after MX_SPIx_Init().
+        int rc = spi_read_fifo(REG_FIFO_DATA, _dma_rx_buffer, count);
+        if (rc != 0) {
+            _status_flags |= IMU_STATUS_SPI_ERROR;
+            static uint32_t _spi_fail_cnt = 0;
+            if ((_spi_fail_cnt++ % 1000u) == 0u) {
+                printf("[IMU] SPI blocking read FAIL #%lu  count=%u  "
+                       "HAL_State=%u  hdmarx=%s\r\n",
+                       (unsigned long)_spi_fail_cnt, (unsigned)count,
+                       (unsigned)(_hw.hspi ? _hw.hspi->State : 0),
+                       dma_hw_ready ? "configured" : "null");
+            }
+            return;
+        }
+        _rx_pending = true;
+        processPendingRx();
+        return;
+    }
+
+    _dma_busy = true;
 
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
     uint8_t reg = REG_FIFO_DATA | 0x80;
@@ -680,9 +699,9 @@ void InvIMU_STM32::tick() {
 }
 
 void InvIMU_STM32::onDmaComplete() {
-//    if (!_dma_busy) {
-//        return;
-//    }
+    if (!_dma_busy) {
+        return;
+    }
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
     const uint16_t total_bytes = _last_dma_size;
     _invalidate_size = (total_bytes > 0u) ? ((uint32_t)total_bytes + 31u) & ~31u : (uint32_t)kRawBufferSize;

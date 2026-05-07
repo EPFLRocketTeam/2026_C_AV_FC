@@ -114,6 +114,11 @@ namespace InvIMU {
         uint64_t getWriteCount() const { return _ring_write_count; }
         uint32_t getRingOverflowCount() const { return _ring_overflow_count; }
 
+        // Frame header statistics for diagnosing FIFO parsing issues.
+        uint32_t frameCount0x78() const override { return _frame_count_0x78; }
+        uint32_t frameCount0xF0() const override { return _frame_count_0xF0; }
+        uint32_t frameCountOther() const override { return _frame_count_other; }
+
         void onInterrupt() override; 
         void tick() override;        
         void onDmaComplete() override;
@@ -168,6 +173,11 @@ namespace InvIMU {
         volatile uint64_t _irq_time_us = 0;
         int64_t _fifo_to_abs_offset_us = 0;
         bool _fifo_to_abs_offset_initialized = false;
+
+        // Frame header statistics
+        uint32_t _frame_count_0x78 = 0;
+        uint32_t _frame_count_0xF0 = 0;
+        uint32_t _frame_count_other = 0;
 
         float _R_body_from_sensor[3][3];
 

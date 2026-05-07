@@ -210,6 +210,18 @@ extern "C" uint32_t app_imu_sensor_status_flags(uint8_t sensor_index) {
     return g_imu_status_flags[sensor_index];
 }
 
+extern "C" void app_imu_frame_counts(uint32_t* h78, uint32_t* hF0, uint32_t* other) {
+    if (g_imu_module == nullptr) {
+        *h78 = *hF0 = *other = 0;
+        return;
+    }
+    // Read from the first (only active) IMU driver via the interface.
+    auto& ctx = g_superloop;
+    *h78 = ctx.invArr[0]->frameCount0x78();
+    *hF0 = ctx.invArr[0]->frameCount0xF0();
+    *other = ctx.invArr[0]->frameCountOther();
+}
+
 extern "C" uint8_t app_baro_sensor_healthy(uint8_t sensor_index) {
     if (sensor_index >= 4u) {
         return 0u;
