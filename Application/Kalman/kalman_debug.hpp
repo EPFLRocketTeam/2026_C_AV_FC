@@ -20,23 +20,23 @@
 // ============================================================================
 
 #ifndef KALMAN_DEBUG_PRINT
-#define KALMAN_DEBUG_PRINT 0
+#define KALMAN_DEBUG_PRINT 1
 #endif
 
 #ifndef KALMAN_DEBUG_FORCE_FLIGHT
-#define KALMAN_DEBUG_FORCE_FLIGHT 0
+#define KALMAN_DEBUG_FORCE_FLIGHT 1
 #endif
 
 /// Print rate decimation: console output happens every N super-loop ticks.
 /// At ~1 kHz loop rate, 500 → ~2 Hz.  Tune if output is too fast/slow.
 #ifndef KALMAN_DEBUG_PRINT_DECIMATION
-#define KALMAN_DEBUG_PRINT_DECIMATION 500
+#define KALMAN_DEBUG_PRINT_DECIMATION 15
 #endif
 
 /// Delay (super-loop ticks) before force-flight auto-transitions.
 /// Gives the Rail Shadow time to converge on gravity before seeding ESKF.
 #ifndef KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS
-#define KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS 3000
+#define KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS 1000
 #endif
 
 #if KALMAN_DEBUG_PRINT

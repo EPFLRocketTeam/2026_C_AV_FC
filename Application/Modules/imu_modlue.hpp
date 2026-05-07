@@ -224,6 +224,7 @@ private:
       ++produced_since_last_update_;
       ++produced;
     }
+    // printf("Produces %d new record\n",produced);
     sensor_state_[sensor_index].status_flags = drivers_[sensor_index]->statusFlags();
     sensor_state_[sensor_index].drop_count = drivers_[sensor_index]->dropCount();
     if (produced > 0u) {

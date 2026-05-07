@@ -148,8 +148,8 @@ int main(void)
 	  // manual_test_gps();
 	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_0);
 	  app_super_loop_iterate();
-	  printf("Completed an iteration\n");
-	  HAL_Delay(500);
+//	  printf("Completed an iteration\n");
+//    HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }

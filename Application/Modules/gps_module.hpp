@@ -39,13 +39,14 @@ public:
       drivers_[0]->getPvt(&gpsFix, APP_GPS_POLL_TIMEOUT_MS);
     if (status == GpsStatus::ERROR_TIMEOUT) {
       publishStaleNoFixIfNeeded(tick_ms, g);
+      // printf("We timed out");
       return;
     }
     if (status != GpsStatus::OK) {
       printf("Error with GPS data fetch : got %d \n", (int)status);
       return;
     }
-
+    printf("\nWe got something from the gps\n");
     if (gpsFix.timestamp_us == 0u) {
       gpsFix.timestamp_us = app_timebase_now_us();
     }
