@@ -195,6 +195,36 @@ struct KalmanRuntime {
 		last_body_accel_mps2 = {};
 		last_state = flight_computer::State::INIT;
 		initialized = true;
+
+#if KALMAN_DEBUG_PRINT
+		// Print compile-time configuration at first init
+		printf("[KAL-CFG] ESKF_FORCE_FLOAT32=%d  sizeof(eskf_scalar)=%lu  "
+		       "COV_DECIM=%d  IMU_ODR=%d  BARO_ODR=%d\r\n",
+		       ESKF_FORCE_FLOAT32,
+		       static_cast<unsigned long>(sizeof(eskf_scalar)),
+		       ESKF_COVARIANCE_DECIMATION,
+		       ESKF_IMU_PRIMARY_ODR_HZ,
+		       ESKF_BARO_ODR_HZ);
+		printf("[KAL-CFG] activeBaroSources=%lu  "
+		       "FORCE_FLIGHT=%d  PRINT_DECIM=%d  "
+		       "FORCE_FLIGHT_DELAY=%d\r\n",
+		       static_cast<unsigned long>(kActiveBaroSources),
+		       KALMAN_DEBUG_FORCE_FLIGHT,
+		       KALMAN_DEBUG_PRINT_DECIMATION,
+		       KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS);
+#ifdef __OPTIMIZE__
+		printf("[KAL-CFG] Optimization: ON");
+#ifdef __OPTIMIZE_SIZE__
+		printf(" (Os/Oz)");
+#else
+		printf(" (O1/O2/O3)");
+#endif
+		printf("  SYSCLK=%luMHz\r\n", SystemCoreClock / 1000000UL);
+#else
+		printf("[KAL-CFG] Optimization: OFF (-O0)  "
+		       "SYSCLK=%luMHz\r\n", SystemCoreClock / 1000000UL);
+#endif
+#endif
 	}
 
 	void onStateChange(uint32_t raw_state) {
@@ -611,6 +641,10 @@ int kalman_loop() {
 	kalman.initIfNeeded();
 	const uint64_t kalman_loop_start_us = app_timebase_now_us();
 
+#if KALMAN_DEBUG_PRINT
+	uint64_t t_imu_drain_start = kalman_loop_start_us;
+#endif
+
 	const uint32_t current_state = kalman_current_state();
 	kalman.onStateChange(current_state);
 
@@ -643,6 +677,10 @@ int kalman_loop() {
 		drained += static_cast<int>(source_samples);
 	}
 	kalman.setActiveImuSources(healthy_source_count);
+
+#if KALMAN_DEBUG_PRINT
+	const uint64_t t_imu_drain_end = app_timebase_now_us();
+#endif
 
 	for (;;) {
 		size_t best_source = 3;
@@ -700,6 +738,10 @@ int kalman_loop() {
 		staged_index[best_source] += chunk_count;
 	}
 
+#if KALMAN_DEBUG_PRINT
+	const uint64_t t_imu_process_end = app_timebase_now_us();
+#endif
+
 	// Liftoff must be consumed before aiding ingestion so that GPS
 	// samples arriving in the same tick see in_flight_==true and
 	// can anchor the NED origin immediately, matching ktp-soft ordering.
@@ -710,11 +752,19 @@ int kalman_loop() {
 
 	kalman.ingestAidingFromStore();
 
+#if KALMAN_DEBUG_PRINT
+	const uint64_t t_aiding_end = app_timebase_now_us();
+#endif
+
 	// Use wall-clock time for onTick so the catchUp horizon matches real
 	// time, not the latest IMU sample timestamp (which may lag due to
 	// central-diff delay or empty batches).
 	const uint64_t tick_now_us = app_timebase_now_us();
 	kalman.onTick(tick_now_us);
+
+#if KALMAN_DEBUG_PRINT
+	const uint64_t t_tick_end = app_timebase_now_us();
+#endif
 
 	const uint64_t kalman_loop_end_us = app_timebase_now_us();
 	const uint32_t kalman_loop_elapsed_us =
@@ -766,6 +816,19 @@ int kalman_loop() {
 	// Use the health snapshot's yieldable_imu_drops as it's already tracked
 	kalman.debug_raw_sensor_.imu_drop_count =
 		kalman.health.yieldable_imu_drops;
+
+	// Populate timing breakdown
+	const uint64_t t_output_end = app_timebase_now_us();
+	kalman.debug_raw_sensor_.t_imu_drain_us =
+		static_cast<uint32_t>(t_imu_drain_end - t_imu_drain_start);
+	kalman.debug_raw_sensor_.t_imu_process_us =
+		static_cast<uint32_t>(t_imu_process_end - t_imu_drain_end);
+	kalman.debug_raw_sensor_.t_aiding_us =
+		static_cast<uint32_t>(t_aiding_end - t_imu_process_end);
+	kalman.debug_raw_sensor_.t_tick_us =
+		static_cast<uint32_t>(t_tick_end - t_aiding_end);
+	kalman.debug_raw_sensor_.t_output_us =
+		static_cast<uint32_t>(t_output_end - t_tick_end);
 
 	kalman_debug::printDebugLine(
 		kalman.estimator,

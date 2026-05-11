@@ -9,6 +9,7 @@
 #include "Application/Kalman/kalman/preprocessor/pressure_altitude.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -303,6 +304,9 @@ bool EskfEstimator::shouldStartEskfBaroFusion(uint64_t timestamp_us) {
 
   const bool aero_blind_now = flight_shadow_.isAeroBlind();
   if (aero_blind_now) {
+    if (!was_aero_blind_ && log_) {
+      log_->printf("[ESKF] AeroBlind ENTERED — baro fusion suppressed\r\n");
+    }
     was_aero_blind_ = true;
     return false;
   }
@@ -310,6 +314,9 @@ bool EskfEstimator::shouldStartEskfBaroFusion(uint64_t timestamp_us) {
   // Transition out of aero-blind: require one-shot vertical reacquisition
   // before re-enabling normal ESKF baro fusion.
   if (was_aero_blind_) {
+    if (log_) {
+      log_->printf("[ESKF] AeroBlind EXITED — baro reacquisition needed\r\n");
+    }
     was_aero_blind_ = false;
     baro_reacquire_needed_ = true;
   }
@@ -332,6 +339,18 @@ void EskfEstimator::performBaroReacquisition(eskf_scalar altitude_isa_m,
     sigma += tuning.baro_transonic_penalty;
   }
   const eskf_scalar baro_reacq_var = sigma * sigma;
+
+  // Log position BEFORE reacquisition snap
+  if (log_) {
+    const eskf_scalar alt_before = -s.p[2] + s.b_baro;
+    log_->printf("[ESKF] BaroReacq: alt_before=%+.2fm  alt_baro=%+.2fm  "
+                 "delta=%+.2fm  speed=%.1fm/s  σ=%.2f\r\n",
+                 static_cast<double>(alt_before),
+                 static_cast<double>(altitude_isa_m),
+                 static_cast<double>(altitude_isa_m - alt_before),
+                 static_cast<double>(speed),
+                 static_cast<double>(sigma));
+  }
 
   core.resetVerticalChannelFromBaro(altitude_isa_m, baro_reacq_var);
   // Reacquisition snaps position; inflate velocity uncertainty so subsequent
@@ -1463,6 +1482,23 @@ void EskfEstimator::processBaroObservation(uint8_t source,
             filter_.triggerBaro(ts);
           }
           filter_.completeBaro(static_cast<eskf_scalar>(altitude_isa_m));
+#if KALMAN_DEBUG_PRINT
+          {
+            const auto &st = filter_.core().state();
+            const eskf_scalar eskf_alt = -st.p[2] + st.b_baro;
+            const eskf_scalar inn = static_cast<eskf_scalar>(altitude_isa_m) - eskf_alt;
+            // Only log when innovation is large (>1m) to avoid flooding
+            if (std::fabs(static_cast<double>(inn)) > 1.0) {
+              printf("[KAL] baroFuse: meas=%+.2fm  eskfAlt=%+.2fm  "
+                     "inn=%+.2fm  pD=%+.2f  bBaro=%+.2f\r\n",
+                     static_cast<double>(altitude_isa_m),
+                     static_cast<double>(eskf_alt),
+                     static_cast<double>(inn),
+                     static_cast<double>(st.p[2]),
+                     static_cast<double>(st.b_baro));
+            }
+          }
+#endif
         }
         flight_shadow_.correctBaro(altitude_agl_m, dt_s);
       }
@@ -1846,6 +1882,27 @@ void EskfEstimator::processGpsSample(const sensors::gnss::GnssSample &sample) {
   // Route GNSS updates through packet API so rewind-consistent heading gating,
   // bootstrap alignment, chi2 rejection, and pos/vel correction ordering are
   // applied in one place.
+#if KALMAN_DEBUG_PRINT
+  {
+    const auto &s = filter_.core().state();
+    const double innov_n = static_cast<double>(pos_ned[0]) - s.p[0];
+    const double innov_e = static_cast<double>(pos_ned[1]) - s.p[1];
+    const double innov_d = static_cast<double>(pos_ned[2]) - s.p[2];
+    const double innov_h = std::sqrt(innov_n * innov_n + innov_e * innov_e);
+    if (innov_h > 2.0 || std::abs(innov_d) > 2.0) {
+      printf("[GPS] LARGE innov N=%.2f E=%.2f D=%.2f |H|=%.2f  "
+             "gps_pos=[%.1f,%.1f,%.1f] eskf_pos=[%.1f,%.1f,%.1f]  "
+             "hacc=%.2f vacc=%.2f\r\n",
+             innov_n, innov_e, innov_d, innov_h,
+             static_cast<double>(pos_ned[0]),
+             static_cast<double>(pos_ned[1]),
+             static_cast<double>(pos_ned[2]),
+             s.p[0], s.p[1], s.p[2],
+             static_cast<double>(h_acc_m),
+             static_cast<double>(v_acc_m));
+    }
+  }
+#endif
   filter_.pushGpsPacket(pps_ts, pos_ned, R_pos, vel_ned, R_vel, lever_arm);
 
   output_dirty_ = true;

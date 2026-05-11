@@ -116,6 +116,12 @@ struct RawSensorSnapshot {
     uint32_t frame_other; // Count of other/unknown frames
     uint32_t imu_status_flags; // IMU driver status flags (SPI errors etc)
     uint32_t imu_drop_count;   // IMU ring buffer overflow count
+    // Timing breakdown (filled by kalman_loop)
+    uint32_t t_imu_drain_us;   // Time spent draining IMU ring buffers
+    uint32_t t_imu_process_us; // Time spent in IMU ingestion + predict
+    uint32_t t_aiding_us;      // Time spent in baro/GPS ingestion
+    uint32_t t_tick_us;        // Time spent in onTick (catchUp)
+    uint32_t t_output_us;      // Time spent in output bridge + apogee
 };
 
 inline void printDebugLine(
@@ -252,6 +258,54 @@ inline void printDebugLine(
            static_cast<unsigned long>(estimator.lastCatchupDurationUs()),
            static_cast<unsigned long>(estimator.lastCatchupEventsProcessed()),
            static_cast<unsigned long>(estimator.predictDtClampedCount()));
+
+    // Line 9: Timing breakdown (where time is spent in kalman_loop)
+    printf("[KAL] timing: drain=%luus  imuProc=%luus  aiding=%luus  "
+           "tick=%luus  output=%luus\r\n",
+           static_cast<unsigned long>(raw.t_imu_drain_us),
+           static_cast<unsigned long>(raw.t_imu_process_us),
+           static_cast<unsigned long>(raw.t_aiding_us),
+           static_cast<unsigned long>(raw.t_tick_us),
+           static_cast<unsigned long>(raw.t_output_us));
+
+    // Line 10: BURN-phase diagnostics (ESKF state, aero-blind, corrections)
+    if (fsm_state == flight_computer::State::BURN ||
+        fsm_state == flight_computer::State::ASCENT ||
+        estimator.inFlight()) {
+        const auto& core = estimator.filter().core();
+        const auto& P = core.covariance();
+        const auto& st = core.state();
+        const bool aero_blind = estimator.flightShadow().isAeroBlind();
+
+        // Position and velocity covariance diagonal (σ in meters)
+        printf("[KAL] Pcov: σp=%.2f,%.2f,%.2f  σv=%.2f,%.2f,%.2f  "
+               "σθ=%.3f  σba=%.4f  σbg=%.6f  σbb=%.2f\r\n",
+               std::sqrt(static_cast<double>(P.diag(0))),
+               std::sqrt(static_cast<double>(P.diag(1))),
+               std::sqrt(static_cast<double>(P.diag(2))),
+               std::sqrt(static_cast<double>(P.diag(3))),
+               std::sqrt(static_cast<double>(P.diag(4))),
+               std::sqrt(static_cast<double>(P.diag(5))),
+               std::sqrt(static_cast<double>(P.diag(6))),
+               std::sqrt(static_cast<double>(P.diag(9))),
+               std::sqrt(static_cast<double>(P.diag(12))),
+               std::sqrt(static_cast<double>(P.diag(15))));
+
+        // ESKF position (NED), velocity, and baro bias
+        printf("[KAL] eskf: pN=%+.2f pE=%+.2f pD=%+.2f  "
+               "vN=%+.2f vE=%+.2f vD=%+.2f  bBaro=%+.2f  "
+               "aeroBlind=%d  inn=%.2f  NIS=%.2f\r\n",
+               static_cast<double>(st.p[0]),
+               static_cast<double>(st.p[1]),
+               static_cast<double>(st.p[2]),
+               static_cast<double>(st.v[0]),
+               static_cast<double>(st.v[1]),
+               static_cast<double>(st.v[2]),
+               static_cast<double>(st.b_baro),
+               static_cast<int>(aero_blind),
+               static_cast<double>(core.lastInnovation()),
+               static_cast<double>(core.lastNIS()));
+    }
 
     // Separator for readability
     printf("---\r\n");
