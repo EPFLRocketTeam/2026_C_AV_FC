@@ -743,7 +743,7 @@ int kalman_loop() {
 	if (!kalman.force_flight_done_) {
 		++kalman.force_flight_tick_counter_;
 		if (kalman.force_flight_tick_counter_ == KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS) {
-			printf("[KAL-DBG] Force-flight: injecting BURN state + liftoff\n");
+			printf("[KAL-DBG] Force-flight: injecting BURN state + liftoff\r\n");
 			kalman_on_state_change(
 				static_cast<uint32_t>(flight_computer::State::BURN));
 			kalman_on_liftoff(HAL_GetTick());

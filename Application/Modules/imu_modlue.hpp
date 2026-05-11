@@ -85,7 +85,7 @@ public:
     return true;
   }
 
-  void onImuInterrupt(size_t sensor_index, uint32_t irq_tick_ms) {
+  void onImuInterrupt(size_t sensor_index, uint32_t irq_tick_ms, uint64_t irq_us = 0) {
     if (sensor_index >= kNumSensors) {
       return;
     }
@@ -95,6 +95,7 @@ public:
 
     master_irq_pending_ = true;
     last_master_irq_ms_ = irq_tick_ms;
+    master_irq_time_us_ = irq_us;
   }
 
   void onSpiRxComplete(SPI_HandleTypeDef *hspi) {
@@ -114,12 +115,12 @@ public:
       master_irq_pending_ = false;
       last_master_irq_ms_ = tick_ms;
       failover_occurred_ = true;
-      printf("ImuModule: master failover to imu %zu\n", master_index_);
+      printf("ImuModule: master failover to imu %lu\r\n", static_cast<unsigned long>(master_index_));
     }
 #endif
 
     if (master_irq_pending_) {
-      drivers_[master_index_]->onInterrupt();
+      drivers_[master_index_]->onInterrupt(master_irq_time_us_);
       master_irq_pending_ = false;
     }
 #if (APP_IMU_SOFT_TRIGGER_MASTER_FALLBACK != 0u)
@@ -276,6 +277,7 @@ private:
   size_t master_index_ = 0;
   bool master_irq_pending_ = false;
   uint32_t last_master_irq_ms_ = 0;
+  uint64_t master_irq_time_us_ = 0;
   bool failover_occurred_ = false;
   SensorRuntimeState sensor_state_[kNumSensors] = {};
 };

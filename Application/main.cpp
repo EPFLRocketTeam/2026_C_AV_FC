@@ -171,13 +171,14 @@ extern "C" void app_on_imu_exti(uint16_t gpio_pin) {
         return;
     }
 
+    const uint64_t irq_us = app_timebase_now_us();
     const uint32_t now_ms = HAL_GetTick();
     for (size_t i = 0; i < 3; ++i) {
         if (kImuIntPins[i] == 0u) {
             continue;
         }
         if (kImuIntPins[i] == gpio_pin) {
-            g_imu_module->onImuInterrupt(i, now_ms);
+            g_imu_module->onImuInterrupt(i, now_ms, irq_us);
             return;
         }
     }
@@ -254,7 +255,7 @@ extern "C" void app_super_loop_setup(void) {
     g_superloop.baroModule.setTriggerCallback(kalman_note_baro_trigger);
     if (!g_superloop.baroModule.init()) {
         // Non-fatal: system can operate with degraded baro (voting handles it)
-        printf("WARNING: No barometers initialized\n");
+        printf("WARNING: No barometers initialized\r\n");
     }
 
     if (!g_superloop.gpsModule.init()) {

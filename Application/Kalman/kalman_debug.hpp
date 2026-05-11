@@ -164,7 +164,7 @@ inline void printDebugLine(
     printf("[KAL] FSM=%-5s  "
            "Rail(p=%+6.1f r=%+6.1f)  "
            "ESKF(p=%+6.1f r=%+6.1f y=%+6.1f)  "
-           "alt=%+.1fm vD=%+.1f\n",
+           "alt=%+.1fm vD=%+.1f\r\n",
            fsmStateName(fsm_state),
            rail_euler.pitch, rail_euler.roll,
            eskf_euler.pitch, eskf_euler.roll, eskf_euler.yaw,
@@ -176,7 +176,7 @@ inline void printDebugLine(
            "loop=%luus(max %lu)  "
            "mainLoop=%luus(max %lu)  "
            "NIS=%.1f  hiNIS=%u  "
-           "yields=%lu\n",
+           "yields=%lu\r\n",
            hb,
            static_cast<unsigned long>(health.last_kalman_loop_us),
            static_cast<unsigned long>(health.max_kalman_loop_us),
@@ -189,23 +189,23 @@ inline void printDebugLine(
     // Line 3: Buffer / overflow
     printf("[KAL] IMU=%lu  baro=%lu  gps=%lu  "
            "imuDrop=%lu  baroDrop=%lu  evtDrop=%lu  "
-           "imuBuf=%zu  baroBuf=%zu  evtBuf=%zu  "
-           "rwd=%lu  drained=%lu\n",
+           "imuBuf=%lu  baroBuf=%lu  evtBuf=%lu  "
+           "rwd=%lu  drained=%lu\r\n",
            static_cast<unsigned long>(health.imu_samples_consumed),
            static_cast<unsigned long>(health.baro_updates),
            static_cast<unsigned long>(health.gps_updates),
            static_cast<unsigned long>(stats.imu_drops),
            static_cast<unsigned long>(stats.baro_drops),
            static_cast<unsigned long>(stats.event_drops),
-           estimator.filter().imuBufferCount(),
-           estimator.filter().baroBufferCount(),
-           estimator.filter().eventBufferCount(),
+           static_cast<unsigned long>(estimator.filter().imuBufferCount()),
+           static_cast<unsigned long>(estimator.filter().baroBufferCount()),
+           static_cast<unsigned long>(estimator.filter().eventBufferCount()),
            static_cast<unsigned long>(stats.rewind_count),
            static_cast<unsigned long>(imu_drained));
 
     // Line 4: Ring HWMs
     printf("[KAL] ring_hwm=[%lu,%lu,%lu]  "
-           "gate=%s  grnd=%s  hdg=%s\n",
+           "gate=%s  grnd=%s  hdg=%s\r\n",
            static_cast<unsigned long>(health.imu_ring_hwm[0]),
            static_cast<unsigned long>(health.imu_ring_hwm[1]),
            static_cast<unsigned long>(health.imu_ring_hwm[2]),
@@ -221,7 +221,7 @@ inline void printDebugLine(
     printf("[KAL] raw: ax=%+7.2f ay=%+7.2f az=%+7.2f  "
            "gx=%+6.3f gy=%+6.3f gz=%+6.3f  "
            "|a|=%.2f  "
-           "P=%.0fPa T=%.1fC\n",
+           "P=%.0fPa T=%.1fC\r\n",
            static_cast<double>(raw.ax), static_cast<double>(raw.ay),
            static_cast<double>(raw.az),
            static_cast<double>(raw.gx), static_cast<double>(raw.gy),
@@ -231,14 +231,14 @@ inline void printDebugLine(
            static_cast<double>(raw.baro_tempC));
 
     // Line 6: Gyro bias from rail shadow (should converge to ~0 when still)
-    printf("[KAL] gyroBias: %+.5f %+.5f %+.5f (rad/s)\n",
+    printf("[KAL] gyroBias: %+.5f %+.5f %+.5f (rad/s)\r\n",
            static_cast<double>(gb[0]),
            static_cast<double>(gb[1]),
            static_cast<double>(gb[2]));
 
     // Line 7: IMU FIFO frame header statistics
     printf("[KAL] fifoHdr: 0x78=%lu  0xF0=%lu  other=%lu  "
-           "imuFlags=0x%lX  imuDrvDrop=%lu\n",
+           "imuFlags=0x%lX  imuDrvDrop=%lu\r\n",
            static_cast<unsigned long>(raw.frame_h78),
            static_cast<unsigned long>(raw.frame_hF0),
            static_cast<unsigned long>(raw.frame_other),
@@ -247,14 +247,14 @@ inline void printDebugLine(
 
     // Line 8: CatchUp budget details
     printf("[KAL] catchUp: budget=%luus  last=%luus  events=%lu  "
-           "dtClamp=%lu\n",
+           "dtClamp=%lu\r\n",
            static_cast<unsigned long>(estimator.catchupBudgetUs()),
            static_cast<unsigned long>(estimator.lastCatchupDurationUs()),
            static_cast<unsigned long>(estimator.lastCatchupEventsProcessed()),
            static_cast<unsigned long>(estimator.predictDtClampedCount()));
 
     // Separator for readability
-    printf("---\n");
+    printf("---\r\n");
 }
 
 } // namespace kalman_debug

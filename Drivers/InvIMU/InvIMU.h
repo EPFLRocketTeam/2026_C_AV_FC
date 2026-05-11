@@ -84,7 +84,10 @@ namespace InvIMU {
         virtual uint32_t frameCount0xF0() const { return 0u; }
         virtual uint32_t frameCountOther() const { return 0u; }
         
-        virtual void onInterrupt() = 0;   // Called by ISR (Sets flag)
+        // irq_us: absolute time (µs) of the hardware EXTI event, captured at ISR
+        // entry for accurate FIFO timestamp alignment. Pass 0 to fall back to
+        // now_us() at the call site (less accurate, may trigger TIMESTAMP_DESYNC).
+        virtual void onInterrupt(uint64_t irq_us = 0) = 0;
         virtual void tick() = 0;          // Called by Main Loop (Processes flag)
         virtual void onDmaComplete() = 0; // Called by DMA ISR
     };

@@ -119,7 +119,7 @@ namespace InvIMU {
         uint32_t frameCount0xF0() const override { return _frame_count_0xF0; }
         uint32_t frameCountOther() const override { return _frame_count_other; }
 
-        void onInterrupt() override; 
+        void onInterrupt(uint64_t irq_us = 0) override;
         void tick() override;        
         void onDmaComplete() override;
 
@@ -156,6 +156,7 @@ namespace InvIMU {
         // For DMA accessibility on STM32H7, the containing InvIMU_STM32 object must be
         // placed in D2/AXI SRAM — see note above on _ring_buffer.
         alignas(32) uint8_t _dma_rx_buffer[kRawBufferSize];
+        uint8_t _tx_dummy_buf[kRawBufferSize + 1]; // TX dummy for spi_read_fifo TransmitReceive
 
         IMUData _burst_buffer[kMaxFrames];
 

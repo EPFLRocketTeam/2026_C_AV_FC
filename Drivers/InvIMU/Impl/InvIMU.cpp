@@ -236,6 +236,7 @@ void InvIMU_STM32::sleep_us(uint32_t us) {
 InvIMU_STM32::InvIMU_STM32(const Config& config) : _hw(config) {
     std::memset(&_dev, 0, sizeof(_dev));
     std::memset((void*)_dma_rx_buffer, 0, kRawBufferSize);
+    std::memset(_tx_dummy_buf, 0, sizeof(_tx_dummy_buf));
     std::memcpy(_R_body_from_sensor, _hw.R_body_from_sensor, sizeof(_R_body_from_sensor));
 }
 
@@ -368,10 +369,14 @@ void InvIMU_STM32::configureFifo() {
         printf("FIFO_CONFIG4 (0x22) AFTER  clear: intended=0x%02X readback=0x%02X\r\n", r22, r22_rb);
     }
 
-    // INT1 pin: push-pull, latched, active-high
+    // INT1 pin: push-pull, PULSE mode, active-high.
+    // PULSE mode generates a ~100 µs rising edge per event and self-de-asserts.
+    // LATCH mode was avoided because INT1 can fire during init (before g_imu_module
+    // is non-null), leaving the pin stuck HIGH with no further rising edges for the
+    // EXTI to detect — resulting in IMU=0 indefinitely.
     inv_imu_int_pin_config_t pin_cfg = {};
     pin_cfg.int_polarity = INTX_CONFIG2_INTX_POLARITY_HIGH;
-    pin_cfg.int_mode     = INTX_CONFIG2_INTX_MODE_LATCH;
+    pin_cfg.int_mode     = INTX_CONFIG2_INTX_MODE_PULSE;
     pin_cfg.int_drive    = INTX_CONFIG2_INTX_DRIVE_PP;
     inv_imu_set_pin_config_int(&_dev, INV_IMU_INT1, &pin_cfg);
 
@@ -398,6 +403,13 @@ void InvIMU_STM32::configureFifo() {
     // Flush FIFO to clear stale data accumulated during init/configure
     inv_imu_flush_fifo(&_dev);
     HAL_Delay(5);
+
+    // Read INT1_STATUS0 to drain any pending status bits that accumulated during
+    // init. INT1 is now in PULSE mode so any init-time DRDYs have already
+    // self-de-asserted; this is a belt-and-suspenders clean-slate before the
+    // first live interrupt after g_imu_module is set.
+    uint8_t int1_status_clr = 0;
+    spi_read(0x19, &int1_status_clr, 1);
 }
 
 void InvIMU_STM32::enableFsync() {
@@ -565,34 +577,40 @@ void InvIMU_STM32::processPendingRx() {
     }
 }
 
-void InvIMU_STM32::onInterrupt() {
+void InvIMU_STM32::onInterrupt(uint64_t irq_us) {
     _irq_pending = true;
-    _irq_time_us = now_us(_hw.use_dwt_timestamps);
-    // NOTE: printf removed from ISR — it races with main-context printfs and garbles UART output.
+    _irq_time_us = (irq_us != 0u) ? irq_us : now_us(_hw.use_dwt_timestamps);
 }
 //POLLING HELPER FUNCTION
 int InvIMU_STM32::spi_read_fifo(uint8_t reg, uint8_t* data, uint16_t len) {
-    uint8_t reg_addr = reg | 0x80;
+    if (len == 0) return 0;
+
+    // STM32H7 full-duplex SPI (2LINES) does not reliably support
+    // HAL_SPI_Transmit + HAL_SPI_Receive as separate calls in one CS assertion:
+    // the RX FIFO retains the byte received during the address phase, causing
+    // HAL_SPI_Receive to fail. Use a single HAL_SPI_TransmitReceive instead.
+    // Safety: max len = (kRawBufferSize/kFrameSize)*kFrameSize = 2040,
+    // so len+1 = 2041 always fits inside _dma_rx_buffer[kRawBufferSize=2048].
+    _tx_dummy_buf[0] = reg | 0x80u;
+    // _tx_dummy_buf[1..len] are pre-zeroed dummy clock bytes.
 
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
-
-    if (HAL_SPI_Transmit(_hw.hspi, &reg_addr, 1, INV_IMU_SPI_TX_TIMEOUT_MS) != HAL_OK) {
-        HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
-        _status_flags |= IMU_STATUS_SPI_ERROR;
-        return -1;
-    }
-
-    int rc = HAL_SPI_Receive(_hw.hspi, data, len, INV_IMU_SPI_FIFO_RX_TIMEOUT_MS);
+    int rc = HAL_SPI_TransmitReceive(_hw.hspi, _tx_dummy_buf, data,
+                                     (uint16_t)(len + 1u),
+                                     INV_IMU_SPI_FIFO_RX_TIMEOUT_MS);
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
 
     if (rc != HAL_OK) {
         _status_flags |= IMU_STATUS_SPI_ERROR;
         return -1;
     }
+    // data[0] is the dummy byte received during the address phase; shift it out.
+    std::memmove(data, data + 1, len);
     return 0;
 }
 
 void InvIMU_STM32::tick() {
+    _status_flags &= ~(uint32_t)IMU_STATUS_TIMESTAMP_DESYNC;
     if (_rx_pending) processPendingRx();
     if (!_irq_pending) return;
     // Guard BEFORE consuming _irq_pending.
@@ -601,10 +619,9 @@ void InvIMU_STM32::tick() {
     if (_dma_busy || _rx_pending) return;
     _irq_pending = false;
 
-    // Clear INT1 latch — in LATCHED mode the pin stays HIGH until INT1_STATUS0 is read.
-    // Do this first so that INT1 can de-assert and produce a fresh rising edge for the
-    // next DRDY/FIFO_THS event.  Without this read the EXTI never re-fires after the
-    // first IRQ.
+    // Read INT1_STATUS0 to acknowledge the interrupt.  INT1 is in PULSE mode so the
+    // pin already self-de-asserted; this read is diagnostic (tells us DRDY vs FIFO_THS)
+    // and also clears the status bits so they don't accumulate across calls.
     uint8_t int1_status_clr = 0;
     spi_read(0x19, &int1_status_clr, 1);
 
@@ -664,9 +681,10 @@ void InvIMU_STM32::tick() {
             static uint32_t _spi_fail_cnt = 0;
             if ((_spi_fail_cnt++ % 1000u) == 0u) {
                 printf("[IMU] SPI blocking read FAIL #%lu  count=%u  "
-                       "HAL_State=%u  hdmarx=%s\r\n",
+                       "HAL_State=%u  HAL_ErrCode=0x%lX  hdmarx=%s\r\n",
                        (unsigned long)_spi_fail_cnt, (unsigned)count,
                        (unsigned)(_hw.hspi ? _hw.hspi->State : 0),
+                       (unsigned long)(_hw.hspi ? _hw.hspi->ErrorCode : 0xDEAD),
                        dma_hw_ready ? "configured" : "null");
             }
             return;

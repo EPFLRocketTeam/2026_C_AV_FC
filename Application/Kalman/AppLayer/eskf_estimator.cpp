@@ -382,7 +382,7 @@ void EskfEstimator::initializeFilter() {
   flight_shadow_.setLocalGravity(local_g);
 
   if (log_) {
-    log_->printf("[ESKF] Local gravity: %.5f m/s² (lat=%.1f°)\n",
+    log_->printf("[ESKF] Local gravity: %.5f m/s² (lat=%.1f°)\r\n",
                  (double)local_g, cfg_.launch_latitude_deg);
   }
 }
@@ -1813,7 +1813,7 @@ void EskfEstimator::processGpsSample(const sensors::gnss::GnssSample &sample) {
                                       false);
       descent_waiting_initial_gnss_snap_ = false;
       if (log_) {
-        log_->printf("[ESKF] DescentNav GNSS hard snap (initial) at %llu us\n",
+        log_->printf("[ESKF] DescentNav GNSS hard snap (initial) at %llu us\r\n",
                      static_cast<unsigned long long>(descent_gnss_ts));
       }
     }
