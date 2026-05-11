@@ -47,7 +47,7 @@ extern AppImuRingBuffer imuData3;
 #define APP_IMU_STALE_TIMEOUT_MS 50u
 #endif
 
-template <size_t NumSensors = 1u,
+template <size_t NumSensors = 3u,
           size_t BufferCapacity = APP_IMU_RING_CAPACITY>
 class ImuModule
     : public modules::Module<InvIMU_Interface,

@@ -57,10 +57,25 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define BMP3_CS1_Pin GPIO_PIN_11
-#define BMP3_CS1_GPIO_Port GPIOF
-#define BMP_CS1_Pin GPIO_PIN_8
-#define BMP_CS1_GPIO_Port GPIOE
+#define BMP_CS2_Pin GPIO_PIN_4
+#define BMP_CS2_GPIO_Port GPIOC
+#define BMP_CS1_Pin GPIO_PIN_11
+#define BMP_CS1_GPIO_Port GPIOF
+#define BMP_CS4_Pin GPIO_PIN_1
+#define BMP_CS4_GPIO_Port GPIOG
+#define BMP_CS3_Pin GPIO_PIN_8
+#define BMP_CS3_GPIO_Port GPIOE
+#define ICM_INT3_Pin GPIO_PIN_10
+#define ICM_INT3_GPIO_Port GPIOE
+#define ICM_INT3_EXTI_IRQn EXTI15_10_IRQn
+#define ICM_INT2_Pin GPIO_PIN_11
+#define ICM_INT2_GPIO_Port GPIOE
+#define ICM_INT2_EXTI_IRQn EXTI15_10_IRQn
+#define ICM_CS1_Pin GPIO_PIN_12
+#define ICM_CS1_GPIO_Port GPIOE
+#define ICM_INT1_Pin GPIO_PIN_13
+#define ICM_INT1_GPIO_Port GPIOE
+#define ICM_INT1_EXTI_IRQn EXTI15_10_IRQn
 #define ICM_CS4_Pin GPIO_PIN_14
 #define ICM_CS4_GPIO_Port GPIOE
 #define ICM_INT4_Pin GPIO_PIN_15
@@ -68,6 +83,10 @@ void Error_Handler(void);
 #define ICM_INT4_EXTI_IRQn EXTI15_10_IRQn
 #define BUZZER_Pin GPIO_PIN_11
 #define BUZZER_GPIO_Port GPIOB
+#define ICM_CS2_Pin GPIO_PIN_10
+#define ICM_CS2_GPIO_Port GPIOD
+#define ICM_CS3_Pin GPIO_PIN_11
+#define ICM_CS3_GPIO_Port GPIOD
 #define GNSS_RST_Pin GPIO_PIN_4
 #define GNSS_RST_GPIO_Port GPIOG
 #define PYROS_4_Pin GPIO_PIN_0

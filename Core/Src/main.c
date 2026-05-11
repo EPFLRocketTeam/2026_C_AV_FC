@@ -372,42 +372,69 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(BMP3_CS1_GPIO_Port, BMP3_CS1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BMP_CS2_GPIO_Port, BMP_CS2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, BMP_CS1_Pin|ICM_CS4_Pin|PYROS_4_Pin|PYROS_3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BMP_CS1_GPIO_Port, BMP_CS1_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(BMP_CS4_GPIO_Port, BMP_CS4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOE, BMP_CS3_Pin|ICM_CS1_Pin|ICM_CS4_Pin|PYROS_4_Pin
+                          |PYROS_3_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOD, ICM_CS2_Pin|ICM_CS3_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GNSS_RST_GPIO_Port, GNSS_RST_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pin : BMP3_CS1_Pin */
-  GPIO_InitStruct.Pin = BMP3_CS1_Pin;
+  /*Configure GPIO pin : BMP_CS2_Pin */
+  GPIO_InitStruct.Pin = BMP_CS2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(BMP3_CS1_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(BMP_CS2_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : BMP_CS1_Pin ICM_CS4_Pin PYROS_4_Pin PYROS_3_Pin */
-  GPIO_InitStruct.Pin = BMP_CS1_Pin|ICM_CS4_Pin|PYROS_4_Pin|PYROS_3_Pin;
+  /*Configure GPIO pin : BMP_CS1_Pin */
+  GPIO_InitStruct.Pin = BMP_CS1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(BMP_CS1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : BMP_CS4_Pin GNSS_RST_Pin */
+  GPIO_InitStruct.Pin = BMP_CS4_Pin|GNSS_RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : BMP_CS3_Pin ICM_CS1_Pin ICM_CS4_Pin PYROS_4_Pin
+                           PYROS_3_Pin */
+  GPIO_InitStruct.Pin = BMP_CS3_Pin|ICM_CS1_Pin|ICM_CS4_Pin|PYROS_4_Pin
+                          |PYROS_3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : ICM_INT4_Pin */
-  GPIO_InitStruct.Pin = ICM_INT4_Pin;
+  /*Configure GPIO pins : ICM_INT3_Pin ICM_INT2_Pin ICM_INT1_Pin ICM_INT4_Pin */
+  GPIO_InitStruct.Pin = ICM_INT3_Pin|ICM_INT2_Pin|ICM_INT1_Pin|ICM_INT4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(ICM_INT4_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /*Configure GPIO pin : BUZZER_Pin */
   GPIO_InitStruct.Pin = BUZZER_Pin;
@@ -416,21 +443,21 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(BUZZER_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : GNSS_RST_Pin */
-  GPIO_InitStruct.Pin = GNSS_RST_Pin;
+  /*Configure GPIO pins : ICM_CS2_Pin ICM_CS3_Pin */
+  GPIO_InitStruct.Pin = ICM_CS2_Pin|ICM_CS3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GNSS_RST_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(ICM_INT4_EXTI_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(ICM_INT4_EXTI_IRQn);
+  HAL_NVIC_SetPriority(ICM_INT3_EXTI_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(ICM_INT3_EXTI_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   /* CS lines must be deasserted (HIGH) after GPIO init to prevent bus contention */
   HAL_GPIO_WritePin(GPIOE, BMP_CS1_Pin|ICM_CS4_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(BMP3_CS1_GPIO_Port, BMP3_CS1_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(BMP_CS1_GPIO_Port, BMP_CS1_Pin, GPIO_PIN_SET);
   /* USER CODE END MX_GPIO_Init_2 */
 }
 

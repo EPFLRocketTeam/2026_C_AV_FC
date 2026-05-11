@@ -53,16 +53,16 @@ RingBuffer<BaroData, 100> baroData4;
 #endif
 
 #ifndef APP_IMU2_INT_PIN
-#define APP_IMU2_INT_PIN 0u
+#define APP_IMU2_INT_PIN ICM_INT2_Pin
 #endif
 
 #ifndef APP_IMU3_INT_PIN
-#define APP_IMU3_INT_PIN 0u
+#define APP_IMU3_INT_PIN ICM_INT3_Pin
 #endif
 
 namespace {
 
-ImuModule<1>* g_imu_module = nullptr;
+ImuModule<3>* g_imu_module = nullptr;
 uint8_t g_imu_healthy[3] = {0u, 0u, 0u};
 uint32_t g_imu_status_flags[3] = {IMU_STATUS_OK, IMU_STATUS_OK, IMU_STATUS_OK};
 uint8_t g_baro_healthy[4] = {0u, 0u, 0u, 0u};
@@ -110,18 +110,18 @@ Drivers::BMP390::BMP390_SDK::Config makeBaroConfig(SPI_HandleTypeDef* hspi,
 
 struct SuperLoopContext {
     Config imu_cfg1 = makeImuConfig(&hspi4, ICM_CS4_GPIO_Port, ICM_CS4_Pin);
-//    Config imu_cfg2 = makeImuConfig(&hspi4, BMI3_NSS_GPIO_Port, BMI3_NSS_Pin);
-//    Config imu_cfg3 = makeImuConfig(&hspi5, BMI2_NSS_GPIO_Port, BMI2_NSS_Pin);
+    Config imu_cfg2 = makeImuConfig(&hspi4, ICM_CS3_GPIO_Port, ICM_CS3_Pin);
+    Config imu_cfg3 = makeImuConfig(&hspi5, ICM_CS2_GPIO_Port, ICM_CS2_Pin);
 
     InvIMU_STM32 invImu1{imu_cfg1};
-//    InvIMU_STM32 invImu2{imu_cfg2};
-//    InvIMU_STM32 invImu3{imu_cfg3};
+    InvIMU_STM32 invImu2{imu_cfg2};
+    InvIMU_STM32 invImu3{imu_cfg3};
 
-    //InvIMU_Interface* invArr[3] = {&invImu1, &invImu2, &invImu3};
-    InvIMU_Interface* invArr[1] = {&invImu1};
-    // RingBuffer<IMUData, APP_IMU_RING_CAPACITY>* ringArr[3] = {&imuData1, &imuData2, &imuData3};
-    AppImuRingBuffer* ringArr[1] = {&imuData1};
-    ImuModule<1> imuModule{invArr, ringArr};
+    InvIMU_Interface* invArr[3] = {&invImu1, &invImu2, &invImu3};
+    //InvIMU_Interface* invArr[1] = {&invImu1};
+    AppImuRingBuffer* ringArr[3] = {&imuData1, &imuData2, &imuData3};
+    //AppImuRingBuffer* ringArr[1] = {&imuData1};
+    ImuModule<3> imuModule{invArr, ringArr};
 
 #ifdef UNIT_TEST_ENV
     Drivers::BMP390::BMP390_Mock baro1{};
@@ -130,28 +130,28 @@ struct SuperLoopContext {
     Drivers::BMP390::BMP390_Mock baro4{};
 #else
     Drivers::BMP390::BMP390_SDK::Config baro_cfg1 =
-        makeBaroConfig(&hspi5, BMP3_CS1_GPIO_Port, BMP3_CS1_Pin);
-//    Drivers::BMP390::BMP390_SDK::Config baro_cfg2 =
-//        makeBaroConfig(&hspi5, BMP2_NSS_GPIO_Port, BMP2_NSS_Pin);
-//    Drivers::BMP390::BMP390_SDK::Config baro_cfg3 =
-//        makeBaroConfig(&hspi4, BMP3_NSS_GPIO_Port, BMP3_NSS_Pin);
-//    Drivers::BMP390::BMP390_SDK::Config baro_cfg4 =
-//        makeBaroConfig(&hspi4, BMP4_NSS_GPIO_Port, BMP4_NSS_Pin);
+        makeBaroConfig(&hspi5, BMP_CS1_GPIO_Port, BMP_CS1_Pin);
+    Drivers::BMP390::BMP390_SDK::Config baro_cfg2 =
+        makeBaroConfig(&hspi5, BMP_CS2_GPIO_Port, BMP_CS2_Pin);
+    Drivers::BMP390::BMP390_SDK::Config baro_cfg3 =
+        makeBaroConfig(&hspi4, BMP_CS3_GPIO_Port, BMP_CS3_Pin);
+    Drivers::BMP390::BMP390_SDK::Config baro_cfg4 =
+        makeBaroConfig(&hspi4, BMP_CS4_GPIO_Port, BMP_CS4_Pin);
 
     Drivers::BMP390::BMP390_SDK baro1{baro_cfg1};
-    // Drivers::BMP390::BMP390_SDK baro2{baro_cfg2};
-    // Drivers::BMP390::BMP390_SDK baro3{baro_cfg3};
-    // Drivers::BMP390::BMP390_SDK baro4{baro_cfg4};
+    Drivers::BMP390::BMP390_SDK baro2{baro_cfg2};
+    Drivers::BMP390::BMP390_SDK baro3{baro_cfg3};
+    Drivers::BMP390::BMP390_SDK baro4{baro_cfg4};
 #endif
-//    Drivers::BMP390::BMP390_Interface* baroArr[4] = {
-//        &baro1, &baro2, &baro3, &baro4};
-//    RingBuffer<BaroData, 100>* baroRing[4] = {
-//        &baroData1, &baroData2, &baroData3, &baroData4};
-    Drivers::BMP390::BMP390_Interface* baroArr[1] = {
-            &baro1 };
-        RingBuffer<BaroData, 100>* baroRing[1] = {
-            &baroData1 };
-    BaroModule baroModule{baroArr, baroRing};
+    Drivers::BMP390::BMP390_Interface* baroArr[4] = {
+        &baro1, &baro2, &baro3, &baro4};
+    RingBuffer<BaroData, 100>* baroRing[4] = {
+        &baroData1, &baroData2, &baroData3, &baroData4};
+//    Drivers::BMP390::BMP390_Interface* baroArr[1] = {
+//            &baro1 };
+//        RingBuffer<BaroData, 100>* baroRing[1] = {
+//            &baroData1 };
+    BaroModule<4> baroModule{baroArr, baroRing};
 
     UbxGpsInterface gps{&huart6, kGpsRateMs};
     UbxGpsInterface* gpsArr[1] = {&gps};

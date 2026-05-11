@@ -22,19 +22,24 @@ extern RingBuffer<Drivers::BMP390::BaroData, 100> baroData4;
 #define APP_BARO_STALE_TIMEOUT_MS 200u
 #endif
 
+template <size_t NumSensors = 1>
 class BaroModule
     : public modules::Module<Drivers::BMP390::BMP390_Interface,
-                             RingBuffer<Drivers::BMP390::BaroData, 100>, 1> {
+                             RingBuffer<Drivers::BMP390::BaroData, 100>, NumSensors> {
 public:
   using BaroData = Drivers::BMP390::BaroData;
   using BMP390_Interface = Drivers::BMP390::BMP390_Interface;
   using OsrPressure = Drivers::BMP390::OsrPressure;
   using OsrTemp = Drivers::BMP390::OsrTemp;
   using IIRFilter = Drivers::BMP390::IIRFilter;
+  using Base = modules::Module<BMP390_Interface, RingBuffer<BaroData, 100>, NumSensors>;
+  using Base::drivers_;
+  using Base::buffers_;
+  static constexpr size_t kNumSensors = NumSensors;
 
-  explicit BaroModule(BMP390_Interface *(&drivers)[1],
-                      RingBuffer<BaroData, 100> *(&buffers)[1])
-      : Module(drivers, buffers) {}
+  explicit BaroModule(BMP390_Interface *(&drivers)[NumSensors],
+                      RingBuffer<BaroData, 100> *(&buffers)[NumSensors])
+      : Base(drivers, buffers) {}
 
   bool init() override {
     bool any_initialized = false;
@@ -119,8 +124,6 @@ private:
     bool healthy = false;
     bool last_sample_valid = false;
   };
-
-  static constexpr size_t kNumSensors = 1;
 
   void triggerConversions(uint32_t tick_ms, flight_computer::GOATStore &g) {
     const uint64_t trigger_ts = app_timebase_now_us();
