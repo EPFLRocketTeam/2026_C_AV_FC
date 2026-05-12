@@ -48,12 +48,12 @@ public:
         continue;
       }
       if (!drivers_[i]->init()) {
-        printf("Error starting baro %zu\n", i);
+        printf("Error starting baro %u\r\n", (unsigned)i);
         sensor_state_[i].status_flags |= Drivers::BMP390::BMP390_STATUS_SPI_ERROR;
         continue;
       }
       if (!drivers_[i]->ping()) {
-        printf("Error pinging baro %zu\n", i);
+        printf("Error pinging baro %u\r\n", (unsigned)i);
         sensor_state_[i].status_flags |=
             Drivers::BMP390::BMP390_STATUS_WHOAMI_MISMATCH;
         continue;

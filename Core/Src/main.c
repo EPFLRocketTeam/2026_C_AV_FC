@@ -456,8 +456,11 @@ static void MX_GPIO_Init(void)
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   /* CS lines must be deasserted (HIGH) after GPIO init to prevent bus contention */
-  HAL_GPIO_WritePin(GPIOE, BMP_CS1_Pin|ICM_CS4_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOE, BMP_CS3_Pin|ICM_CS1_Pin|ICM_CS4_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(BMP_CS1_GPIO_Port, BMP_CS1_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOD, ICM_CS2_Pin|ICM_CS3_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(BMP_CS2_GPIO_Port, BMP_CS2_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(BMP_CS4_GPIO_Port, BMP_CS4_Pin, GPIO_PIN_SET);
   /* USER CODE END MX_GPIO_Init_2 */
 }
 

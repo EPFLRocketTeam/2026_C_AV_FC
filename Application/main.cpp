@@ -35,6 +35,7 @@ using Drivers::BMP390::BaroData;
 AppImuRingBuffer imuData1;
 AppImuRingBuffer imuData2;
 AppImuRingBuffer imuData3;
+// AppImuRingBuffer imuData4;
 
 RingBuffer<GpsBasicFixData, 100> gpsData;
 RingBuffer<BaroData, 100> baroData1;
@@ -60,11 +61,15 @@ RingBuffer<BaroData, 100> baroData4;
 #define APP_IMU3_INT_PIN ICM_INT3_Pin
 #endif
 
+#ifndef APP_IMU4_INT_PIN
+#define APP_IMU4_INT_PIN ICM_INT1_Pin
+#endif
+
 namespace {
 
-ImuModule<3>* g_imu_module = nullptr;
-uint8_t g_imu_healthy[3] = {0u, 0u, 0u};
-uint32_t g_imu_status_flags[3] = {IMU_STATUS_OK, IMU_STATUS_OK, IMU_STATUS_OK};
+ImuModule<1>* g_imu_module = nullptr;
+uint8_t g_imu_healthy[1] = {0u};
+uint32_t g_imu_status_flags[1] = {IMU_STATUS_OK};
 uint8_t g_baro_healthy[4] = {0u, 0u, 0u, 0u};
 uint32_t g_baro_status_flags[4] = {
     Drivers::BMP390::BMP390_STATUS_OK,
@@ -80,10 +85,8 @@ constexpr uint16_t kGpsRateMs = static_cast<uint16_t>(
 constexpr uint16_t kGpsRateMs = 1000u;
 #endif
 
-constexpr uint16_t kImuIntPins[3] = {
+constexpr uint16_t kImuIntPins[1] = {
     APP_IMU1_INT_PIN,
-    APP_IMU2_INT_PIN,
-    APP_IMU3_INT_PIN,
 };
 
 Config makeImuConfig(SPI_HandleTypeDef* hspi, GPIO_TypeDef* cs_port, uint16_t cs_pin) {
@@ -110,18 +113,12 @@ Drivers::BMP390::BMP390_SDK::Config makeBaroConfig(SPI_HandleTypeDef* hspi,
 
 struct SuperLoopContext {
     Config imu_cfg1 = makeImuConfig(&hspi4, ICM_CS4_GPIO_Port, ICM_CS4_Pin);
-    Config imu_cfg2 = makeImuConfig(&hspi4, ICM_CS3_GPIO_Port, ICM_CS3_Pin);
-    Config imu_cfg3 = makeImuConfig(&hspi5, ICM_CS2_GPIO_Port, ICM_CS2_Pin);
 
     InvIMU_STM32 invImu1{imu_cfg1};
-    InvIMU_STM32 invImu2{imu_cfg2};
-    InvIMU_STM32 invImu3{imu_cfg3};
 
-    InvIMU_Interface* invArr[3] = {&invImu1, &invImu2, &invImu3};
-    //InvIMU_Interface* invArr[1] = {&invImu1};
-    AppImuRingBuffer* ringArr[3] = {&imuData1, &imuData2, &imuData3};
-    //AppImuRingBuffer* ringArr[1] = {&imuData1};
-    ImuModule<3> imuModule{invArr, ringArr};
+    InvIMU_Interface* invArr[1] = {&invImu1};
+    AppImuRingBuffer* ringArr[1] = {&imuData1};
+    ImuModule<1> imuModule{invArr, ringArr};
 
 #ifdef UNIT_TEST_ENV
     Drivers::BMP390::BMP390_Mock baro1{};
@@ -173,7 +170,7 @@ extern "C" void app_on_imu_exti(uint16_t gpio_pin) {
 
     const uint64_t irq_us = app_timebase_now_us();
     const uint32_t now_ms = HAL_GetTick();
-    for (size_t i = 0; i < 3; ++i) {
+    for (size_t i = 0; i < 1; ++i) {
         if (kImuIntPins[i] == 0u) {
             continue;
         }
@@ -198,14 +195,14 @@ extern "C" void app_on_imu_spi_rx_complete(SPI_HandleTypeDef* hspi) {
 }
 
 extern "C" uint8_t app_imu_sensor_healthy(uint8_t sensor_index) {
-    if (sensor_index >= 3u) {
+    if (sensor_index >= 1u) {
         return 0u;
     }
     return g_imu_healthy[sensor_index];
 }
 
 extern "C" uint32_t app_imu_sensor_status_flags(uint8_t sensor_index) {
-    if (sensor_index >= 3u) {
+    if (sensor_index >= 1u) {
         return IMU_STATUS_OK;
     }
     return g_imu_status_flags[sensor_index];
@@ -274,7 +271,7 @@ extern "C" void app_super_loop_iterate(void) {
     const uint32_t now_ms = HAL_GetTick();
     g_superloop.imuModule.update(now_ms);
 
-    for (size_t i = 0; i < 3; ++i) {
+    for (size_t i = 0; i < 1; ++i) {
         g_imu_healthy[i] = g_superloop.imuModule.sensorHealthy(i) ? 1u : 0u;
         g_imu_status_flags[i] = g_superloop.imuModule.sensorStatusFlags(i);
     }

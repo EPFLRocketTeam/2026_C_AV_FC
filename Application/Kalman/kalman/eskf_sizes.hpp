@@ -82,7 +82,7 @@ using eskf_sensor_t = float;
 // ============================================================
 
 #ifndef ESKF_USE_CUSTOM_LINALG
-#define ESKF_USE_CUSTOM_LINALG 0
+#define ESKF_USE_CUSTOM_LINALG 1
 #endif
 
 // ============================================================

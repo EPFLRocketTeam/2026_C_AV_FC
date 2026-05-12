@@ -30,7 +30,7 @@
 /// Print rate decimation: console output happens every N super-loop ticks.
 /// At ~1 kHz loop rate, 500 → ~2 Hz.  Tune if output is too fast/slow.
 #ifndef KALMAN_DEBUG_PRINT_DECIMATION
-#define KALMAN_DEBUG_PRINT_DECIMATION 100
+#define KALMAN_DEBUG_PRINT_DECIMATION 500
 #endif
 
 /// Delay (super-loop ticks) before force-flight auto-transitions.

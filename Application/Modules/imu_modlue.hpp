@@ -18,6 +18,7 @@ using AppImuRingBuffer = RingBuffer<IMUData, APP_IMU_RING_CAPACITY>;
 extern AppImuRingBuffer imuData1;
 extern AppImuRingBuffer imuData2;
 extern AppImuRingBuffer imuData3;
+// extern AppImuRingBuffer imuData4;
 
 #ifndef APP_IMU_ENABLE_FSYNC
 #define APP_IMU_ENABLE_FSYNC 1u
@@ -67,11 +68,11 @@ public:
   bool init() override {
     for (size_t i = 0; i < kNumSensors; ++i) {
       if (!drivers_[i]->init()) {
-        printf("Error starting imu %zu\n", i);
+        printf("Error starting imu %u\r\n", (unsigned)i);
         return false;
       }
       if (!drivers_[i]->ping()) {
-        printf("Error pinging imu %zu\n", i);
+        printf("Error pinging imu %u\r\n", (unsigned)i);
         return false;
       }
       drivers_[i]->configure(AccelRange::_32G, GyroRange::_4000DPS, ODR::_6_4kHz);
