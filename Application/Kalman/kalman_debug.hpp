@@ -268,6 +268,22 @@ inline void printDebugLine(
            static_cast<unsigned long>(raw.t_tick_us),
            static_cast<unsigned long>(raw.t_output_us));
 
+    // Line 9b: VirtualIMU vs post-processing breakdown inside imuProc
+    {
+        uint32_t vimu_us = 0, post_us = 0, vimu_samples = 0;
+        estimator.getImuProcBreakdown(vimu_us, post_us, vimu_samples);
+        const uint32_t vimu_per = vimu_samples > 0 ? vimu_us / vimu_samples : 0;
+        const uint32_t post_per = vimu_samples > 0 ? post_us / vimu_samples : 0;
+        printf("[KAL] imuBreak: vimu=%luus  post=%luus  n=%lu  "
+               "vimu/s=%luus  post/s=%luus\r\n",
+               static_cast<unsigned long>(vimu_us),
+               static_cast<unsigned long>(post_us),
+               static_cast<unsigned long>(vimu_samples),
+               static_cast<unsigned long>(vimu_per),
+               static_cast<unsigned long>(post_per));
+        const_cast<app::EskfEstimator&>(estimator).resetImuProcBreakdown();
+    }
+
     // Line 10: BURN-phase diagnostics (ESKF state, aero-blind, corrections)
     if (fsm_state == flight_computer::State::BURN ||
         fsm_state == flight_computer::State::ASCENT ||

@@ -9,6 +9,7 @@
 #include "eskf_math.hpp"
 #include <cstring>
 #include <algorithm>
+#include <cstdio>
 
 #if APP_TARGET_STM32
 extern "C" {
@@ -674,6 +675,22 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
   const uint32_t start_us = nowMicros();
   uint32_t events_processed = 0;
   const bool started_in_rewind = in_rewind_;
+
+#if KALMAN_DEBUG_PRINT
+  // Diagnose when kalman_timestamp_us_ is ahead of target (while-loop skipped)
+  if (kalman_timestamp_us_ > target_timestamp_us) {
+    static uint32_t ahead_counter = 0;
+    if (++ahead_counter >= 500) {
+      ahead_counter = 0;
+      printf("[CATCHUP] AHEAD: kalTs=%llu > targetTs=%llu  diff=%lluus  "
+             "rewind=%d hiber=%d\r\n",
+             (unsigned long long)kalman_timestamp_us_,
+             (unsigned long long)target_timestamp_us,
+             (unsigned long long)(kalman_timestamp_us_ - target_timestamp_us),
+             (int)in_rewind_, (int)hibernating_);
+    }
+  }
+#endif
   
   while (kalman_timestamp_us_ <= target_timestamp_us) {
     discardStalePendingBaro();
@@ -689,10 +706,42 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
     if (next_event_ts < earliest) earliest = next_event_ts;
     
     // No more data to process
-    if (earliest == UINT64_MAX) break;
+    if (earliest == UINT64_MAX) {
+#if KALMAN_DEBUG_PRINT
+      static uint32_t catchup_diag_counter = 0;
+      if (++catchup_diag_counter >= 500) {
+        catchup_diag_counter = 0;
+        printf("[CATCHUP] exhausted: kalTs=%llu targetTs=%llu "
+               "imuRdIdx=%u imuCnt=%u imuHead=%u "
+               "nextImu=%llu nextBaro=%llu nextEvt=%llu\r\n",
+               (unsigned long long)kalman_timestamp_us_,
+               (unsigned long long)target_timestamp_us,
+               (unsigned)imu_read_idx_, (unsigned)imu_count_,
+               (unsigned)imu_head_,
+               (unsigned long long)next_imu_ts,
+               (unsigned long long)next_baro_ts,
+               (unsigned long long)next_event_ts);
+      }
+#endif
+      break;
+    }
     
     // Don't process events beyond target
-    if (earliest > target_timestamp_us) break;
+    if (earliest > target_timestamp_us) {
+#if KALMAN_DEBUG_PRINT
+      static uint32_t catchup_future_counter = 0;
+      if (++catchup_future_counter >= 500) {
+        catchup_future_counter = 0;
+        printf("[CATCHUP] future: earliest=%llu target=%llu "
+               "kalTs=%llu imuRdIdx=%u imuCnt=%u\r\n",
+               (unsigned long long)earliest,
+               (unsigned long long)target_timestamp_us,
+               (unsigned long long)kalman_timestamp_us_,
+               (unsigned)imu_read_idx_, (unsigned)imu_count_);
+      }
+#endif
+      break;
+    }
 
     // If we already reached target, only drain entries exactly at target.
     if (kalman_timestamp_us_ == target_timestamp_us &&

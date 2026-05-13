@@ -113,6 +113,14 @@ public:
   /// Last catchUp execution duration (us).
   uint32_t lastCatchupDurationUs() const { return filter_.lastCatchUpDurationUs(); }
 
+#if KALMAN_DEBUG_PRINT
+  /// Get per-tick VirtualIMU vs post-processing timing breakdown.
+  void getImuProcBreakdown(uint32_t &vimu_us, uint32_t &post_us,
+                            uint32_t &samples) const;
+  /// Reset per-tick timing accumulators (call after reading).
+  void resetImuProcBreakdown();
+#endif
+
   /// Configured catchUp budget (us) used for budgeted onTick processing.
   uint32_t catchupBudgetUs() const { return cfg_.catchup_budget_us; }
 

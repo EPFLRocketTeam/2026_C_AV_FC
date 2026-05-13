@@ -7,6 +7,7 @@
 #include "Application/Kalman/kalman/eskf_logger.hpp"
 #include "Application/Kalman/kalman/eskf_math.hpp"
 #include "Application/Kalman/kalman/preprocessor/pressure_altitude.hpp"
+#include "Application/app_timebase.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -25,6 +26,26 @@ constexpr uint32_t EskfEstimator::kImuBatchTimeoutUs;
 constexpr size_t EskfEstimator::kMaxBaroSources;
 constexpr uint32_t EskfEstimator::kBaroSyncToleranceUs;
 constexpr uint32_t EskfEstimator::kBaroBatchTimeoutUs;
+
+// Per-tick timing accumulators for VirtualIMU vs post-processing breakdown
+#if KALMAN_DEBUG_PRINT
+static uint32_t s_vimu_acc_us = 0;
+static uint32_t s_post_acc_us = 0;
+static uint32_t s_vimu_samples = 0;
+
+void EskfEstimator::getImuProcBreakdown(uint32_t &vimu_us, uint32_t &post_us,
+                                         uint32_t &samples) const {
+  vimu_us = s_vimu_acc_us;
+  post_us = s_post_acc_us;
+  samples = s_vimu_samples;
+}
+
+void EskfEstimator::resetImuProcBreakdown() {
+  s_vimu_acc_us = 0;
+  s_post_acc_us = 0;
+  s_vimu_samples = 0;
+}
+#endif
 
 namespace {
 
@@ -1050,7 +1071,7 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
 
   const eskf_scalar dt_s = static_cast<eskf_scalar>(dt_us) / 1e6;
 
-  static constexpr size_t kMaxBatchSize = 64;
+  static constexpr size_t kMaxBatchSize = 16;
   const size_t safe_count = std::min(count, kMaxBatchSize);
 
   // ICM-45686 FIFO temperature conversion: T_C = temp_data/2.07 + 25
@@ -1240,7 +1261,7 @@ void EskfEstimator::processBufferedImuBatch(const PendingImuBatch &batch) {
   const uint32_t dt_us = batch.dt_us;
   const eskf_scalar dt_s = static_cast<eskf_scalar>(dt_us) / 1e6;
 
-  static constexpr size_t kMaxBatchSize = 64;
+  static constexpr size_t kMaxBatchSize = 16;
   const size_t safe_count = std::min(count, kMaxBatchSize);
 
   constexpr eskf_scalar kTempScale = 1.0 / 2.07;
@@ -1317,10 +1338,19 @@ void EskfEstimator::processBufferedImuBatch(const PendingImuBatch &batch) {
   const eskf_scalar *gyro_bias_body =
       in_flight_ ? filter_.state().b_gyro : rail_shadow_.gyroBias();
   eskf::VirtualImuOutput vout_buffer[kMaxBatchSize];
+
+#if KALMAN_DEBUG_PRINT
+  const uint64_t t_vimu_start = app_timebase_now_us();
+#endif
   size_t out_count = virtual_imu_.process(accel_ptrs, gyro_ptrs, temp_ptrs,
                                           statuses, safe_count, batch.t0_us,
                                           vout_buffer, kMaxBatchSize, dt_us,
                                           gyro_bias_body);
+#if KALMAN_DEBUG_PRINT
+  const uint64_t t_vimu_end = app_timebase_now_us();
+  s_vimu_acc_us += static_cast<uint32_t>(t_vimu_end - t_vimu_start);
+  s_vimu_samples += out_count;
+#endif
 
   for (size_t i = 0; i < out_count; ++i) {
     const eskf::VirtualImuOutput &vout = vout_buffer[i];
@@ -1401,6 +1431,11 @@ void EskfEstimator::processBufferedImuBatch(const PendingImuBatch &batch) {
       logImuHealthTransitions(vout);
     }
   }
+
+#if KALMAN_DEBUG_PRINT
+  const uint64_t t_post_end = app_timebase_now_us();
+  s_post_acc_us += static_cast<uint32_t>(t_post_end - t_vimu_end);
+#endif
 
   output_dirty_ = true;
 }
@@ -2442,6 +2477,14 @@ void EskfEstimator::logFlightShadowIfDue(uint64_t timestamp_us) {
 
 void EskfEstimator::logImuPipelineIfDue(const eskf::VirtualImuOutput &vout,
                                         eskf_scalar dt_s) {
+  // Decimate during flight to avoid constructing 600+ byte snapshot at IMU rate.
+  // Pre-flight: every sample. In-flight: every 64th sample (~100Hz at 6.4kHz).
+  if (in_flight_) {
+    static uint16_t imu_pipeline_log_counter = 0;
+    if (++imu_pipeline_log_counter < 64) return;
+    imu_pipeline_log_counter = 0;
+  }
+
   eskf::ImuPipelineSnapshot snapshot;
   for (int i = 0; i < 3; ++i) {
     snapshot.accel_body[i] = static_cast<float>(vout.nav_accel[i]);

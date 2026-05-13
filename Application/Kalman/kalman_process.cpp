@@ -45,7 +45,7 @@ namespace {
 using BaroData = Drivers::BMP390::BaroData;
 
 constexpr size_t kMaxImuSamplesPerSourcePerRun = 128u;
-constexpr size_t kMaxImuSamplesPerEstimatorBatch = 64u;
+constexpr size_t kMaxImuSamplesPerEstimatorBatch = 16u;
 constexpr size_t kMaxBaroSamplesPerSourcePerRun = 8u;
 constexpr size_t kMaxGpsSamplesPerRun = 8u;
 #if APP_IMU_PRIMARY_ODR_HZ > 0
