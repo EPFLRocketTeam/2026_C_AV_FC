@@ -186,7 +186,8 @@
 
 #ifndef ESKF_COVARIANCE_DECIMATION
 #define ESKF_COVARIANCE_DECIMATION                                             \
-  1 // Update P every Nth step (1=disabled, Section 2.5.B)
+  1 // Update P every Nth step (1=every step). Note: accumulation code uses
+    // dense multiplies, so N>1 is currently SLOWER. Needs sparse rewrite.
 #endif
 
 #ifndef ESKF_PREDICT_MAX_DT_S

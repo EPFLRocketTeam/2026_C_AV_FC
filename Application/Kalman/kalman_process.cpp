@@ -44,7 +44,12 @@ namespace {
 
 using BaroData = Drivers::BMP390::BaroData;
 
-constexpr size_t kMaxImuSamplesPerSourcePerRun = 128u;
+constexpr size_t kMaxImuSamplesPerSourcePerRun = 32u;  // was 128; lower cap
+    // prevents the vicious drain-accumulate cycle (draining 100+ takes 17ms,
+    // which causes 100+ more to accumulate). With push decimation at 4x,
+    // 32 drained → 8 pushed to ESKF → catchUp ~1.8ms.  Steady state converges
+    // to ~4 samples/tick at ~624µs.  Excess samples stay in the ring buffer
+    // and are overwritten by newer data (ring buffer discards oldest).
 constexpr size_t kMaxImuSamplesPerEstimatorBatch = 16u;
 constexpr size_t kMaxBaroSamplesPerSourcePerRun = 8u;
 constexpr size_t kMaxGpsSamplesPerRun = 8u;
@@ -212,18 +217,14 @@ struct KalmanRuntime {
 		       KALMAN_DEBUG_FORCE_FLIGHT,
 		       KALMAN_DEBUG_PRINT_DECIMATION,
 		       KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS);
-#ifdef __OPTIMIZE__
-		printf("[KAL-CFG] Optimization: ON");
-#ifdef __OPTIMIZE_SIZE__
-		printf(" (Os/Oz)");
+#ifdef COMPILE_OPT_LEVEL
+		printf("[KAL-CFG] Optimization: -O%d", COMPILE_OPT_LEVEL);
+#elif defined(__OPTIMIZE__)
+		printf("[KAL-CFG] Optimization: ON (unknown level)");
 #else
-		printf(" (O1/O2/O3)");
+		printf("[KAL-CFG] Optimization: OFF (-O0)");
 #endif
 		printf("  SYSCLK=%luMHz\r\n", SystemCoreClock / 1000000UL);
-#else
-		printf("[KAL-CFG] Optimization: OFF (-O0)  "
-		       "SYSCLK=%luMHz\r\n", SystemCoreClock / 1000000UL);
-#endif
 #endif
 	}
 

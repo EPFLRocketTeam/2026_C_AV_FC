@@ -139,15 +139,20 @@ void EskfYieldable::pushImu(const ImuFrame& imu, eskf_scalar dt) {
   if (imu_count_ < ESKF_IMU_BUFFER_SIZE) {
     imu_count_++;
   } else {
-    // Buffer full - oldest entry is being overwritten
-    if (hibernating_ || in_rewind_) {
-      // Pre-liftoff (hibernating): Buffer filling is expected and normal.
-      // During rewind (in_rewind_): Buffer is full and we're consuming it.
-      //   Overwriting already-processed entries is expected.
-      // In both cases, no warning needed.
+    // Buffer full - oldest entry is being overwritten.
+    // When the buffer is full and imu_head_ advances, the "oldest" position
+    // shifts by 1. Since imu_read_idx_ is a RELATIVE offset from oldest,
+    // we must decrement it to keep pointing at the same physical entry.
+    // BUG FIX: Previously, in_rewind_ skipped this decrement. This caused
+    // imu_read_idx_ to drift forward by 1 per pushImu during rewind,
+    // eventually pointing at entries overwritten with future-timestamped data,
+    // making catchUp see "future" entries and process 0 events permanently.
+    if (hibernating_) {
+      // Pre-liftoff: catchUp not running, index irrelevant.
+      // rewindTo() will reset imu_read_idx_ via binary search at liftoff.
     } else if (imu_read_idx_ > 0) {
-      // Overwriting an already-processed entry - normal ring buffer operation.
-      // Just adjust read index to maintain relative position.
+      // Adjust read index to maintain correct relative position after
+      // oldest shifts. Required during BOTH normal operation AND rewind.
       imu_read_idx_--;
     } else {
       // REAL OVERFLOW: imu_read_idx_ == 0 means we're overwriting data that
@@ -682,11 +687,11 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
     static uint32_t ahead_counter = 0;
     if (++ahead_counter >= 500) {
       ahead_counter = 0;
-      printf("[CATCHUP] AHEAD: kalTs=%llu > targetTs=%llu  diff=%lluus  "
+      printf("[CATCHUP] AHEAD: kalTs=%u:%u > targetTs=%u:%u  diff=%uus  "
              "rewind=%d hiber=%d\r\n",
-             (unsigned long long)kalman_timestamp_us_,
-             (unsigned long long)target_timestamp_us,
-             (unsigned long long)(kalman_timestamp_us_ - target_timestamp_us),
+             (unsigned)(kalman_timestamp_us_ >> 32), (unsigned)kalman_timestamp_us_,
+             (unsigned)(target_timestamp_us >> 32), (unsigned)target_timestamp_us,
+             (unsigned)(uint32_t)(kalman_timestamp_us_ - target_timestamp_us),
              (int)in_rewind_, (int)hibernating_);
     }
   }
@@ -711,16 +716,12 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       static uint32_t catchup_diag_counter = 0;
       if (++catchup_diag_counter >= 500) {
         catchup_diag_counter = 0;
-        printf("[CATCHUP] exhausted: kalTs=%llu targetTs=%llu "
-               "imuRdIdx=%u imuCnt=%u imuHead=%u "
-               "nextImu=%llu nextBaro=%llu nextEvt=%llu\r\n",
-               (unsigned long long)kalman_timestamp_us_,
-               (unsigned long long)target_timestamp_us,
+        printf("[CATCHUP] exhausted: kalTs=%u:%u targetTs=%u:%u "
+               "imuRdIdx=%u imuCnt=%u imuHead=%u\r\n",
+               (unsigned)(kalman_timestamp_us_ >> 32), (unsigned)kalman_timestamp_us_,
+               (unsigned)(target_timestamp_us >> 32), (unsigned)target_timestamp_us,
                (unsigned)imu_read_idx_, (unsigned)imu_count_,
-               (unsigned)imu_head_,
-               (unsigned long long)next_imu_ts,
-               (unsigned long long)next_baro_ts,
-               (unsigned long long)next_event_ts);
+               (unsigned)imu_head_);
       }
 #endif
       break;
@@ -732,11 +733,11 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       static uint32_t catchup_future_counter = 0;
       if (++catchup_future_counter >= 500) {
         catchup_future_counter = 0;
-        printf("[CATCHUP] future: earliest=%llu target=%llu "
-               "kalTs=%llu imuRdIdx=%u imuCnt=%u\r\n",
-               (unsigned long long)earliest,
-               (unsigned long long)target_timestamp_us,
-               (unsigned long long)kalman_timestamp_us_,
+        printf("[CATCHUP] future: earliest=%u:%u target=%u:%u "
+               "kalTs=%u:%u imuRdIdx=%u imuCnt=%u\r\n",
+               (unsigned)(earliest >> 32), (unsigned)earliest,
+               (unsigned)(target_timestamp_us >> 32), (unsigned)target_timestamp_us,
+               (unsigned)(kalman_timestamp_us_ >> 32), (unsigned)kalman_timestamp_us_,
                (unsigned)imu_read_idx_, (unsigned)imu_count_);
       }
 #endif

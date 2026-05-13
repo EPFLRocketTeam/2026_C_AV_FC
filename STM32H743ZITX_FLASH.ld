@@ -34,8 +34,11 @@
 /* Entry Point */
 ENTRY(Reset_Handler)
 
-/* Highest address of the user mode stack */
-_estack = ORIGIN(RAM_D1) + LENGTH(RAM_D1);    /* end of RAM */
+/* Highest address of the user mode stack — placed in DTCM for single-cycle access.
+ * DTCM (128KB) is tightly coupled to the Cortex-M7 data port: zero wait states,
+ * no bus contention, no cache needed.  Stack-allocated temporaries in
+ * propagateCovariance() (FP[16][16], FPFt[16][16], ~4KB) benefit directly. */
+_estack = ORIGIN(DTCMRAM) + LENGTH(DTCMRAM);    /* end of DTCM */
 /* Generate a link error if heap and stack don't fit into RAM */
 _Min_Heap_Size = 0x200;      /* required amount of heap  */
 _Min_Stack_Size = 0x400; /* required amount of stack */

@@ -1186,6 +1186,7 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
         rail_shadow_initialized_ = true;
       }
 
+      // Push IMU sample to ESKF ring buffer at full rate.
       filter_.pushImu(vout.frame, dt_s);
       last_body_accel_x_ = vout.frame.accel[0];
 
@@ -1369,6 +1370,7 @@ void EskfEstimator::processBufferedImuBatch(const PendingImuBatch &batch) {
         rail_shadow_initialized_ = true;
       }
 
+      // Push IMU sample to ESKF ring buffer at full rate.
       filter_.pushImu(vout.frame, dt_s);
       last_body_accel_x_ = vout.frame.accel[0];
 
