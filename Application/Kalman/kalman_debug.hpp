@@ -36,7 +36,7 @@
 /// Delay (super-loop ticks) before force-flight auto-transitions.
 /// Gives the Rail Shadow time to converge on gravity before seeding ESKF.
 #ifndef KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS
-#define KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS 2000
+#define KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS 5000
 #endif
 
 #if KALMAN_DEBUG_PRINT
@@ -137,7 +137,7 @@ inline void printDebugLine(
     flight_computer::State fsm_state,
     uint32_t kalman_loop_us,
     uint32_t imu_drained,
-    const RawSensorSnapshot& raw)
+    RawSensorSnapshot& raw)
 {
     static uint32_t decimation_counter = 0;
     if (++decimation_counter < KALMAN_DEBUG_PRINT_DECIMATION) {
@@ -202,7 +202,7 @@ inline void printDebugLine(
 
     // Line 3: Buffer / overflow
     printf("[KAL] IMU=%lu  baro=%lu  gps=%lu  "
-           "imuDrop=%lu  baroDrop=%lu  evtDrop=%lu  "
+           "imuDrop=%lu  baroDrop=%lu  evtDrop=%lu  staleSkip=%lu  "
            "imuBuf=%lu  baroBuf=%lu  evtBuf=%lu  "
            "rwd=%lu  drained=%lu\r\n",
            static_cast<unsigned long>(health.imu_samples_consumed),
@@ -211,6 +211,7 @@ inline void printDebugLine(
            static_cast<unsigned long>(stats.imu_drops),
            static_cast<unsigned long>(stats.baro_drops),
            static_cast<unsigned long>(stats.event_drops),
+           static_cast<unsigned long>(stats.stale_skips),
            static_cast<unsigned long>(estimator.filter().imuBufferCount()),
            static_cast<unsigned long>(estimator.filter().baroBufferCount()),
            static_cast<unsigned long>(estimator.filter().eventBufferCount()),
@@ -218,11 +219,12 @@ inline void printDebugLine(
            static_cast<unsigned long>(imu_drained));
 
     // Line 4: Ring HWMs
-    printf("[KAL] ring_hwm=[%lu,%lu,%lu]  "
+    printf("[KAL] ring_hwm=[%lu,%lu,%lu]  imuRdIdx=%lu  "
            "gate=%s  grnd=%s  hdg=%s\r\n",
            static_cast<unsigned long>(health.imu_ring_hwm[0]),
            static_cast<unsigned long>(health.imu_ring_hwm[1]),
            static_cast<unsigned long>(health.imu_ring_hwm[2]),
+           static_cast<unsigned long>(estimator.filter().imuReadIdx()),
            rail.isGateOpen() ? "OPEN" : "SHUT",
            rail.isGroundReferenceValid() ? "OK" : "NO",
            rail.isHeadingInitialized() ? "OK" : "NO");
@@ -355,6 +357,11 @@ inline void printDebugLine(
                static_cast<double>(core.lastInnovation()),
                static_cast<double>(core.lastNIS()));
     }
+
+    // Reset per-sensor alive bitmasks after printing so they accumulate
+    // across all kalman_loop() calls until the next decimated print.
+    raw.baro_per_sensor_alive = 0;
+    raw.imu_per_sensor_alive = 0;
 
     // Separator for readability
     printf("---\r\n");

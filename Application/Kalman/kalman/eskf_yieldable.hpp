@@ -175,6 +175,9 @@ struct RewindStats {
   uint32_t gps_vel_rejects = 0;       ///< Velocity Chi² failures (entire packet rejected)
   uint32_t gps_pos_rejects = 0;       ///< Position Chi² failures (position only rejected)
   uint32_t gps_covariance_resets = 0; ///< Covariance inflations due to prolonged rejection
+
+  // Stale-entry protection
+  uint32_t stale_skips = 0;           ///< Stale ring-buffer entries skipped by catchUp
   
   void reset() { *this = RewindStats{}; }
 };
@@ -353,6 +356,7 @@ class EskfYieldable {
   size_t imuBufferCount() const { return imu_count_; }
   size_t baroBufferCount() const { return baro_count_; }
   size_t eventBufferCount() const { return event_count_; }
+  size_t imuReadIdx() const { return imu_read_idx_; }
   
   /// Check if filter is in hibernation (pre-liftoff) mode.
   /// When hibernating, the ESKF is not running - only buffers are filling.

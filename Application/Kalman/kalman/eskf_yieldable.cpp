@@ -749,7 +749,37 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
         earliest != kalman_timestamp_us_) {
       break;
     }
-    
+
+    // ── Guard: skip stale entries from ring-buffer wrap-around ──
+    // When imu_read_idx_ hits 0 and wraps back through the circular buffer,
+    // old entries with timestamps well behind kalman_timestamp_us_ become
+    // visible.  Re-processing them would double-integrate IMU data, causing
+    // catastrophic attitude / velocity divergence.
+    // Threshold: 1 ms — comfortably above any normal jitter but far below
+    // the ~500 ms span of the full ring buffer.
+    constexpr uint64_t kStaleThresholdUs = 1000;
+    if (earliest + kStaleThresholdUs < kalman_timestamp_us_) {
+      // Advance the correct read index past this stale entry.
+      if (earliest == next_imu_ts)       { imu_read_idx_++; }
+      else if (earliest == next_baro_ts) { baro_read_idx_++; }
+      else                               { event_read_idx_++; }
+      stats_.stale_skips++;
+#if KALMAN_DEBUG_PRINT
+      static uint32_t stale_log_counter = 0;
+      if (++stale_log_counter >= 3000) {
+        stale_log_counter = 0;
+        printf("[CATCHUP] STALE-SKIP: ts=%u:%u  kalTs=%u:%u  "
+               "staleSkips=%u  imuRdIdx=%u\r\n",
+               (unsigned)(earliest >> 32), (unsigned)earliest,
+               (unsigned)(kalman_timestamp_us_ >> 32),
+               (unsigned)kalman_timestamp_us_,
+               (unsigned)stats_.stale_skips,
+               (unsigned)imu_read_idx_);
+      }
+#endif
+      continue;   // re-peek without counting as a processed event
+    }
+
     // Process the earliest event (handle liftoff snap before IMU at same time)
     const bool imu_tied = (earliest == next_imu_ts);
     const bool event_tied = (earliest == next_event_ts);

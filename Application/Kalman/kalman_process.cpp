@@ -659,9 +659,6 @@ int kalman_loop() {
 
 #if KALMAN_DEBUG_PRINT
 	uint64_t t_imu_drain_start = kalman_loop_start_us;
-	// Reset per-sensor alive bitmasks for this loop iteration
-	kalman.debug_raw_sensor_.baro_per_sensor_alive = 0;
-	kalman.debug_raw_sensor_.imu_per_sensor_alive = 0;
 #endif
 
 	const uint32_t current_state = kalman_current_state();
