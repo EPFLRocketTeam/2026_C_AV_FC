@@ -287,22 +287,43 @@ void InvIMU_STM32::configure(AccelRange ar, GyroRange gr, ODR odr) {
     auto tdk_gyro_fsr  = toGyroFsr(gr);
     auto tdk_accel_odr = toAccelOdr(odr);
     auto tdk_gyro_odr  = toGyroOdr(odr);
+
+    // Direct-register settings (don't need MCLK).
     inv_imu_set_accel_fsr(&_dev, tdk_accel_fsr);
     inv_imu_set_gyro_fsr(&_dev, tdk_gyro_fsr);
     inv_imu_set_accel_frequency(&_dev, tdk_accel_odr);
     inv_imu_set_gyro_frequency(&_dev, tdk_gyro_odr);
+
+    // Bring accel/gyro into LN mode FIRST. This starts MCLK, which is required for
+    // any MREG access. Without MCLK running, the LN_BW/LP_AVG writes below would
+    // silently fail (their target registers IPREG_SYS1/2 live in MREG space at
+    // addresses ≥0xa000), leaving the filter in an invalid state and the FIFO
+    // emitting 0x8000-sentinel frames that parseFrameInto rejects.
+    //
+    // The TDK helpers inv_imu_set_accel_mode / inv_imu_set_gyro_mode each do a
+    // read-modify-write on PWR_MGMT0. Issued back-to-back, the second read
+    // observes accel_mode=OFF (the part hasn't committed the first write yet)
+    // and writes 0 back into the accel field, leaving the part with
+    // PWR_MGMT0=0x0C (accel=OFF, gyro=LN). Write both fields atomically instead:
+    //   bits[1:0] = accel_mode (LN=3), bits[3:2] = gyro_mode (LN=3) -> 0x0F.
+    spi_write(0x10, 0x0F);
+    HAL_Delay(1);  // let MCLK stabilise before any MREG write
+
+    // MREG-backed bandwidth / averaging settings — must come after MCLK is up.
     inv_imu_set_accel_ln_bw(&_dev, toAccelBwDiv(_hw.accel_bw_div));
     inv_imu_set_accel_lp_avg(&_dev, toAccelLpAvg(_hw.accel_lp_avg));
     inv_imu_set_gyro_ln_bw(&_dev, toGyroBwDiv(_hw.gyro_bw_div));
     inv_imu_set_gyro_lp_avg(&_dev, toGyroLpAvg(_hw.gyro_lp_avg));
-    inv_imu_set_accel_mode(&_dev, PWR_MGMT0_ACCEL_MODE_LN);
-    inv_imu_set_gyro_mode(&_dev, PWR_MGMT0_GYRO_MODE_LN);
 
-    // MCLK is now running (LN mode started). Disable the EDMP engine so it stops
-    // writing 0xF0 EDMP-output frames into the FIFO. Without this, the FIFO fills
-    // entirely with 0xF0 frames and no 0x78 hires sensor frames are produced.
-    // EDMP_APEX_EN1 is an MREG register — the write silently fails before MCLK starts.
-    HAL_Delay(1);  // let MCLK stabilise before MREG write
+    // Sanity-check PWR_MGMT0: bits[1:0]=accel_mode, bits[3:2]=gyro_mode, LN=0b11.
+    {
+        uint8_t pwr = 0xFF;
+        spi_read(0x10, &pwr, 1);
+        printf("PWR_MGMT0 readback=0x%02X (expect 0x0F: accel=LN gyro=LN)\r\n", pwr);
+    }
+
+    // Disable the EDMP engine so it stops writing 0xF0 EDMP-output frames into
+    // the FIFO. EDMP_APEX_EN1 is an MREG register and likewise requires MCLK.
     int edmp_rc = inv_imu_edmp_disable(&_dev);
     printf("EDMP disable rc=%d\r\n", edmp_rc);
     // Read back EDMP registers to confirm the disable took effect.

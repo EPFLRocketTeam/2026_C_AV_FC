@@ -49,10 +49,21 @@ int inv_imu_soft_reset(inv_imu_device_t *s)
 	/* Restore INTF_CONFIG1_OVRD register */
 	status |= inv_imu_write_reg(s, INTF_CONFIG1_OVRD, 1, (uint8_t *)&intf_config1_ovrd);
 
-	/* Clear the RESET_DONE interrupt */
-	status |= inv_imu_read_reg(s, INT1_STATUS0, 1, (uint8_t *)&int1_status0);
-	if (int1_status0.int1_status_reset_done != 1)
-		return INV_IMU_ERROR; /* Return an error if RESET_DONE is not set */
+	/* Poll INT1_STATUS0 for RESET_DONE — datasheet says "up to ~1 ms" so the
+	 * fixed 1 ms above is the minimum; the part can miss it at margin. */
+	{
+		int reset_done = 0;
+		for (int i = 0; i < 20; ++i) {
+			status |= inv_imu_read_reg(s, INT1_STATUS0, 1, (uint8_t *)&int1_status0);
+			if (int1_status0.int1_status_reset_done == 1) {
+				reset_done = 1;
+				break;
+			}
+			inv_imu_sleep_us(s, 1000);
+		}
+		if (!reset_done)
+			return INV_IMU_ERROR;
+	}
 
 	return status;
 }

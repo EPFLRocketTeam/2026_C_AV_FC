@@ -39,6 +39,10 @@ ENTRY(Reset_Handler)
  * no bus contention, no cache needed.  Stack-allocated temporaries in
  * propagateCovariance() (FP[16][16], FPFt[16][16], ~4KB) benefit directly. */
 _estack = ORIGIN(DTCMRAM) + LENGTH(DTCMRAM);    /* end of DTCM */
+/* Heap ceiling. Stack lives in DTCM now, so `_estack - _Min_Stack_Size` no
+ * longer describes the top of the heap region in RAM_D1. _sbrk() in sysmem.c
+ * uses this symbol instead to compute the heap's upper bound. */
+_heap_limit = ORIGIN(RAM_D1) + LENGTH(RAM_D1);
 /* Generate a link error if heap and stack don't fit into RAM */
 _Min_Heap_Size = 0x200;      /* required amount of heap  */
 _Min_Stack_Size = 0x400; /* required amount of stack */
