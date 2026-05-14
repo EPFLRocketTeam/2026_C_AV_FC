@@ -234,6 +234,49 @@ extern "C" uint32_t app_baro_sensor_status_flags(uint8_t sensor_index) {
     return g_baro_status_flags[sensor_index];
 }
 
+// ── Standalone raw SPI baro test ──────────────────────────────────────────────
+// Bypasses the Bosch SDK and baro module entirely. Just does a raw SPI chip ID
+// read (reg 0x00) for each of the 4 BMP390 sensors.
+// This tells us if the SPI bus and CS pins work at the lowest possible level.
+static void baro_raw_spi_test() {
+    struct BaroTestCfg {
+        SPI_HandleTypeDef* hspi;
+        GPIO_TypeDef* cs_port;
+        uint16_t cs_pin;
+        const char* name;
+    };
+    BaroTestCfg baros[4] = {
+        {&hspi5, BMP_CS1_GPIO_Port, BMP_CS1_Pin, "BARO1(SPI5)"},
+        {&hspi5, BMP_CS2_GPIO_Port, BMP_CS2_Pin, "BARO2(SPI5)"},
+        {&hspi4, BMP_CS3_GPIO_Port, BMP_CS3_Pin, "BARO3(SPI4)"},
+        {&hspi4, BMP_CS4_GPIO_Port, BMP_CS4_Pin, "BARO4(SPI4)"},
+    };
+
+    printf("[RAW-BARO-TEST] Starting raw SPI chip ID reads...\r\n");
+    for (int i = 0; i < 4; i++) {
+        auto& b = baros[i];
+        // BMP390 SPI read: [reg|0x80] [dummy] [data]
+        // For chip ID (reg 0x00): tx=[0x80, 0x00, 0x00], expect rx=[xx, xx, 0x60]
+        uint8_t tx[3] = {0x80, 0x00, 0x00};
+        uint8_t rx[3] = {0xAA, 0xBB, 0xCC}; // fill with known pattern
+
+        // Ensure CS is HIGH before we start
+        HAL_GPIO_WritePin(b.cs_port, b.cs_pin, GPIO_PIN_SET);
+        HAL_Delay(1);
+
+        HAL_GPIO_WritePin(b.cs_port, b.cs_pin, GPIO_PIN_RESET);
+        HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(b.hspi, tx, rx, 3, 50);
+        HAL_GPIO_WritePin(b.cs_port, b.cs_pin, GPIO_PIN_SET);
+
+        printf("[RAW-BARO-TEST] %s: HAL=%d SPI_state=%u SPI_err=0x%lX rx=[%02X %02X %02X] chip_id=0x%02X %s\r\n",
+               b.name, (int)st,
+               (unsigned)b.hspi->State, (unsigned long)b.hspi->ErrorCode,
+               rx[0], rx[1], rx[2], rx[2],
+               (rx[2] == 0x60) ? "OK" : "MISMATCH!");
+    }
+    printf("[RAW-BARO-TEST] Done.\r\n");
+}
+
 extern "C" void app_super_loop_setup(void) {
     if (g_superloop.setup_done) {
         return;
@@ -248,6 +291,23 @@ extern "C" void app_super_loop_setup(void) {
         return;
     }
     g_imu_module = &g_superloop.imuModule;
+
+    // ── Baro init diagnostics ──────────────────────────────────────────────
+    // Print SPI handle states after IMU init (IMU uses SPI4, baros use SPI4+SPI5)
+    printf("[APP] SPI4 state=%u err=0x%lX  SPI5 state=%u err=0x%lX\r\n",
+           (unsigned)hspi4.State, (unsigned long)hspi4.ErrorCode,
+           (unsigned)hspi5.State, (unsigned long)hspi5.ErrorCode);
+
+    // D-cache clean+invalidate before baro init as a safety measure.
+    // If D-cache holds stale data for the SPI handle structs (AXI SRAM),
+    // this ensures a clean state. Costs ~microseconds, runs once.
+    SCB_CleanInvalidateDCache();
+    __DSB();
+    __ISB();
+    printf("[APP] D-cache clean+invalidate done, starting baro init...\r\n");
+
+    // Raw SPI test: bypasses SDK, directly reads chip IDs from all 4 baros
+    baro_raw_spi_test();
 
     g_superloop.baroModule.setTriggerCallback(kalman_note_baro_trigger);
     if (!g_superloop.baroModule.init()) {

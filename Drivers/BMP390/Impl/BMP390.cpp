@@ -13,6 +13,24 @@ BMP390_SDK::BMP390_SDK(const Config& cfg) : cfg_(cfg) {}
 bool BMP390_SDK::init() {
     bmp3_enable_dwt();
 
+    printf("[BMP390] init: hspi=%p cs_port=%p cs_pin=0x%04X\r\n",
+           (void*)cfg_.hspi, (void*)cfg_.cs_port, cfg_.cs_pin);
+
+    // Check SPI handle state before we do anything
+    if (cfg_.hspi) {
+        printf("[BMP390] SPI handle state=%u err=0x%lX instance=%p\r\n",
+               (unsigned)cfg_.hspi->State,
+               (unsigned long)cfg_.hspi->ErrorCode,
+               (void*)cfg_.hspi->Instance);
+    } else {
+        printf("[BMP390] ERROR: hspi is NULL!\r\n");
+        snprintf(lastErr_, sizeof(lastErr_), "hspi=NULL");
+        return false;
+    }
+
+    // Reset SPI debug print counter for this sensor
+    bmp3_spi_debug_reset();
+
     // Wire up the SDK device struct
     spiCtx_       = { cfg_.hspi, cfg_.cs_port, cfg_.cs_pin };
     dev_.intf     = BMP3_SPI_INTF;
@@ -21,14 +39,32 @@ bool BMP390_SDK::init() {
     dev_.write    = bmp3_spi_write;
     dev_.delay_us = bmp3_delay_us_hal;
 
+    // === RAW SPI TEST: bypass SDK, read chip ID register directly ===
+    {
+        uint8_t raw_tx[3] = {0x00 | 0x80, 0x00, 0x00}; // Read reg 0x00 (CHIP_ID), +1 dummy, +1 data
+        uint8_t raw_rx[3] = {0xFF, 0xFF, 0xFF};
+        HAL_GPIO_WritePin(cfg_.cs_port, cfg_.cs_pin, GPIO_PIN_RESET);
+        HAL_StatusTypeDef raw_st = HAL_SPI_TransmitReceive(cfg_.hspi, raw_tx, raw_rx, 3, 50);
+        HAL_GPIO_WritePin(cfg_.cs_port, cfg_.cs_pin, GPIO_PIN_SET);
+        printf("[BMP390] RAW chip_id test: HAL=%d rx=[%02X %02X %02X] (expect xx xx 60)\r\n",
+               (int)raw_st, raw_rx[0], raw_rx[1], raw_rx[2]);
+    }
+
     // bmp3_init: validates chip-id, soft-resets, reads NVM calibration
+    printf("[BMP390] calling bmp3_init...\r\n");
     int8_t rs = bmp3_init(&dev_);
+    printf("[BMP390] bmp3_init returned %d (0=OK, -2=COMM_FAIL, -3=DEV_NOT_FOUND)\r\n", (int)rs);
+
     if (rs != BMP3_OK) {
         uint8_t raw_id = 0;
         bmp3_get_regs(BMP3_REG_CHIP_ID, &raw_id, 1, &dev_);
+        printf("[BMP390] INIT FAILED: bmp3_init=%d chip_id=0x%02X (expected 0x60)\r\n",
+               (int)rs, raw_id);
         snprintf(lastErr_, sizeof(lastErr_), "bmp3_init=%d chip_id=0x%02X", (int)rs, raw_id);
         return false;
     }
+
+    printf("[BMP390] bmp3_init OK, chip_id=0x%02X, configuring...\r\n", dev_.chip_id);
 
     // Apply defaults from config
     configure(static_cast<OsrPressure>(cfg_.osr_p),
@@ -36,6 +72,7 @@ bool BMP390_SDK::init() {
               static_cast<IIRFilter>(cfg_.iir));
 
     healthy_ = true;
+    printf("[BMP390] init complete, healthy=true\r\n");
     return true;
 }
 

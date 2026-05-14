@@ -1,5 +1,6 @@
 #include "BMP390_transport_stm32.h"
 #include <cstring>
+#include <cstdio>
 
 // ── SPI transport ─────────────────────────────────────────────────────────────
 // BMP390 SPI read protocol: [addr|0x80] [dummy rx] [data...].
@@ -8,8 +9,20 @@
 
 static constexpr size_t kBufMax = 32; // calibration (21 B) + 2 overhead + margin
 
+// Debug counter: prints SPI details for the first N calls per sensor init
+static volatile uint32_t g_bmp3_spi_debug_calls = 0;
+static constexpr uint32_t kBmp3SpiDebugMaxCalls = 20; // print first 20 SPI transactions
+
+void bmp3_spi_debug_reset() {
+    g_bmp3_spi_debug_calls = 0;
+}
+
 BMP3_INTF_RET_TYPE bmp3_spi_read(uint8_t reg, uint8_t* dst, uint32_t len, void* ctx) {
-    if (!ctx || !dst || len == 0 || (len + 1) > kBufMax) return -1;
+    if (!ctx || !dst || len == 0 || (len + 1) > kBufMax) {
+        printf("[BMP3-SPI] READ guard fail: ctx=%p dst=%p len=%lu\r\n",
+               ctx, dst, (unsigned long)len);
+        return -1;
+    }
     auto* c = static_cast<Bmp3SpiCtx*>(ctx);
 
     uint8_t tx[kBufMax] = {};
@@ -21,13 +34,30 @@ BMP3_INTF_RET_TYPE bmp3_spi_read(uint8_t reg, uint8_t* dst, uint32_t len, void* 
                                                     static_cast<uint16_t>(len + 1), 10);
     HAL_GPIO_WritePin(c->cs_port, c->cs_pin, GPIO_PIN_SET);
 
+    if (g_bmp3_spi_debug_calls < kBmp3SpiDebugMaxCalls) {
+        g_bmp3_spi_debug_calls++;
+        printf("[BMP3-SPI] RD reg=0x%02X len=%lu HAL=%d SPI_State=%u SPI_Err=0x%lX",
+               reg, (unsigned long)len, (int)st,
+               (unsigned)c->hspi->State,
+               (unsigned long)c->hspi->ErrorCode);
+        if (st == HAL_OK && len <= 4) {
+            printf(" rx[1..%lu]=", (unsigned long)len);
+            for (uint32_t i = 0; i < len; i++) printf("%02X ", rx[i+1]);
+        }
+        printf("\r\n");
+    }
+
     if (st != HAL_OK) return -1;
     memcpy(dst, rx + 1, len); // skip addr-echo; SDK strips dummy from dst
     return BMP3_INTF_RET_SUCCESS;
 }
 
 BMP3_INTF_RET_TYPE bmp3_spi_write(uint8_t reg, const uint8_t* src, uint32_t len, void* ctx) {
-    if (!ctx || !src || len == 0 || (len + 1) > kBufMax) return -1;
+    if (!ctx || !src || len == 0 || (len + 1) > kBufMax) {
+        printf("[BMP3-SPI] WRITE guard fail: ctx=%p src=%p len=%lu\r\n",
+               ctx, src, (unsigned long)len);
+        return -1;
+    }
     auto* c = static_cast<Bmp3SpiCtx*>(ctx);
 
     uint8_t tx[kBufMax];
@@ -38,6 +68,12 @@ BMP3_INTF_RET_TYPE bmp3_spi_write(uint8_t reg, const uint8_t* src, uint32_t len,
     HAL_StatusTypeDef st = HAL_SPI_Transmit(c->hspi, tx,
                                              static_cast<uint16_t>(len + 1), 10);
     HAL_GPIO_WritePin(c->cs_port, c->cs_pin, GPIO_PIN_SET);
+
+    if (g_bmp3_spi_debug_calls < kBmp3SpiDebugMaxCalls) {
+        g_bmp3_spi_debug_calls++;
+        printf("[BMP3-SPI] WR reg=0x%02X len=%lu HAL=%d SPI_State=%u\r\n",
+               reg, (unsigned long)len, (int)st, (unsigned)c->hspi->State);
+    }
 
     return (st == HAL_OK) ? BMP3_INTF_RET_SUCCESS : -1;
 }

@@ -23,3 +23,7 @@ void               bmp3_delay_us_hal(uint32_t us, void* ctx);
 
 void     bmp3_enable_dwt();
 uint64_t bmp3_now_us();
+
+// ── Debug helpers ──────────────────────────────────────────────────────────────
+// Reset the SPI debug counter so the next sensor init prints its transactions.
+void     bmp3_spi_debug_reset();

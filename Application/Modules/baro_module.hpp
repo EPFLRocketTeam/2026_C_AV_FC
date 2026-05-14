@@ -43,17 +43,23 @@ public:
 
   bool init() override {
     bool any_initialized = false;
+    printf("[BARO-MOD] init: %u sensors\r\n", (unsigned)kNumSensors);
     for (size_t i = 0; i < kNumSensors; ++i) {
       if (drivers_[i] == nullptr) {
+        printf("[BARO-MOD] sensor %u: driver is NULL, skip\r\n", (unsigned)i);
         continue;
       }
+      printf("[BARO-MOD] sensor %u: calling init()...\r\n", (unsigned)i);
       if (!drivers_[i]->init()) {
-        printf("Error starting baro %u\r\n", (unsigned)i);
+        printf("[BARO-MOD] sensor %u: init() FAILED, status=0x%lX\r\n",
+               (unsigned)i, (unsigned long)drivers_[i]->getStatus());
         sensor_state_[i].status_flags |= Drivers::BMP390::BMP390_STATUS_SPI_ERROR;
         continue;
       }
+      printf("[BARO-MOD] sensor %u: init() OK, calling ping()...\r\n", (unsigned)i);
       if (!drivers_[i]->ping()) {
-        printf("Error pinging baro %u\r\n", (unsigned)i);
+        printf("[BARO-MOD] sensor %u: ping() FAILED, status=0x%lX\r\n",
+               (unsigned)i, (unsigned long)drivers_[i]->getStatus());
         sensor_state_[i].status_flags |=
             Drivers::BMP390::BMP390_STATUS_WHOAMI_MISMATCH;
         continue;
@@ -64,7 +70,9 @@ public:
       drivers_[i]->configure(OsrPressure::x4, OsrTemp::x1, IIRFilter::OFF);
       sensor_state_[i].initialized = true;
       any_initialized = true;
+      printf("[BARO-MOD] sensor %u: READY\r\n", (unsigned)i);
     }
+    printf("[BARO-MOD] init done: any_initialized=%d\r\n", any_initialized);
     return any_initialized;
   }
 
