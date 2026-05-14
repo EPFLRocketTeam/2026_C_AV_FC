@@ -1,0 +1,15 @@
+REMOTE    = mkezzedd@10.20.45.239
+FIRMWARE  = 2026_C_AV_FC.bin
+SERIAL    = /dev/serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_377733713333-if00
+BAUD      = 115200
+
+flash-remote:
+	scp $(FIRMWARE) $(REMOTE):/tmp/firmware.bin
+	ssh $(REMOTE) "~/flash.sh /tmp/firmware.bin"
+
+serial:
+	ssh $(REMOTE) "stty -F $(SERIAL) $(BAUD) raw && cat $(SERIAL)"
+
+deploy:
+	scp $(FIRMWARE) $(REMOTE):/tmp/firmware.bin
+	ssh $(REMOTE) "~/flash.sh /tmp/firmware.bin && sleep 2 && stty -F $(SERIAL) $(BAUD) raw && cat $(SERIAL)"
