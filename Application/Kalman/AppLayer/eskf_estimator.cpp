@@ -191,6 +191,8 @@ void EskfEstimator::reset() {
   descent_last_gnss_fuse_us_ = 0;
   latest_descent_gnss_ = LatestGnssForDescent{};
   latest_descent_baro_ = LatestBaroForDescent{};
+  preflight_baro_pressure_pa_ = 0;
+  preflight_baro_valid_ = false;
   descent_filter_.configure(DescentNavFilter::Config{});
   descent_filter_.reset();
   for (size_t i = 0; i < kMaxImuSources; ++i) {
@@ -766,11 +768,36 @@ void EskfEstimator::onLiftoff(uint32_t liftoff_ms) {
   init_data.heading_initialized = cp->heading_initialized;
   init_data.liftoff_us = liftoff_us_;
 
-  // Pass ground reference for b_baro initialization
-  init_data.ground_altitude_m =
-      ground_ref.valid ? eskf::pressureToAltitudeIsa(ground_ref.pressure_pa)
-                       : 0;
-  init_data.ground_reference_valid = ground_ref.valid;
+  // Pass ground reference for b_baro initialization.
+  // Prefer the latest pre-flight virtual baro pressure over the (potentially
+  // stale) oldest ground-reference window.  BMP390 sensors can drift hundreds
+  // of Pascals during PCB warm-up, so using the freshest pressure eliminates
+  // a ~30 m b_baro mismatch that otherwise triggers immediate NIS divergence.
+  const eskf_scalar old_ground_alt =
+      ground_ref.valid ? eskf::pressureToAltitudeIsa(ground_ref.pressure_pa) : 0;
+  if (preflight_baro_valid_) {
+    init_data.ground_altitude_m =
+        eskf::pressureToAltitudeIsa(preflight_baro_pressure_pa_);
+    // Also update ground_isa_altitude_ for consistent AGL display
+    ground_isa_altitude_ = static_cast<float>(init_data.ground_altitude_m);
+  } else {
+    init_data.ground_altitude_m = old_ground_alt;
+  }
+  init_data.ground_reference_valid = ground_ref.valid || preflight_baro_valid_;
+
+  if (log_) {
+    log_->printf("[ESKF] b_baro init: fresh=%d  freshP=%.0fPa(%.1fm)  "
+                 "oldP=%.0fPa(%.1fm)  delta=%.1fm\r\n",
+                 (int)preflight_baro_valid_,
+                 (double)preflight_baro_pressure_pa_,
+                 (double)(preflight_baro_valid_
+                              ? eskf::pressureToAltitudeIsa(
+                                    preflight_baro_pressure_pa_)
+                              : 0),
+                 (double)ground_ref.pressure_pa,
+                 (double)old_ground_alt,
+                 (double)(init_data.ground_altitude_m - old_ground_alt));
+  }
 
   // Persist a full handoff snapshot for app-layer SD logging.
   last_liftoff_snapshot_ = LiftoffSnapshot{};
@@ -1481,6 +1508,12 @@ void EskfEstimator::processBaroObservation(uint8_t source,
       fused_valid_flags[0] = true;
       rail_shadow_.updateBaro(&bout.pressure_pa, &bout.temperature_k,
                               fused_valid_flags, 1, ts);
+      // Track the latest pre-flight virtual baro pressure so we can use a
+      // fresh value for b_baro initialization at liftoff, avoiding the
+      // ~30 m error caused by sensor warm-up drift since the oldest
+      // ground-reference window was captured.
+      preflight_baro_pressure_pa_ = bout.pressure_pa;
+      preflight_baro_valid_ = true;
     }
 
     if (bout.valid_count > 0) {
@@ -1524,15 +1557,24 @@ void EskfEstimator::processBaroObservation(uint8_t source,
             const auto &st = filter_.core().state();
             const eskf_scalar eskf_alt = -st.p[2] + st.b_baro;
             const eskf_scalar inn = static_cast<eskf_scalar>(altitude_isa_m) - eskf_alt;
-            // Only log when innovation is large (>1m) to avoid flooding
-            if (std::fabs(static_cast<double>(inn)) > 1.0) {
+            const bool soft_div = filter_.core().hasDiverged();
+            // Log when innovation is large (>1m), or always on first 20,
+            // or when soft-diverged to track recovery.
+            static uint16_t baro_fuse_log_count = 0;
+            if (std::fabs(static_cast<double>(inn)) > 1.0 ||
+                baro_fuse_log_count < 20 || soft_div) {
               printf("[KAL] baroFuse: meas=%+.2fm  eskfAlt=%+.2fm  "
-                     "inn=%+.2fm  pD=%+.2f  bBaro=%+.2f\r\n",
+                     "inn=%+.2fm  pD=%+.2f  bBaro=%+.2f  NIS=%.1f  "
+                     "P_bb=%.4f  div=%d\r\n",
                      static_cast<double>(altitude_isa_m),
                      static_cast<double>(eskf_alt),
                      static_cast<double>(inn),
                      static_cast<double>(st.p[2]),
-                     static_cast<double>(st.b_baro));
+                     static_cast<double>(st.b_baro),
+                     static_cast<double>(filter_.core().lastNIS()),
+                     static_cast<double>(filter_.core().covariance().P[15][15]),
+                     (int)soft_div);
+              baro_fuse_log_count++;
             }
           }
 #endif

@@ -134,6 +134,7 @@ public:
   uint8_t eskfConsecutiveHighNisCount() const {
     return filter_.core().consecutiveHighNisCount();
   }
+  bool eskfHasDiverged() const { return filter_.core().hasDiverged(); }
   uint32_t predictDtClampedCount() const {
     return filter_.core().predictDtClampedCount();
   }
@@ -244,6 +245,12 @@ private:
   // Ground reference for barometer (set at liftoff from RailShadow)
   eskf::GroundReference ground_reference_;
   float ground_isa_altitude_ = 0; ///< ISA altitude of launch pad (m MSL), for FlightShadow AGL
+
+  // Latest pre-flight virtual baro pressure for fresh b_baro initialization.
+  // Updated every baro cycle during INIT; used at liftoff to avoid stale
+  // ground-reference drift causing large initial baro innovation.
+  float preflight_baro_pressure_pa_ = 0;
+  bool  preflight_baro_valid_ = false;
 
   bool was_aero_blind_ = false;
   bool baro_reacquire_needed_ = false;

@@ -373,8 +373,10 @@ class EskfCore {
   eskf_scalar last_nis_ = 0;
   eskf_scalar last_innovation_ = 0;           // Last scalar innovation (for debugging)
   uint8_t consecutive_high_nis_count_ = 0;    // Count of consecutive high NIS values
+  uint8_t consecutive_low_nis_count_ = 0;     // Count of consecutive low NIS values (for recovery)
   uint32_t predict_dt_clamped_count_ = 0;
   bool diverged_ = false;
+  bool nis_soft_diverged_ = false;            // NIS-based soft divergence (baro continues with inflated R)
   FilterMode mode_ = FilterMode::Settling;
 
   // Runtime Configuration

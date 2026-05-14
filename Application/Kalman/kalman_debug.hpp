@@ -181,7 +181,7 @@ inline void printDebugLine(
     printf("[KAL] hlth=0x%02X  "
            "loop=%luus(max %lu)  "
            "mainLoop=%luus(max %lu)  "
-           "NIS=%.1f  hiNIS=%u  "
+           "NIS=%.1f  hiNIS=%u  div=%d  "
            "yields=%lu\r\n",
            hb,
            static_cast<unsigned long>(health.last_kalman_loop_us),
@@ -190,6 +190,7 @@ inline void printDebugLine(
            static_cast<unsigned long>(health.max_main_loop_iteration_us),
            static_cast<double>(estimator.eskfLastNis()),
            static_cast<unsigned>(estimator.eskfConsecutiveHighNisCount()),
+           static_cast<int>(estimator.eskfHasDiverged()),
            static_cast<unsigned long>(stats.catchup_budget_yields));
 
     // Line 3: Buffer / overflow

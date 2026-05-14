@@ -24,8 +24,10 @@ void EskfCore::reset() {
   last_nis_ = 0;
   last_innovation_ = 0;
   consecutive_high_nis_count_ = 0;
+  consecutive_low_nis_count_ = 0;
   predict_dt_clamped_count_ = 0;
   diverged_ = false;
+  nis_soft_diverged_ = false;
   mode_ = FilterMode::Settling;
 
   // Reset integration state
@@ -64,8 +66,10 @@ void EskfCore::initialize(const State &initial_state,
   last_nis_ = 0;
   last_innovation_ = 0;
   consecutive_high_nis_count_ = 0;
+  consecutive_low_nis_count_ = 0;
   predict_dt_clamped_count_ = 0;
   diverged_ = false;
+  nis_soft_diverged_ = false;
   mode_ = FilterMode::Settling;
 
   // Reset integration state
@@ -845,8 +849,15 @@ void EskfCore::correctGpsVelocityWithAveragedLeverArm(
 
 void EskfCore::correctBaroAltitude(eskf_scalar alt_m, eskf_scalar R) {
   flushDeferredCovariancePropagation();
-  if (diverged_)
-    return;
+  if (diverged_ && !nis_soft_diverged_)
+    return;  // Hard divergence (NaN, negative P) — truly broken, stop.
+
+  // Soft NIS divergence: keep fusing but with heavily inflated noise so the
+  // corrections are very gentle.  This lets b_baro slowly adapt through the
+  // process noise Q, eventually reducing NIS and enabling recovery.
+  if (nis_soft_diverged_) {
+    R *= 100.0;
+  }
 
   // Barometer measures altitude (positive up).
   // In NED, Down is positive, so altitude = -p[2] + b_baro
@@ -2083,8 +2094,12 @@ void EskfCore::checkNumericalHealth() {
   // Note: Occasional high NIS is expected during events like baro re-entry
   // after transonic flight, so we only flag divergence after sustained high
   // values.
+  // NIS-based divergence is "soft": baro corrections continue with inflated R
+  // so that b_baro can slowly adapt through process noise.  Recovery clears
+  // the flag after sustained low NIS.
   if (last_nis_ > cfg_.nis_divergence_threshold) {
     consecutive_high_nis_count_++;
+    consecutive_low_nis_count_ = 0;
     if (consecutive_high_nis_count_ == 1) {
       // Log first warning
       getEskfLogger().logEvent(EskfEventType::NisDivergenceWarning,
@@ -2092,7 +2107,10 @@ void EskfCore::checkNumericalHealth() {
                                static_cast<float>(last_nis_));
     }
     if (consecutive_high_nis_count_ >= cfg_.nis_max_consecutive_high) {
-      if (!diverged_) {
+      if (!nis_soft_diverged_) {
+        nis_soft_diverged_ = true;
+        // Set diverged_ for status reporting, but correctBaroAltitude
+        // checks nis_soft_diverged_ to allow continued soft corrections.
         diverged_ = true;
         mode_ = FilterMode::Diverged;
         getEskfLogger().logEvent(EskfEventType::FilterDiverged,
@@ -2101,6 +2119,19 @@ void EskfCore::checkNumericalHealth() {
     }
   } else {
     consecutive_high_nis_count_ = 0; // Reset on normal NIS
+    // Recovery path: if NIS returns to normal after soft divergence,
+    // clear the diverged state so normal baro corrections resume.
+    if (nis_soft_diverged_) {
+      consecutive_low_nis_count_++;
+      if (consecutive_low_nis_count_ >= cfg_.nis_max_consecutive_high) {
+        nis_soft_diverged_ = false;
+        diverged_ = false;
+        mode_ = FilterMode::Flight;
+        consecutive_low_nis_count_ = 0;
+        getEskfLogger().logEvent(EskfEventType::NisDivergenceWarning,
+                                 state_.timestamp_us, -1.0f); // Negative = recovery
+      }
+    }
   }
 }
 

@@ -1450,7 +1450,8 @@ void EskfYieldable::processNextEvent() {
       p0.tilt = 0.01;      // ~0.5 deg - well converged from Mahony
       p0.accel_bias = 0.0; // Start from injected turn-on estimate; keep tight prior
       p0.gyro_bias = 0.001; // 0.001 rad/s - well converged from LPF
-      p0.baro_bias = 0.1;  // 0.1m - will be corrected by baro
+      p0.baro_bias = 5.0;  // 5 m — allows filter to quickly absorb residual
+                            // b_baro mismatch from sensor warm-up drift
       
       // Use heading variance from RailShadow (or default if not initialized)
       p0.heading = entry.data.liftoff.heading_initialized 
