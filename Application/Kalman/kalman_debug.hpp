@@ -111,6 +111,13 @@ struct RawSensorSnapshot {
     float gx, gy, gz;  // Last raw gyro sample (body, rad/s)
     float baro_pa;     // Last baro pressure seen (Pa), 0 if none
     float baro_tempC;  // Last baro temperature (°C), 0 if none
+    // Per-sensor raw baro values (up to 4)
+    float baro_per_sensor_pa[4];     // Raw pressure per baro source (Pa)
+    float baro_per_sensor_tempC[4];  // Raw temperature per baro source (°C)
+    uint8_t baro_per_sensor_alive;   // Bitmask of sensors that produced data
+    // Per-IMU raw accel magnitude
+    float imu_per_sensor_amag[3];    // |a| per IMU source (m/s²)
+    uint8_t imu_per_sensor_alive;    // Bitmask of IMUs that produced data
     uint32_t frame_h78;  // Count of 0x78 frames (normal hires)
     uint32_t frame_hF0;  // Count of 0xF0 frames (ext_header)
     uint32_t frame_other; // Count of other/unknown frames
@@ -236,6 +243,31 @@ inline void printDebugLine(
            amag,
            static_cast<double>(raw.baro_pa),
            static_cast<double>(raw.baro_tempC));
+
+    // Line 5b: Per-sensor raw baro values
+    printf("[KAL] baroRaw:");
+    for (int i = 0; i < 4; ++i) {
+      if (raw.baro_per_sensor_alive & (1u << i)) {
+        printf(" [%d]=%.0fPa/%.1fC", i,
+               static_cast<double>(raw.baro_per_sensor_pa[i]),
+               static_cast<double>(raw.baro_per_sensor_tempC[i]));
+      } else {
+        printf(" [%d]=--", i);
+      }
+    }
+    printf("  alive=0x%X\r\n", raw.baro_per_sensor_alive);
+
+    // Line 5c: Per-IMU raw accel magnitudes
+    printf("[KAL] imuRaw:");
+    for (int i = 0; i < 3; ++i) {
+      if (raw.imu_per_sensor_alive & (1u << i)) {
+        printf(" [%d]|a|=%.2f", i,
+               static_cast<double>(raw.imu_per_sensor_amag[i]));
+      } else {
+        printf(" [%d]=--", i);
+      }
+    }
+    printf("  alive=0x%X\r\n", raw.imu_per_sensor_alive);
 
     // Line 6: Gyro bias from rail shadow (should converge to ~0 when still)
     printf("[KAL] gyroBias: %+.5f %+.5f %+.5f (rad/s)\r\n",

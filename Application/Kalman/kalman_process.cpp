@@ -440,6 +440,15 @@ struct KalmanRuntime {
 			debug_raw_sensor_.gx = last_raw.gyro_x;
 			debug_raw_sensor_.gy = last_raw.gyro_y;
 			debug_raw_sensor_.gz = last_raw.gyro_z;
+			// Per-IMU accel magnitude
+			if (source_index < 3) {
+				const float amag = std::sqrt(
+					last_raw.accel_x * last_raw.accel_x +
+					last_raw.accel_y * last_raw.accel_y +
+					last_raw.accel_z * last_raw.accel_z);
+				debug_raw_sensor_.imu_per_sensor_amag[source_index] = amag;
+				debug_raw_sensor_.imu_per_sensor_alive |= (1u << source_index);
+			}
 #endif
 			offset += slice_count;
 		}
@@ -601,6 +610,12 @@ struct KalmanRuntime {
 			// Capture last baro sample for debug output
 			debug_raw_sensor_.baro_pa = sample.pressurePa;
 			debug_raw_sensor_.baro_tempC = sample.temperatureC;
+			// Per-sensor tracking
+			if (best_source < 4) {
+				debug_raw_sensor_.baro_per_sensor_pa[best_source] = sample.pressurePa;
+				debug_raw_sensor_.baro_per_sensor_tempC[best_source] = sample.temperatureC;
+				debug_raw_sensor_.baro_per_sensor_alive |= (1u << best_source);
+			}
 #endif
 		}
 
@@ -644,6 +659,9 @@ int kalman_loop() {
 
 #if KALMAN_DEBUG_PRINT
 	uint64_t t_imu_drain_start = kalman_loop_start_us;
+	// Reset per-sensor alive bitmasks for this loop iteration
+	kalman.debug_raw_sensor_.baro_per_sensor_alive = 0;
+	kalman.debug_raw_sensor_.imu_per_sensor_alive = 0;
 #endif
 
 	const uint32_t current_state = kalman_current_state();
