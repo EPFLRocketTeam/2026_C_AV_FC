@@ -177,7 +177,7 @@ struct KalmanRuntime {
 #endif
 
 #if KALMAN_DEBUG_FORCE_FLIGHT
-	uint32_t force_flight_tick_counter_ = 0;
+	uint32_t force_flight_start_ms_ = 0;
 	bool force_flight_done_ = false;
 #endif
 
@@ -212,11 +212,11 @@ struct KalmanRuntime {
 		       ESKF_BARO_ODR_HZ);
 		printf("[KAL-CFG] activeBaroSources=%lu  "
 		       "FORCE_FLIGHT=%d  PRINT_DECIM=%d  "
-		       "FORCE_FLIGHT_DELAY=%d\r\n",
+		       "FORCE_FLIGHT_DELAY_MS=%u\r\n",
 		       static_cast<unsigned long>(kActiveBaroSources),
 		       KALMAN_DEBUG_FORCE_FLIGHT,
 		       KALMAN_DEBUG_PRINT_DECIMATION,
-		       KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS);
+		       (unsigned)KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS);
 #ifdef COMPILE_OPT_LEVEL
 		printf("[KAL-CFG] Optimization: -O%d", COMPILE_OPT_LEVEL);
 #elif defined(__OPTIMIZE__)
@@ -807,9 +807,18 @@ int kalman_loop() {
 	// -----------------------------------------------------------------
 #if KALMAN_DEBUG_FORCE_FLIGHT
 	if (!kalman.force_flight_done_) {
-		++kalman.force_flight_tick_counter_;
-		if (kalman.force_flight_tick_counter_ == KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS) {
-			printf("[KAL-DBG] Force-flight: injecting BURN state + liftoff\r\n");
+		// Use wall-clock milliseconds (HAL_GetTick) instead of loop-iteration
+		// count.  kalman_loop() runs at the super-loop rate (~18 kHz), so a
+		// tick-based delay of 10 000 would be only ~556 ms — too short for
+		// the 1-second ground-reference window to complete.
+		const uint32_t now_ms = HAL_GetTick();
+		if (kalman.force_flight_start_ms_ == 0) {
+			kalman.force_flight_start_ms_ = now_ms;
+		}
+		if ((now_ms - kalman.force_flight_start_ms_) >= KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS) {
+			printf("[KAL-DBG] Force-flight: injecting BURN state + liftoff  "
+			       "(waited %lu ms)\r\n",
+			       (unsigned long)(now_ms - kalman.force_flight_start_ms_));
 			kalman_on_state_change(
 				static_cast<uint32_t>(flight_computer::State::BURN));
 			kalman_on_liftoff(HAL_GetTick());

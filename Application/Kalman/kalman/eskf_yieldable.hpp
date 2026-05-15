@@ -351,6 +351,7 @@ class EskfYieldable {
   /// Get statistics from last catchUp operation.
   uint32_t lastCatchUpDurationUs() const { return last_catchup_duration_us_; }
   uint32_t lastEventsProcessed() const { return last_events_processed_; }
+  uint64_t totalEventsProcessed() const { return total_events_processed_; }
 
   /// Get current buffer depths (for debugging/monitoring).
   size_t imuBufferCount() const {
@@ -426,6 +427,7 @@ class EskfYieldable {
   // --- Statistics ---
   uint32_t last_catchup_duration_us_ = 0;
   uint32_t last_events_processed_ = 0;
+  uint64_t total_events_processed_ = 0;
   RewindStats stats_;  ///< Monitoring statistics (I2, I3)
   
   // --- Pending Baro Trigger (for simpler triggerBaro/completeBaro API) ---

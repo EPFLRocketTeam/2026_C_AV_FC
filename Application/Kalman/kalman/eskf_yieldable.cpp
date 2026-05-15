@@ -120,6 +120,7 @@ void EskfYieldable::initialize(const State& initial_state,
   
   last_catchup_duration_us_ = 0;
   last_events_processed_ = 0;
+  total_events_processed_ = 0;
   
   // Don't reset stats_ here - caller can use resetStats() if desired
 }
@@ -809,6 +810,7 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
     if (nowMicros() - start_us >= budget_us) {
       last_catchup_duration_us_ = nowMicros() - start_us;
       last_events_processed_ = events_processed;
+      total_events_processed_ += events_processed;
       stats_.catchup_budget_yields++;
       return false;  // Yield
     }
@@ -816,6 +818,7 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
   
   last_catchup_duration_us_ = nowMicros() - start_us;
   last_events_processed_ = events_processed;
+  total_events_processed_ += events_processed;
 
   if (started_in_rewind) {
     RewindInfo rewind_info{};

@@ -33,10 +33,13 @@
 #define KALMAN_DEBUG_PRINT_DECIMATION 1000
 #endif
 
-/// Delay (super-loop ticks) before force-flight auto-transitions.
-/// Gives the Rail Shadow time to converge on gravity before seeding ESKF.
-#ifndef KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS
-#define KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS 10000
+/// Delay (milliseconds, wall-clock via HAL_GetTick) before force-flight
+/// auto-transitions.  Gives the Rail Shadow time to converge on gravity and
+/// accumulate at least one 1-second ground-reference window before seeding
+/// the ESKF.  Previous tick-based delay (10 000 super-loop iterations) was
+/// only ~556 ms at the actual 18 kHz loop rate — too short.
+#ifndef KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS
+#define KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS 10000u   // 10 seconds
 #endif
 
 #if KALMAN_DEBUG_PRINT
@@ -140,10 +143,14 @@ inline void printDebugLine(
     RawSensorSnapshot& raw)
 {
     static uint32_t decimation_counter = 0;
+    static uint32_t cumulative_drained = 0;
+    cumulative_drained += imu_drained;
     if (++decimation_counter < KALMAN_DEBUG_PRINT_DECIMATION) {
         return;
     }
     decimation_counter = 0;
+    const uint32_t drained_this_period = cumulative_drained;
+    cumulative_drained = 0;
 
     // ── Rail Shadow attitude (always running pre-flight) ─────────────
     const auto& rail = estimator.railShadow();
@@ -216,7 +223,7 @@ inline void printDebugLine(
            static_cast<unsigned long>(estimator.filter().baroBufferCount()),
            static_cast<unsigned long>(estimator.filter().eventBufferCount()),
            static_cast<unsigned long>(stats.rewind_count),
-           static_cast<unsigned long>(imu_drained));
+           static_cast<unsigned long>(drained_this_period));
 
     // Line 4: Ring HWMs
     printf("[KAL] ring_hwm=[%lu,%lu,%lu]  imuPending=%lu  "
@@ -288,10 +295,11 @@ inline void printDebugLine(
 
     // Line 8: CatchUp budget details
     printf("[KAL] catchUp: budget=%luus  last=%luus  events=%lu  "
-           "dtClamp=%lu\r\n",
+           "totalEv=%llu  dtClamp=%lu\r\n",
            static_cast<unsigned long>(estimator.catchupBudgetUs()),
            static_cast<unsigned long>(estimator.lastCatchupDurationUs()),
            static_cast<unsigned long>(estimator.lastCatchupEventsProcessed()),
+           static_cast<unsigned long long>(estimator.totalCatchupEventsProcessed()),
            static_cast<unsigned long>(estimator.predictDtClampedCount()));
 
     // Line 9: Timing breakdown (where time is spent in kalman_loop)

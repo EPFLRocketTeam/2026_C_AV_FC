@@ -128,6 +128,10 @@ public:
   uint32_t lastCatchupEventsProcessed() const {
     return filter_.lastEventsProcessed();
   }
+  /// Cumulative events processed across all catchUp calls.
+  uint64_t totalCatchupEventsProcessed() const {
+    return filter_.totalEventsProcessed();
+  }
 
   /// ESKF numerical-health diagnostics.
   eskf_scalar eskfLastNis() const { return filter_.core().lastNIS(); }
