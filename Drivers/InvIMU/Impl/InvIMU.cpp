@@ -576,8 +576,12 @@ void InvIMU_STM32::processPendingRx() {
     } else {
         const int64_t predicted_irq = (int64_t)last_fifo_us + _fifo_to_abs_offset_us;
         const int64_t err = (int64_t)irq_us - predicted_irq;
+        // Always correct the offset to track IMU-vs-MCU clock drift.
+        // The IMU's internal oscillator can differ from the MCU crystal by
+        // ~0.1%, which causes ~1 ms/s of timestamp drift if uncorrected.
+        // Previous 500µs dead zone let drift accumulate for tens of seconds.
+        _fifo_to_abs_offset_us += err;
         if (err > 500 || err < -500) {
-            _fifo_to_abs_offset_us += err;
             _status_flags |= IMU_STATUS_TIMESTAMP_DESYNC;
         }
     }

@@ -31,6 +31,50 @@ using Drivers::InvIMU::InvIMU_Interface;
 using Drivers::InvIMU::InvIMU_STM32;
 using Drivers::BMP390::BaroData;
 
+// ── FSYNC PWM on PD14 (TIM4_CH3, AF2) ────────────────────────────────────────
+// Generates a 6400 Hz square wave that the ICM-45686 uses as an external time
+// reference (FSYNC). This locks IMU FIFO timestamps to the MCU crystal,
+// eliminating the ~0.1 % clock drift between the IMU's internal RC oscillator
+// and the MCU's PLL-derived DWT cycle counter.
+static TIM_HandleTypeDef htim4_fsync;
+
+static bool fsync_pwm_init(uint32_t freq_hz) {
+    // Enable clocks
+    __HAL_RCC_TIM4_CLK_ENABLE();
+    // GPIOD clock already enabled by CubeMX MX_GPIO_Init
+
+    // Configure PD14 as TIM4_CH3 (AF2)
+    GPIO_InitTypeDef gpio{};
+    gpio.Pin       = GPIO_PIN_14;
+    gpio.Mode      = GPIO_MODE_AF_PP;
+    gpio.Pull      = GPIO_NOPULL;
+    gpio.Speed     = GPIO_SPEED_FREQ_LOW;
+    gpio.Alternate = GPIO_AF2_TIM4;
+    HAL_GPIO_Init(GPIOD, &gpio);
+
+    // TIM4 clock = 2 × APB1 = 240 MHz (APB1 prescaler > 1)
+    // ARR = 240 000 000 / freq_hz − 1
+    const uint32_t tim_clk = 240000000u;
+    const uint32_t arr     = (tim_clk / freq_hz) - 1u;
+
+    htim4_fsync.Instance               = TIM4;
+    htim4_fsync.Init.Prescaler         = 0;
+    htim4_fsync.Init.CounterMode       = TIM_COUNTERMODE_UP;
+    htim4_fsync.Init.Period            = arr;
+    htim4_fsync.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
+    htim4_fsync.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+    if (HAL_TIM_PWM_Init(&htim4_fsync) != HAL_OK) return false;
+
+    TIM_OC_InitTypeDef oc{};
+    oc.OCMode     = TIM_OCMODE_PWM1;
+    oc.Pulse      = arr / 2u;   // 50 % duty
+    oc.OCPolarity = TIM_OCPOLARITY_HIGH;
+    oc.OCFastMode = TIM_OCFAST_DISABLE;
+    if (HAL_TIM_PWM_ConfigChannel(&htim4_fsync, &oc, TIM_CHANNEL_3) != HAL_OK) return false;
+
+    return HAL_TIM_PWM_Start(&htim4_fsync, TIM_CHANNEL_3) == HAL_OK;
+}
+
 
 AppImuRingBuffer imuData1;
 AppImuRingBuffer imuData2;
@@ -291,6 +335,17 @@ extern "C" void app_super_loop_setup(void) {
         return;
     }
     g_imu_module = &g_superloop.imuModule;
+
+    // ── FSYNC: lock IMU timestamps to MCU crystal ──────────────────────────
+    // Start 6400 Hz PWM on PD14 → ICM-45686 INT2 (FSYNC input), then tell
+    // the IMU to use it. Order matters: clock must be running before the IMU
+    // is told to listen to it, otherwise the IMU sees no edges.
+    if (fsync_pwm_init(6400u)) {
+        g_superloop.invImu1.enableFsync();
+        printf("[APP] FSYNC PWM started on PD14 @ 6400 Hz\r\n");
+    } else {
+        printf("[APP] WARNING: FSYNC PWM init failed — IMU timestamps may drift\r\n");
+    }
 
     // ── Baro init diagnostics ──────────────────────────────────────────────
     // Print SPI handle states after IMU init (IMU uses SPI4, baros use SPI4+SPI5)
