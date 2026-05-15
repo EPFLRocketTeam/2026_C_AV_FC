@@ -368,6 +368,14 @@ class EskfYieldable {
                ? static_cast<size_t>(imu_push_seq_ - imu_read_seq_)
                : 0u;
   }
+
+  /// Raw sequence counters and kalman time (for liftoff diagnostics).
+  uint64_t imuPushSeq() const { return imu_push_seq_; }
+  uint64_t imuReadSeq() const { return imu_read_seq_; }
+  uint64_t kalmanTimestampUs() const { return kalman_timestamp_us_; }
+  uint64_t imuBufferTimestamp(size_t slot) const {
+    return imu_buffer_[slot].imu.timestamp_us;
+  }
   
   /// Check if filter is in hibernation (pre-liftoff) mode.
   /// When hibernating, the ESKF is not running - only buffers are filling.

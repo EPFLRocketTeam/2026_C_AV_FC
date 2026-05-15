@@ -836,6 +836,49 @@ void EskfEstimator::onLiftoff(uint32_t liftoff_ms) {
 
   output_dirty_ = true;
 
+#if KALMAN_DEBUG_PRINT
+  {
+    // Detailed liftoff/rewind diagnostic
+    const auto& f = filter_;
+    const uint64_t pushSeq = f.imuPushSeq();
+    const uint64_t readSeq = f.imuReadSeq();
+    const size_t pending = static_cast<size_t>(pushSeq - readSeq);
+    const size_t bufCount = f.imuBufferCount();
+    const uint64_t kalTs = f.kalmanTimestampUs();
+    const uint64_t nextImu = f.peekNextImuTimestamp();
+    const uint64_t oldestSeq = pushSeq - bufCount;
+    const size_t oldestSlot = oldestSeq % ESKF_IMU_BUFFER_SIZE;
+
+    printf("[LIFTOFF-DBG] liftoff_us=%u:%u  rewind_to=%u:%u  "
+           "kalTs=%u:%u\r\n",
+           (unsigned)(liftoff_us_ >> 32), (unsigned)liftoff_us_,
+           (unsigned)(rewind_to >> 32), (unsigned)rewind_to,
+           (unsigned)(kalTs >> 32), (unsigned)kalTs);
+    printf("[LIFTOFF-DBG] imuPushSeq=%u  imuReadSeq=%u  pending=%u  "
+           "bufCount=%u  oldestSlot=%u\r\n",
+           (unsigned)pushSeq, (unsigned)readSeq, (unsigned)pending,
+           (unsigned)bufCount, (unsigned)oldestSlot);
+    printf("[LIFTOFF-DBG] nextImuTs=%u:%u  ground_ref=%d  "
+           "grndP=%.0fPa  freshBaro=%d  freshP=%.0fPa\r\n",
+           (unsigned)(nextImu >> 32), (unsigned)nextImu,
+           (int)ground_ref.valid,
+           (double)ground_ref.pressure_pa,
+           (int)preflight_baro_valid_,
+           (double)preflight_baro_pressure_pa_);
+    // Print oldest and newest IMU timestamps in buffer
+    if (bufCount > 0) {
+      const uint64_t oldestTs = f.imuBufferTimestamp(oldestSlot);
+      const size_t newestSlot = (pushSeq - 1) % ESKF_IMU_BUFFER_SIZE;
+      const uint64_t newestTs = f.imuBufferTimestamp(newestSlot);
+      printf("[LIFTOFF-DBG] oldestBufTs=%u:%u  newestBufTs=%u:%u  "
+             "span=%ums\r\n",
+             (unsigned)(oldestTs >> 32), (unsigned)oldestTs,
+             (unsigned)(newestTs >> 32), (unsigned)newestTs,
+             (unsigned)((newestTs - oldestTs) / 1000));
+    }
+  }
+#endif
+
   if (log_) {
     log_->printf("[ESKF] Liftoff at T=%ums, q=[%.3f, %.3f, %.3f, %.3f], "
                  "gyro_bias=[%.5f, %.5f, %.5f], accel_bias=[%.5f, %.5f, %.5f], "
@@ -2106,6 +2149,29 @@ void EskfEstimator::onTick(uint64_t now_us) {
     // This may leave events buffered for the next tick.
     if (!filter_.catchUp(now_us, cfg_.catchup_budget_us)) {
       catchup_yield_count_++;
+    }
+#endif
+
+#if KALMAN_DEBUG_PRINT
+    // Detailed post-liftoff catchUp diagnostics for first 20 ticks
+    {
+      static uint32_t post_liftoff_tick = 0;
+      if (post_liftoff_tick < 20) {
+        const uint64_t kalTs = filter_.kalmanTimestampUs();
+        const uint64_t nextImu = filter_.peekNextImuTimestamp();
+        const uint64_t pending = filter_.imuPushSeq() - filter_.imuReadSeq();
+        printf("[TICK-DBG] #%u  now=%u:%u  kalTs=%u:%u  "
+               "nextImu=%u:%u  pending=%u  lastEv=%u  totalEv=%u:%u\r\n",
+               (unsigned)post_liftoff_tick,
+               (unsigned)(now_us >> 32), (unsigned)now_us,
+               (unsigned)(kalTs >> 32), (unsigned)kalTs,
+               (unsigned)(nextImu >> 32), (unsigned)nextImu,
+               (unsigned)pending,
+               (unsigned)filter_.lastEventsProcessed(),
+               (unsigned)(filter_.totalEventsProcessed() >> 32),
+               (unsigned)filter_.totalEventsProcessed());
+        post_liftoff_tick++;
+      }
     }
 #endif
 

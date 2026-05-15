@@ -1010,6 +1010,35 @@ void EskfYieldable::rewindTo(uint64_t timestamp_us, bool liftoff_rewind) {
         imu_buffer_, imu_count, imu_head, imu_replay_from);
     const uint64_t oldest_seq = imu_push_seq_ - imu_count;
     imu_read_seq_ = oldest_seq + rel;
+
+#if KALMAN_DEBUG_PRINT
+    // Diagnostic: show rewind binary search result
+    const size_t read_slot = imu_read_seq_ % ESKF_IMU_BUFFER_SIZE;
+    const size_t oldest_slot = oldest_seq % ESKF_IMU_BUFFER_SIZE;
+    const uint64_t read_ts = imu_buffer_[read_slot].imu.timestamp_us;
+    const uint64_t oldest_ts = imu_buffer_[oldest_slot].imu.timestamp_us;
+    const size_t newest_slot = (imu_push_seq_ - 1) % ESKF_IMU_BUFFER_SIZE;
+    const uint64_t newest_ts = imu_buffer_[newest_slot].imu.timestamp_us;
+    printf("[REWIND-DBG] replay_from=%u:%u  imu_replay_from=%u:%u  "
+           "liftoff_direct=%d\r\n",
+           (unsigned)(replay_from >> 32), (unsigned)replay_from,
+           (unsigned)(imu_replay_from >> 32), (unsigned)imu_replay_from,
+           (int)liftoff_direct_replay);
+    printf("[REWIND-DBG] pushSeq=%u  readSeq=%u  oldestSeq=%u  "
+           "rel=%u  bufCount=%u\r\n",
+           (unsigned)imu_push_seq_, (unsigned)imu_read_seq_,
+           (unsigned)oldest_seq, (unsigned)rel, (unsigned)imu_count);
+    printf("[REWIND-DBG] oldestTs=%u:%u  readTs=%u:%u  "
+           "newestTs=%u:%u  span=%ums\r\n",
+           (unsigned)(oldest_ts >> 32), (unsigned)oldest_ts,
+           (unsigned)(read_ts >> 32), (unsigned)read_ts,
+           (unsigned)(newest_ts >> 32), (unsigned)newest_ts,
+           (unsigned)((newest_ts - oldest_ts) / 1000));
+    printf("[REWIND-DBG] kalTs=%u:%u  hibernating=%d\r\n",
+           (unsigned)(kalman_timestamp_us_ >> 32),
+           (unsigned)kalman_timestamp_us_,
+           (int)hibernating_);
+#endif
   }
   
   baro_read_idx_ = binarySearchBuffer<BaroEntry, ESKF_BARO_BUFFER_SIZE>(
