@@ -758,6 +758,18 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       stats_.stale_skips++;
 #if KALMAN_DEBUG_PRINT
       static uint32_t stale_log_counter = 0;
+      static uint32_t stale_detail_counter = 0;
+      if (stale_detail_counter < 10) {
+        printf("[CATCHUP] STALE-DETAIL: ts=%u:%u  kalTs=%u:%u  "
+               "readSeq=%u  slot=%u  staleSkips=%u\r\n",
+               (unsigned)(earliest >> 32), (unsigned)earliest,
+               (unsigned)(kalman_timestamp_us_ >> 32),
+               (unsigned)kalman_timestamp_us_,
+               (unsigned)imu_read_seq_,
+               (unsigned)(imu_read_seq_ % ESKF_IMU_BUFFER_SIZE),
+               (unsigned)stats_.stale_skips);
+        stale_detail_counter++;
+      }
       if (++stale_log_counter >= 3000) {
         stale_log_counter = 0;
         printf("[CATCHUP] STALE-SKIP: ts=%u:%u  kalTs=%u:%u  "
@@ -1295,6 +1307,26 @@ void EskfYieldable::processNextImu() {
   }
 
   replayPredictChunked(entry.imu, entry.dt, entry.imu.timestamp_us);
+
+#if KALMAN_DEBUG_PRINT
+  {
+    static uint32_t imu_proc_diag_count = 0;
+    if (imu_proc_diag_count < 30) {
+      printf("[IMU-PROC] #%u  seq=%u  slot=%u  ts=%u:%u  dt=%.6f  "
+             "kalTs=%u:%u  stale=%u\r\n",
+             (unsigned)imu_proc_diag_count,
+             (unsigned)imu_read_seq_,
+             (unsigned)slot,
+             (unsigned)(entry.imu.timestamp_us >> 32),
+             (unsigned)entry.imu.timestamp_us,
+             (double)entry.dt,
+             (unsigned)(kalman_timestamp_us_ >> 32),
+             (unsigned)kalman_timestamp_us_,
+             (unsigned)stats_.stale_skips);
+      imu_proc_diag_count++;
+    }
+  }
+#endif
 
   if (in_rewind_) {
     rewind_imu_replayed_++;
