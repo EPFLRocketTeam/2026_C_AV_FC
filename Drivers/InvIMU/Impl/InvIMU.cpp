@@ -436,7 +436,25 @@ void InvIMU_STM32::configureFifo() {
 void InvIMU_STM32::enableFsync() {
     inv_imu_adv_set_int2_pin_usage(&_dev, IOC_PAD_SCENARIO_OVRD_INT2_CFG_OVRD_VAL_FSYNC);
     inv_imu_adv_configure_fsync_ap_tag(&_dev, FSYNC_CONFIG0_AP_FSYNC_TEMP);
-    inv_imu_adv_enable_fsync(&_dev);
+
+    // Enable FSYNC clock sync but keep regular FIFO timestamps.
+    // inv_imu_adv_enable_fsync() sets tmst_delta_en=1 which replaces the FIFO
+    // timestamp field with FSYNC delay values, breaking per-sample timestamps.
+    // Instead, enable tmst_fsync_en + tmst_en WITHOUT tmst_delta_en.
+    {
+        smc_control_0_t smc;
+        inv_imu_read_reg(&_dev, SMC_CONTROL_0, 1, (uint8_t *)&smc);
+        smc.tmst_fsync_en = INV_IMU_ENABLE;
+        smc.tmst_en       = INV_IMU_ENABLE;
+        inv_imu_write_reg(&_dev, SMC_CONTROL_0, 1, (uint8_t *)&smc);
+    }
+    // Explicitly keep tmst_delta_en=0 (preserve regular FIFO timestamps)
+    {
+        tmst_wom_config_t twc;
+        inv_imu_read_reg(&_dev, TMST_WOM_CONFIG, 1, (uint8_t *)&twc);
+        twc.tmst_delta_en = INV_IMU_DISABLE;
+        inv_imu_write_reg(&_dev, TMST_WOM_CONFIG, 1, (uint8_t *)&twc);
+    }
 }
 
 bool InvIMU_STM32::parseFrameInto(IMUData& out, const uint8_t* p, uint8_t /*frame_size*/) {
