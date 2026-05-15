@@ -219,7 +219,7 @@ inline void printDebugLine(
            static_cast<unsigned long>(imu_drained));
 
     // Line 4: Ring HWMs
-    printf("[KAL] ring_hwm=[%lu,%lu,%lu]  imuRdIdx=%lu  "
+    printf("[KAL] ring_hwm=[%lu,%lu,%lu]  imuPending=%lu  "
            "gate=%s  grnd=%s  hdg=%s\r\n",
            static_cast<unsigned long>(health.imu_ring_hwm[0]),
            static_cast<unsigned long>(health.imu_ring_hwm[1]),

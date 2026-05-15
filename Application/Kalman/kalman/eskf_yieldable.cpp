@@ -73,9 +73,8 @@ void EskfYieldable::initialize(const State& initial_state,
   core_.initialize(initial_state, P0, Q);
   
   // Reset all buffers
-  imu_head_ = 0;
-  imu_count_ = 0;
-  imu_read_idx_ = 0;
+  imu_push_seq_ = 0;
+  imu_read_seq_ = 0;
   
   baro_head_ = 0;
   baro_count_ = 0;
@@ -132,50 +131,41 @@ void EskfYieldable::initialize(const State& initial_state,
 void EskfYieldable::pushImu(const ImuFrame& imu, eskf_scalar dt) {
 #if ESKF_USE_GPS_REWIND
   // (M1) Store in ring buffer (BUFFER ONLY - no processing here)
-  imu_buffer_[imu_head_].imu = imu;
-  imu_buffer_[imu_head_].dt = dt;
-  
-  imu_head_ = (imu_head_ + 1) % ESKF_IMU_BUFFER_SIZE;
-  if (imu_count_ < ESKF_IMU_BUFFER_SIZE) {
-    imu_count_++;
-  } else {
-    // Buffer full - oldest entry is being overwritten.
-    // When the buffer is full and imu_head_ advances, the "oldest" position
-    // shifts by 1. Since imu_read_idx_ is a RELATIVE offset from oldest,
-    // we must decrement it to keep pointing at the same physical entry.
-    // BUG FIX: Previously, in_rewind_ skipped this decrement. This caused
-    // imu_read_idx_ to drift forward by 1 per pushImu during rewind,
-    // eventually pointing at entries overwritten with future-timestamped data,
-    // making catchUp see "future" entries and process 0 events permanently.
-    if (hibernating_) {
-      // Pre-liftoff: catchUp not running, index irrelevant.
-      // rewindTo() will reset imu_read_idx_ via binary search at liftoff.
-    } else if (imu_read_idx_ > 0) {
-      // Adjust read index to maintain correct relative position after
-      // oldest shifts. Required during BOTH normal operation AND rewind.
-      imu_read_idx_--;
-    } else {
-      // REAL OVERFLOW: imu_read_idx_ == 0 means we're overwriting data that
-      // hasn't been processed yet. This happens when catchUp isn't keeping up.
-      stats_.imu_drops++;
-      
-      // Rate-limit overflow logging to 1 Hz to avoid log spam
-      constexpr uint64_t kOverflowLogIntervalUs = 1000000;
-      if (imu.timestamp_us - last_imu_overflow_log_us_ >= kOverflowLogIntervalUs) {
-        last_imu_overflow_log_us_ = imu.timestamp_us;
-        getEskfLogger().logEvent(EskfEventType::ImuBufferOverflow,
-                                 imu.timestamp_us,
-                                 static_cast<float>(stats_.imu_drops));
-      }
-      
-      // (M1) Data lost while caught up - update oldest checkpoint
-      oldest_checkpoint_ = captureRewindCheckpoint();
+  const size_t slot = imu_push_seq_ % ESKF_IMU_BUFFER_SIZE;
+  imu_buffer_[slot].imu = imu;
+  imu_buffer_[slot].dt = dt;
+  imu_push_seq_++;
+
+  // Detect overwrite of unread entries.
+  // If push_seq - read_seq > BUFFER_SIZE, the oldest unread entry was
+  // overwritten.  Advance read_seq to the oldest surviving entry.
+  const uint64_t pending = imu_push_seq_ - imu_read_seq_;
+  if (pending > ESKF_IMU_BUFFER_SIZE) {
+    const uint64_t lost = pending - ESKF_IMU_BUFFER_SIZE;
+    stats_.imu_drops += static_cast<uint32_t>(lost);
+    imu_read_seq_ = imu_push_seq_ - ESKF_IMU_BUFFER_SIZE;
+
+    // Rate-limit overflow logging to 1 Hz to avoid log spam
+    constexpr uint64_t kOverflowLogIntervalUs = 1000000;
+    if (imu.timestamp_us - last_imu_overflow_log_us_ >= kOverflowLogIntervalUs) {
+      last_imu_overflow_log_us_ = imu.timestamp_us;
+      getEskfLogger().logEvent(EskfEventType::ImuBufferOverflow,
+                               imu.timestamp_us,
+                               static_cast<float>(stats_.imu_drops));
     }
+
+    // (M1) Data lost while caught up - update oldest checkpoint
+    oldest_checkpoint_ = captureRewindCheckpoint();
   }
   
   // (I2) Track high-water mark
-  if (imu_count_ > stats_.imu_max_usage) {
-    stats_.imu_max_usage = imu_count_;
+  {
+    const size_t count = (imu_push_seq_ > ESKF_IMU_BUFFER_SIZE)
+                             ? ESKF_IMU_BUFFER_SIZE
+                             : static_cast<size_t>(imu_push_seq_);
+    if (count > stats_.imu_max_usage) {
+      stats_.imu_max_usage = count;
+    }
   }
   
   // Periodic checkpoints are created while replaying IMU entries in catchUp(),
@@ -371,14 +361,15 @@ void EskfYieldable::logGpsDroppedByCheckpointHorizon(
 bool EskfYieldable::isGpsTimestampOlderThanRetainedImuHistory(
     uint64_t gps_timestamp_us,
     uint64_t *oldest_imu_timestamp_us) const {
-  if (imu_count_ == 0) {
+  if (imu_push_seq_ == 0) {
     if (oldest_imu_timestamp_us) {
       *oldest_imu_timestamp_us = 0;
     }
     return false;
   }
 
-  const size_t oldest_idx = oldestIndex<ESKF_IMU_BUFFER_SIZE>(imu_count_, imu_head_);
+  const size_t count = imuBufferCount();
+  const size_t oldest_idx = (imu_push_seq_ - count) % ESKF_IMU_BUFFER_SIZE;
   const uint64_t oldest_imu_ts = imu_buffer_[oldest_idx].imu.timestamp_us;
   if (oldest_imu_timestamp_us) {
     *oldest_imu_timestamp_us = oldest_imu_ts;
@@ -606,8 +597,9 @@ void EskfYieldable::injectLiftoffSnap(const LiftoffInitData& init_data,
   // Clamp liftoff rewind target to retained IMU history horizon.
   // In preflight hibernation the IMU ring continuously laps, so requesting
   // a deeper rewind than retained history is unrecoverable.
-  if (imu_count_ > 0) {
-    const size_t oldest = oldestIndex<ESKF_IMU_BUFFER_SIZE>(imu_count_, imu_head_);
+  if (imu_push_seq_ > 0) {
+    const size_t imu_count = imuBufferCount();
+    const size_t oldest = (imu_push_seq_ - imu_count) % ESKF_IMU_BUFFER_SIZE;
     const uint64_t oldest_ts = imu_buffer_[oldest].imu.timestamp_us;
     if (effective_rewind_to_ts < oldest_ts) {
       effective_rewind_to_ts = oldest_ts;
@@ -717,11 +709,11 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       if (++catchup_diag_counter >= 500) {
         catchup_diag_counter = 0;
         printf("[CATCHUP] exhausted: kalTs=%u:%u targetTs=%u:%u "
-               "imuRdIdx=%u imuCnt=%u imuHead=%u\r\n",
+               "imuPending=%u imuPushSeq=%u imuReadSeq=%u\r\n",
                (unsigned)(kalman_timestamp_us_ >> 32), (unsigned)kalman_timestamp_us_,
                (unsigned)(target_timestamp_us >> 32), (unsigned)target_timestamp_us,
-               (unsigned)imu_read_idx_, (unsigned)imu_count_,
-               (unsigned)imu_head_);
+               (unsigned)(imu_push_seq_ - imu_read_seq_),
+               (unsigned)imu_push_seq_, (unsigned)imu_read_seq_);
       }
 #endif
       break;
@@ -734,11 +726,12 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       if (++catchup_future_counter >= 500) {
         catchup_future_counter = 0;
         printf("[CATCHUP] future: earliest=%u:%u target=%u:%u "
-               "kalTs=%u:%u imuRdIdx=%u imuCnt=%u\r\n",
+               "kalTs=%u:%u imuPending=%u imuPushSeq=%u\r\n",
                (unsigned)(earliest >> 32), (unsigned)earliest,
                (unsigned)(target_timestamp_us >> 32), (unsigned)target_timestamp_us,
                (unsigned)(kalman_timestamp_us_ >> 32), (unsigned)kalman_timestamp_us_,
-               (unsigned)imu_read_idx_, (unsigned)imu_count_);
+               (unsigned)(imu_push_seq_ - imu_read_seq_),
+               (unsigned)imu_push_seq_);
       }
 #endif
       break;
@@ -751,16 +744,14 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
     }
 
     // ── Guard: skip stale entries from ring-buffer wrap-around ──
-    // When imu_read_idx_ hits 0 and wraps back through the circular buffer,
-    // old entries with timestamps well behind kalman_timestamp_us_ become
-    // visible.  Re-processing them would double-integrate IMU data, causing
-    // catastrophic attitude / velocity divergence.
+    // With sequence-number indexing this should be rare, but keep as safety net
+    // in case a rewind or other edge case leaves stale timestamps visible.
     // Threshold: 1 ms — comfortably above any normal jitter but far below
     // the ~500 ms span of the full ring buffer.
     constexpr uint64_t kStaleThresholdUs = 1000;
     if (earliest + kStaleThresholdUs < kalman_timestamp_us_) {
       // Advance the correct read index past this stale entry.
-      if (earliest == next_imu_ts)       { imu_read_idx_++; }
+      if (earliest == next_imu_ts)       { imu_read_seq_++; }
       else if (earliest == next_baro_ts) { baro_read_idx_++; }
       else                               { event_read_idx_++; }
       stats_.stale_skips++;
@@ -769,12 +760,12 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       if (++stale_log_counter >= 3000) {
         stale_log_counter = 0;
         printf("[CATCHUP] STALE-SKIP: ts=%u:%u  kalTs=%u:%u  "
-               "staleSkips=%u  imuRdIdx=%u\r\n",
+               "staleSkips=%u  imuPending=%u\r\n",
                (unsigned)(earliest >> 32), (unsigned)earliest,
                (unsigned)(kalman_timestamp_us_ >> 32),
                (unsigned)kalman_timestamp_us_,
                (unsigned)stats_.stale_skips,
-               (unsigned)imu_read_idx_);
+               (unsigned)(imu_push_seq_ - imu_read_seq_));
       }
 #endif
       continue;   // re-peek without counting as a processed event
@@ -1007,8 +998,16 @@ void EskfYieldable::rewindTo(uint64_t timestamp_us, bool liftoff_rewind) {
   // replay_from to preserve same-timestamp LiftoffSnap->IMU ordering.
   const uint64_t imu_replay_from =
       liftoff_direct_replay ? replay_from : (replay_from + 1);
-  imu_read_idx_ = binarySearchBuffer<ImuEntry, ESKF_IMU_BUFFER_SIZE>(
-      imu_buffer_, imu_count_, imu_head_, imu_replay_from);
+  // Binary search returns a relative offset from oldest surviving entry.
+  // Convert to absolute sequence number.
+  {
+    const size_t imu_count = imuBufferCount();
+    const size_t imu_head = imu_push_seq_ % ESKF_IMU_BUFFER_SIZE;
+    const size_t rel = binarySearchBuffer<ImuEntry, ESKF_IMU_BUFFER_SIZE>(
+        imu_buffer_, imu_count, imu_head, imu_replay_from);
+    const uint64_t oldest_seq = imu_push_seq_ - imu_count;
+    imu_read_seq_ = oldest_seq + rel;
+  }
   
   baro_read_idx_ = binarySearchBuffer<BaroEntry, ESKF_BARO_BUFFER_SIZE>(
       baro_buffer_, baro_count_, baro_head_, replay_from);
@@ -1037,8 +1036,9 @@ void EskfYieldable::rewindTo(uint64_t timestamp_us, bool liftoff_rewind) {
   pending_rewind_gap_dt_us_ = 0;
   
   // (M4) Check for data gap: if oldest buffered sample is newer than replay start
-  if (!liftoff_direct_replay && imu_count_ > 0) {
-    size_t oldest_imu_idx = (imu_count_ < ESKF_IMU_BUFFER_SIZE) ? 0 : imu_head_;
+  if (!liftoff_direct_replay && imu_push_seq_ > 0) {
+    const size_t imu_count = imuBufferCount();
+    const size_t oldest_imu_idx = (imu_push_seq_ - imu_count) % ESKF_IMU_BUFFER_SIZE;
     uint64_t oldest_imu_ts = imu_buffer_[oldest_imu_idx].imu.timestamp_us;
     if (oldest_imu_ts > replay_from) {
       stats_.rewind_data_gap_count++;
@@ -1098,11 +1098,15 @@ size_t EskfYieldable::binarySearchBuffer(const T* buffer, size_t count,
 // ============================================================
 
 uint64_t EskfYieldable::peekNextImuTimestamp() const {
-  if (imu_read_idx_ >= imu_count_) return UINT64_MAX;
+  if (imu_read_seq_ >= imu_push_seq_) return UINT64_MAX;
   
-  size_t oldest = oldestIndex<ESKF_IMU_BUFFER_SIZE>(imu_count_, imu_head_);
-  size_t idx = (oldest + imu_read_idx_) % ESKF_IMU_BUFFER_SIZE;
-  return imu_buffer_[idx].imu.timestamp_us;
+  // Check for overwrite: entry may have been overwritten since we recorded read_seq
+  if (imu_push_seq_ - imu_read_seq_ > ESKF_IMU_BUFFER_SIZE) {
+    return UINT64_MAX;  // Will be fixed up in catchUp via drop detection
+  }
+  
+  const size_t slot = imu_read_seq_ % ESKF_IMU_BUFFER_SIZE;
+  return imu_buffer_[slot].imu.timestamp_us;
 }
 
 uint64_t EskfYieldable::peekNextBaroTimestamp() const {
@@ -1184,12 +1188,18 @@ EventType EskfYieldable::peekNextEventType() const {
 // ============================================================
 
 void EskfYieldable::processNextImu() {
-  if (imu_read_idx_ >= imu_count_) return;
+  if (imu_read_seq_ >= imu_push_seq_) return;
   
-  size_t oldest = oldestIndex<ESKF_IMU_BUFFER_SIZE>(imu_count_, imu_head_);
-  size_t idx = (oldest + imu_read_idx_) % ESKF_IMU_BUFFER_SIZE;
+  // Advance past overwritten entries (drop detection)
+  if (imu_push_seq_ - imu_read_seq_ > ESKF_IMU_BUFFER_SIZE) {
+    const uint64_t lost = (imu_push_seq_ - imu_read_seq_) - ESKF_IMU_BUFFER_SIZE;
+    stats_.imu_drops += static_cast<uint32_t>(lost);
+    imu_read_seq_ = imu_push_seq_ - ESKF_IMU_BUFFER_SIZE;
+    if (imu_read_seq_ >= imu_push_seq_) return;
+  }
   
-  const ImuEntry& entry = imu_buffer_[idx];
+  const size_t slot = imu_read_seq_ % ESKF_IMU_BUFFER_SIZE;
+  const ImuEntry& entry = imu_buffer_[slot];
   const auto replayPredictChunked =
       [&](const ImuFrame &base_imu, eskf_scalar dt_total_s,
           uint64_t final_timestamp_us) {
@@ -1279,7 +1289,7 @@ void EskfYieldable::processNextImu() {
                          entry.imu.accel[2] * entry.imu.accel[2];
   last_accel_magnitude_g_ = std::sqrt(accel_sq) / constants::kGravityLocal;
 
-  imu_read_idx_++;
+  imu_read_seq_++;
 }
 
 void EskfYieldable::processNextBaro() {
@@ -1960,13 +1970,14 @@ bool EskfYieldable::computeAveragedLeverArmVelocity(
   avg_lever_vel_ned[1] = 0;
   avg_lever_vel_ned[2] = 0;
   
-  if (imu_count_ == 0) return false;
+  if (imu_push_seq_ == 0) return false;
   
   // Find window boundaries
   uint64_t window_start = (gps_timestamp_us > window_us) ? (gps_timestamp_us - window_us) : 0;
   
   // Iterate through IMU buffer to find samples in window
-  size_t oldest_idx = oldestIndex<ESKF_IMU_BUFFER_SIZE>(imu_count_, imu_head_);
+  const size_t count = imuBufferCount();
+  size_t oldest_idx = (imu_push_seq_ - count) % ESKF_IMU_BUFFER_SIZE;
   uint32_t sample_count = 0;
   
   // We need attitude at each sample time. Since we can't easily reconstruct
@@ -1975,7 +1986,7 @@ bool EskfYieldable::computeAveragedLeverArmVelocity(
   // the averaging effect we need even with a constant body-frame lever arm.
   const eskf_scalar* q = core_.state().q;
   
-  for (size_t i = 0; i < imu_count_; ++i) {
+  for (size_t i = 0; i < count; ++i) {
     size_t buf_idx = (oldest_idx + i) % ESKF_IMU_BUFFER_SIZE;
     const ImuEntry& entry = imu_buffer_[buf_idx];
     

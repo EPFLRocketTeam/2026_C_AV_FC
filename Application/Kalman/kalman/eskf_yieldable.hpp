@@ -353,10 +353,20 @@ class EskfYieldable {
   uint32_t lastEventsProcessed() const { return last_events_processed_; }
 
   /// Get current buffer depths (for debugging/monitoring).
-  size_t imuBufferCount() const { return imu_count_; }
+  size_t imuBufferCount() const {
+    return static_cast<size_t>(
+        (imu_push_seq_ > ESKF_IMU_BUFFER_SIZE)
+            ? ESKF_IMU_BUFFER_SIZE
+            : imu_push_seq_);
+  }
   size_t baroBufferCount() const { return baro_count_; }
   size_t eventBufferCount() const { return event_count_; }
-  size_t imuReadIdx() const { return imu_read_idx_; }
+  /// Pending (unprocessed) entries in IMU ring buffer.
+  size_t imuReadIdx() const {
+    return (imu_push_seq_ > imu_read_seq_)
+               ? static_cast<size_t>(imu_push_seq_ - imu_read_seq_)
+               : 0u;
+  }
   
   /// Check if filter is in hibernation (pre-liftoff) mode.
   /// When hibernating, the ESKF is not running - only buffers are filling.
@@ -386,11 +396,10 @@ class EskfYieldable {
   // Filter's current processing timestamp
   uint64_t kalman_timestamp_us_ = 0;
   
-  // --- IMU Ring Buffer ---
+  // --- IMU Ring Buffer (sequence-number based) ---
   ImuEntry imu_buffer_[ESKF_IMU_BUFFER_SIZE];
-  size_t imu_head_ = 0;       // Next write position
-  size_t imu_count_ = 0;      // Number of valid entries
-  size_t imu_read_idx_ = 0;   // Current read position (relative to oldest)
+  uint64_t imu_push_seq_ = 0;  // Monotonic push counter (slot = seq % SIZE)
+  uint64_t imu_read_seq_ = 0;  // Next sequence to consume in catchUp
   
   // --- Baro Ring Buffer ---
   BaroEntry baro_buffer_[ESKF_BARO_BUFFER_SIZE];
