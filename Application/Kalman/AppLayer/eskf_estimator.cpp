@@ -845,7 +845,7 @@ void EskfEstimator::onLiftoff(uint32_t liftoff_ms) {
     const size_t pending = static_cast<size_t>(pushSeq - readSeq);
     const size_t bufCount = f.imuBufferCount();
     const uint64_t kalTs = f.kalmanTimestampUs();
-    const uint64_t nextImu = f.peekNextImuTimestamp();
+    const uint64_t nextImu = f.peekNextImuTimestampPublic();
     const uint64_t oldestSeq = pushSeq - bufCount;
     const size_t oldestSlot = oldestSeq % ESKF_IMU_BUFFER_SIZE;
 
@@ -2158,7 +2158,7 @@ void EskfEstimator::onTick(uint64_t now_us) {
       static uint32_t post_liftoff_tick = 0;
       if (post_liftoff_tick < 20) {
         const uint64_t kalTs = filter_.kalmanTimestampUs();
-        const uint64_t nextImu = filter_.peekNextImuTimestamp();
+        const uint64_t nextImu = filter_.peekNextImuTimestampPublic();
         const uint64_t pending = filter_.imuPushSeq() - filter_.imuReadSeq();
         printf("[TICK-DBG] #%u  now=%u:%u  kalTs=%u:%u  "
                "nextImu=%u:%u  pending=%u  lastEv=%u  totalEv=%u:%u\r\n",

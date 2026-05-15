@@ -376,6 +376,7 @@ class EskfYieldable {
   uint64_t imuBufferTimestamp(size_t slot) const {
     return imu_buffer_[slot].imu.timestamp_us;
   }
+  uint64_t peekNextImuTimestampPublic() const { return peekNextImuTimestamp(); }
   
   /// Check if filter is in hibernation (pre-liftoff) mode.
   /// When hibernating, the ESKF is not running - only buffers are filling.
