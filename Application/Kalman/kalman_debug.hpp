@@ -294,13 +294,17 @@ inline void printDebugLine(
            static_cast<unsigned long>(raw.imu_drop_count));
 
     // Line 8: CatchUp budget details
-    printf("[KAL] catchUp: budget=%luus  last=%luus  events=%lu  "
-           "totalEv=%llu  dtClamp=%lu\r\n",
-           static_cast<unsigned long>(estimator.catchupBudgetUs()),
-           static_cast<unsigned long>(estimator.lastCatchupDurationUs()),
-           static_cast<unsigned long>(estimator.lastCatchupEventsProcessed()),
-           static_cast<unsigned long long>(estimator.totalCatchupEventsProcessed()),
-           static_cast<unsigned long>(estimator.predictDtClampedCount()));
+    {
+      const uint64_t te = estimator.totalCatchupEventsProcessed();
+      printf("[KAL] catchUp: budget=%luus  last=%luus  events=%lu  "
+             "totalEv=%lu:%lu  dtClamp=%lu\r\n",
+             static_cast<unsigned long>(estimator.catchupBudgetUs()),
+             static_cast<unsigned long>(estimator.lastCatchupDurationUs()),
+             static_cast<unsigned long>(estimator.lastCatchupEventsProcessed()),
+             static_cast<unsigned long>(te >> 32),
+             static_cast<unsigned long>(te & 0xFFFFFFFFu),
+             static_cast<unsigned long>(estimator.predictDtClampedCount()));
+    }
 
     // Line 9: Timing breakdown (where time is spent in kalman_loop)
     printf("[KAL] timing: drain=%luus  imuProc=%luus  aiding=%luus  "
