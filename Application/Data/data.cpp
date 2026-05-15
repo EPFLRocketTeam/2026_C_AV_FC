@@ -2,6 +2,7 @@
 #include "Application/Data/data.hpp"
 #include "Application/app_timebase.h"
 #include "Drivers/STM32HAL/stm32hal.h"
+#include <cstdio>
 
 #ifndef APP_ENABLE_RTOS_STORE_LOCKS
 #define APP_ENABLE_RTOS_STORE_LOCKS 0u
@@ -64,10 +65,8 @@ inline void unlock_navigation_data() {
 #if !defined(UNIT_TEST_ENV)
 inline void app_timebase_enable_dwt() {
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-  if ((DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk) == 0u) {
-    DWT->CYCCNT = 0u;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-  }
+  DWT->CYCCNT = 0u;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
 inline bool app_timebase_is_dwt_running() {
@@ -110,6 +109,11 @@ void app_timebase_init_locked() {
     return;
   }
 
+  // Debug: capture state BEFORE init to diagnose timebase divergence
+  const uint32_t pre_hal  = HAL_GetTick();
+  const uint32_t pre_dwt  = DWT->CYCCNT;
+  const uint32_t pre_ctrl = DWT->CTRL;
+
   g_app_timebase.last_tick_ms = HAL_GetTick();
   g_app_timebase.acc_us = static_cast<uint64_t>(g_app_timebase.last_tick_ms) * 1000ULL;
   g_app_timebase.last_cycle = 0u;
@@ -126,6 +130,17 @@ void app_timebase_init_locked() {
 #endif
 
   g_app_timebase.initialized = true;
+
+  // Print timebase init diagnostic
+  printf("[TIMEBASE-INIT] pre: HAL=%lu DWT=0x%08lX CTRL=0x%08lX  "
+         "post: HAL=%lu last_cycle=0x%08lX acc_us=%lu dwt=%d\r\n",
+         static_cast<unsigned long>(pre_hal),
+         static_cast<unsigned long>(pre_dwt),
+         static_cast<unsigned long>(pre_ctrl),
+         static_cast<unsigned long>(g_app_timebase.last_tick_ms),
+         static_cast<unsigned long>(g_app_timebase.last_cycle),
+         static_cast<unsigned long>(g_app_timebase.acc_us),
+         static_cast<int>(g_app_timebase.use_dwt));
 }
 
 uint64_t app_timebase_now_us_locked() {
