@@ -225,6 +225,11 @@ struct KalmanRuntime {
 		printf("[KAL-CFG] Optimization: OFF (-O0)");
 #endif
 		printf("  SYSCLK=%luMHz\r\n", SystemCoreClock / 1000000UL);
+		printf("[KAL-CFG] timebase_init: HAL=%lu  app=%lu  cycles_per_us=%lu  DWT_CTRL=0x%08lX\r\n",
+		       static_cast<unsigned long>(HAL_GetTick()),
+		       static_cast<unsigned long>(app_timebase_now_ms()),
+		       SystemCoreClock / 1000000UL,
+		       static_cast<unsigned long>(DWT->CTRL));
 #endif
 	}
 

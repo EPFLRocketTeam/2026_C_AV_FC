@@ -48,6 +48,7 @@
 #include <cstdint>
 #include <cmath>
 
+#include "Application/app_timebase.h"
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Kalman/AppLayer/eskf_estimator.hpp"
 #include "Application/Data/fsm.hpp"
@@ -206,6 +207,19 @@ inline void printDebugLine(
            static_cast<unsigned>(estimator.eskfConsecutiveHighNisCount()),
            static_cast<int>(estimator.eskfHasDiverged()),
            static_cast<unsigned long>(stats.catchup_budget_yields));
+
+    // Timebase diagnostic: detect HAL vs DWT divergence
+#if !defined(UNIT_TEST_ENV)
+    {
+        const uint32_t hal_ms  = HAL_GetTick();
+        const uint32_t app_ms  = static_cast<uint32_t>(app_timebase_now_ms());
+        printf("[KAL] timebase: HAL=%lu  app=%lu  ratio=%.2f  DWT=0x%08lX\r\n",
+               static_cast<unsigned long>(hal_ms),
+               static_cast<unsigned long>(app_ms),
+               (hal_ms > 0) ? static_cast<double>(app_ms) / static_cast<double>(hal_ms) : 0.0,
+               static_cast<unsigned long>(DWT->CYCCNT));
+    }
+#endif
 
     // Line 3: Buffer / overflow
     printf("[KAL] IMU=%lu  baro=%lu  gps=%lu  "
