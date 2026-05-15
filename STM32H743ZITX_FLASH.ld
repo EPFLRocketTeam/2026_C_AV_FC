@@ -162,6 +162,19 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM_D1
 
+  /* DTCM BSS — zero-wait-state, non-cacheable RAM for timing-critical globals.
+   * Placed before the stack (stack grows down from end of DTCM).
+   * Startup code must zero this section (see _sdtcm_bss / _edtcm_bss). */
+  .dtcm_bss (NOLOAD) :
+  {
+    . = ALIGN(4);
+    _sdtcm_bss = .;
+    *(.dtcm_bss)
+    *(.dtcm_bss*)
+    . = ALIGN(4);
+    _edtcm_bss = .;
+  } >DTCMRAM
+
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack :
   {

@@ -36,7 +36,9 @@ struct AppTimebaseState {
   uint64_t acc_us = 0;
 };
 
-AppTimebaseState g_app_timebase{};
+// Place in DTCM (non-cacheable, zero wait state) to avoid D-cache coherency
+// issues when accessed from both main thread and ISR context.
+__attribute__((section(".dtcm_bss"))) AppTimebaseState g_app_timebase;
 
 // Diagnostic: capture DWT state at init for later printing
 static uint32_t g_timebase_init_hal_ms = 0;
@@ -154,26 +156,50 @@ uint64_t app_timebase_now_us_locked() {
 #if !defined(UNIT_TEST_ENV)
     const uint32_t cycles_per_us = SystemCoreClock / 1000000u;
     if (cycles_per_us > 0u) {
+      // Hybrid approach: HAL_GetTick (ms, SysTick-based, never wraps for 49 days)
+      // + DWT sub-ms interpolation.
+      //
+      // The previous pure-DWT incremental accumulator suffered from a bug where
+      // accumulated µs diverged from real time by ~30x. Root cause unclear
+      // (possibly compiler optimization across critical sections, or DWT
+      // counting issue after soft reset without power cycle).
+      //
+      // This approach anchors to SysTick (known correct) and uses DWT only
+      // for the fractional millisecond.
+      const uint32_t now_ms    = HAL_GetTick();
       const uint32_t now_cycle = DWT->CYCCNT;
-      const uint32_t delta_cycles =
-          static_cast<uint32_t>(now_cycle - g_app_timebase.last_cycle);
 
       // Capture first call diagnostics
       if (g_timebase_first_call_count == 0) {
-        g_timebase_first_call_delta = delta_cycles;
         g_timebase_first_call_now_cycle = now_cycle;
         g_timebase_first_call_last_cycle = g_app_timebase.last_cycle;
+        g_timebase_first_call_delta = static_cast<uint32_t>(now_cycle - g_app_timebase.last_cycle);
       }
       g_timebase_first_call_count++;
 
-      g_app_timebase.last_cycle = now_cycle;
+      // Sub-millisecond: cycles elapsed since last SysTick increment.
+      // SysTick fires every (SystemCoreClock / 1000) cycles = cycles_per_us * 1000.
+      // SysTick->VAL counts DOWN from reload value.  At the instant HAL_GetTick()
+      // increments, SysTick->VAL reloads.  The elapsed cycles within the current
+      // ms tick = reload - VAL.
+      // Guard against SysTick roll-over between reading now_ms and VAL:
+      // if VAL rolled (SysTick pending), re-read now_ms.
+      uint32_t ms1 = now_ms;
+      uint32_t val = SysTick->VAL;
+      if (SCB->ICSR & SCB_ICSR_PENDSTSET_Msk) {
+        // SysTick fired between now_ms read and VAL read
+        ms1 = HAL_GetTick();
+        val = SysTick->VAL;
+      }
+      const uint32_t reload = SysTick->LOAD;
+      const uint32_t elapsed_in_tick = (val <= reload) ? (reload - val) : 0u;
+      const uint32_t sub_ms_us = (elapsed_in_tick / cycles_per_us) % 1000u;
 
-      const uint64_t total_cycles =
-          static_cast<uint64_t>(g_app_timebase.cycle_remainder) +
-          static_cast<uint64_t>(delta_cycles);
-      g_app_timebase.acc_us += total_cycles / static_cast<uint64_t>(cycles_per_us);
-      g_app_timebase.cycle_remainder =
-          static_cast<uint32_t>(total_cycles % static_cast<uint64_t>(cycles_per_us));
+      g_app_timebase.last_cycle = now_cycle;
+      const uint64_t candidate = static_cast<uint64_t>(ms1) * 1000ULL + sub_ms_us;
+      if (candidate > g_app_timebase.acc_us) {
+        g_app_timebase.acc_us = candidate;
+      }
       return g_app_timebase.acc_us;
     }
 #endif
