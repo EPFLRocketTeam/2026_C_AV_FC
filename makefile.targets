@@ -2,14 +2,20 @@ REMOTE    = mkezzedd@100.126.7.111
 FIRMWARE  = 2026_C_AV_FC.bin
 SERIAL    = /dev/serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_377733713333-if00
 BAUD      = 115200
+LOG_DIR   = logs
+LOG_FILE  = $(LOG_DIR)/uart_$(shell date +%Y%m%d_%H%M%S).log
 
 flash-remote:
 	scp $(FIRMWARE) $(REMOTE):/tmp/firmware.bin
 	ssh $(REMOTE) "~/flash.sh /tmp/firmware.bin"
 
 serial:
-	ssh $(REMOTE) "stty -F $(SERIAL) $(BAUD) raw && cat $(SERIAL)"
+	@mkdir -p $(LOG_DIR)
+	@echo "Streaming UART → $(LOG_FILE)"
+	ssh $(REMOTE) "stty -F $(SERIAL) $(BAUD) raw && cat $(SERIAL)" >> $(LOG_FILE)
 
 deploy:
+	@mkdir -p $(LOG_DIR)
 	scp $(FIRMWARE) $(REMOTE):/tmp/firmware.bin
-	ssh $(REMOTE) "~/flash.sh /tmp/firmware.bin && sleep 2 && stty -F $(SERIAL) $(BAUD) raw && cat $(SERIAL)"
+	@echo "Flashed. Streaming UART → $(LOG_FILE)"
+	ssh $(REMOTE) "~/flash.sh /tmp/firmware.bin && sleep 2 && stty -F $(SERIAL) $(BAUD) raw && cat $(SERIAL)" >> $(LOG_FILE)
