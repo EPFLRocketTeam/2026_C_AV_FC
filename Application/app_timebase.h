@@ -10,6 +10,7 @@ extern "C" {
 void app_timebase_init(void);
 uint64_t app_timebase_now_us(void);
 uint32_t app_timebase_now_ms(void);
+void app_timebase_print_init_diag(void);
 
 #ifdef __cplusplus
 }

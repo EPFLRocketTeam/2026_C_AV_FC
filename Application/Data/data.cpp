@@ -38,6 +38,13 @@ struct AppTimebaseState {
 
 AppTimebaseState g_app_timebase{};
 
+// Diagnostic: capture DWT state at init for later printing
+static uint32_t g_timebase_init_hal_ms = 0;
+static uint32_t g_timebase_init_dwt_pre = 0;
+static uint32_t g_timebase_init_dwt_ctrl_pre = 0;
+static uint32_t g_timebase_init_last_cycle = 0;
+static uint64_t g_timebase_init_acc_us = 0;
+
 inline void lock_event_store() {
   if (eventStoreMutexHandle != nullptr) {
     osMutexAcquire(eventStoreMutexHandle, osWaitForever);
@@ -109,10 +116,9 @@ void app_timebase_init_locked() {
     return;
   }
 
-  // Debug: capture state BEFORE init to diagnose timebase divergence
-  const uint32_t pre_hal  = HAL_GetTick();
-  const uint32_t pre_dwt  = DWT->CYCCNT;
-  const uint32_t pre_ctrl = DWT->CTRL;
+  g_timebase_init_hal_ms = HAL_GetTick();
+  g_timebase_init_dwt_pre = DWT->CYCCNT;
+  g_timebase_init_dwt_ctrl_pre = DWT->CTRL;
 
   g_app_timebase.last_tick_ms = HAL_GetTick();
   g_app_timebase.acc_us = static_cast<uint64_t>(g_app_timebase.last_tick_ms) * 1000ULL;
@@ -131,16 +137,8 @@ void app_timebase_init_locked() {
 
   g_app_timebase.initialized = true;
 
-  // Print timebase init diagnostic
-  printf("[TIMEBASE-INIT] pre: HAL=%lu DWT=0x%08lX CTRL=0x%08lX  "
-         "post: HAL=%lu last_cycle=0x%08lX acc_us=%lu dwt=%d\r\n",
-         static_cast<unsigned long>(pre_hal),
-         static_cast<unsigned long>(pre_dwt),
-         static_cast<unsigned long>(pre_ctrl),
-         static_cast<unsigned long>(g_app_timebase.last_tick_ms),
-         static_cast<unsigned long>(g_app_timebase.last_cycle),
-         static_cast<unsigned long>(g_app_timebase.acc_us),
-         static_cast<int>(g_app_timebase.use_dwt));
+  g_timebase_init_last_cycle = g_app_timebase.last_cycle;
+  g_timebase_init_acc_us = g_app_timebase.acc_us;
 }
 
 uint64_t app_timebase_now_us_locked() {
@@ -194,6 +192,16 @@ extern "C" uint64_t app_timebase_now_us(void) {
 
 extern "C" uint32_t app_timebase_now_ms(void) {
   return static_cast<uint32_t>(app_timebase_now_us() / 1000ULL);
+}
+
+extern "C" void app_timebase_print_init_diag(void) {
+  printf("[TIMEBASE-INIT] pre: HAL=%lu DWT=0x%08lX CTRL=0x%08lX  "
+         "post: last_cycle=0x%08lX acc_us=%lu\r\n",
+         static_cast<unsigned long>(g_timebase_init_hal_ms),
+         static_cast<unsigned long>(g_timebase_init_dwt_pre),
+         static_cast<unsigned long>(g_timebase_init_dwt_ctrl_pre),
+         static_cast<unsigned long>(g_timebase_init_last_cycle),
+         static_cast<unsigned long>(g_timebase_init_acc_us));
 }
 
 using namespace flight_computer;
