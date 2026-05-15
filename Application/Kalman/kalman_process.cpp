@@ -816,12 +816,15 @@ int kalman_loop() {
 			kalman.force_flight_start_ms_ = now_ms;
 		}
 		if ((now_ms - kalman.force_flight_start_ms_) >= KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS) {
+			const uint32_t liftoff_ms = app_timebase_now_ms();
 			printf("[KAL-DBG] Force-flight: injecting BURN state + liftoff  "
-			       "(waited %lu ms)\r\n",
-			       (unsigned long)(now_ms - kalman.force_flight_start_ms_));
+			       "(waited %lu ms, liftoff_ms=%lu, HAL_ms=%lu)\r\n",
+			       (unsigned long)(now_ms - kalman.force_flight_start_ms_),
+			       (unsigned long)liftoff_ms,
+			       (unsigned long)HAL_GetTick());
 			kalman_on_state_change(
 				static_cast<uint32_t>(flight_computer::State::BURN));
-			kalman_on_liftoff(HAL_GetTick());
+			kalman_on_liftoff(liftoff_ms);
 			kalman.force_flight_done_ = true;
 		}
 	}
