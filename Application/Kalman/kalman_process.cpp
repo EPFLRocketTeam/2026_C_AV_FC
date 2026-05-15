@@ -391,6 +391,28 @@ struct KalmanRuntime {
 			return;
 		}
 
+#if KALMAN_DEBUG_PRINT
+		{
+			static uint32_t ingest_diag_counter = 0;
+			if (ingest_diag_counter < 5) {
+				printf("[INGEST-IMU] src=%u count=%u ts[0]=%u:%u",
+					(unsigned)source_index, (unsigned)count,
+					(unsigned)(samples[0].timestamp_us >> 32),
+					(unsigned)samples[0].timestamp_us);
+				if (count >= 2) {
+					printf("  ts[1]=%u:%u  dt=%u",
+						(unsigned)(samples[1].timestamp_us >> 32),
+						(unsigned)samples[1].timestamp_us,
+						(unsigned)(uint32_t)(samples[1].timestamp_us - samples[0].timestamp_us));
+				}
+				printf("  ts[last]=%u:%u\r\n",
+					(unsigned)(samples[count-1].timestamp_us >> 32),
+					(unsigned)samples[count-1].timestamp_us);
+				ingest_diag_counter++;
+			}
+		}
+#endif
+
 		if (count > kMaxImuSamplesPerSourcePerRun) {
 			count = kMaxImuSamplesPerSourcePerRun;
 		}
@@ -428,6 +450,24 @@ struct KalmanRuntime {
 			}
 			batch.source = static_cast<uint8_t>(source_index);
 			batch.slot = 0xFF;
+
+#if KALMAN_DEBUG_PRINT
+			{
+				static uint32_t batch_diag_counter = 0;
+				if (batch_diag_counter < 10) {
+					printf("[BATCH-DT] #%u  t0=%u:%u  dt_us=%u  count=%u  "
+						"slice0_ts=%u:%u  slice1_ts=%u:%u\r\n",
+						(unsigned)batch_diag_counter,
+						(unsigned)(batch.t0_us >> 32), (unsigned)batch.t0_us,
+						(unsigned)batch.dt_us, (unsigned)batch.count,
+						(unsigned)(slice[0].timestamp_us >> 32),
+						(unsigned)slice[0].timestamp_us,
+						(unsigned)(slice_count >= 2 ? (slice[1].timestamp_us >> 32) : 0),
+						(unsigned)(slice_count >= 2 ? (uint32_t)slice[1].timestamp_us : 0));
+					batch_diag_counter++;
+				}
+			}
+#endif
 
 			estimator.processImuBatch(batch);
 
