@@ -36,7 +36,7 @@
 /// Delay (super-loop ticks) before force-flight auto-transitions.
 /// Gives the Rail Shadow time to converge on gravity before seeding ESKF.
 #ifndef KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS
-#define KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS 5000
+#define KALMAN_DEBUG_FORCE_FLIGHT_DELAY_TICKS 10000
 #endif
 
 #if KALMAN_DEBUG_PRINT

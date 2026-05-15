@@ -1,4 +1,4 @@
-REMOTE    = mkezzedd@10.20.45.239
+REMOTE    = mkezzedd@100.126.7.111
 FIRMWARE  = 2026_C_AV_FC.bin
 SERIAL    = /dev/serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_377733713333-if00
 BAUD      = 115200
