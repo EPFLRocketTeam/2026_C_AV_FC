@@ -141,6 +141,12 @@ void app_timebase_init_locked() {
   g_timebase_init_acc_us = g_app_timebase.acc_us;
 }
 
+// Diagnostic: capture first few calls
+static uint32_t g_timebase_first_call_delta = 0xDEAD;
+static uint32_t g_timebase_first_call_now_cycle = 0;
+static uint32_t g_timebase_first_call_last_cycle = 0;
+static uint32_t g_timebase_first_call_count = 0;
+
 uint64_t app_timebase_now_us_locked() {
   app_timebase_init_locked();
 
@@ -151,6 +157,15 @@ uint64_t app_timebase_now_us_locked() {
       const uint32_t now_cycle = DWT->CYCCNT;
       const uint32_t delta_cycles =
           static_cast<uint32_t>(now_cycle - g_app_timebase.last_cycle);
+
+      // Capture first call diagnostics
+      if (g_timebase_first_call_count == 0) {
+        g_timebase_first_call_delta = delta_cycles;
+        g_timebase_first_call_now_cycle = now_cycle;
+        g_timebase_first_call_last_cycle = g_app_timebase.last_cycle;
+      }
+      g_timebase_first_call_count++;
+
       g_app_timebase.last_cycle = now_cycle;
 
       const uint64_t total_cycles =
@@ -202,6 +217,12 @@ extern "C" void app_timebase_print_init_diag(void) {
          static_cast<unsigned long>(g_timebase_init_dwt_ctrl_pre),
          static_cast<unsigned long>(g_timebase_init_last_cycle),
          static_cast<unsigned long>(g_timebase_init_acc_us));
+  printf("[TIMEBASE-FIRST] delta=0x%08lX (%lu us)  now=0x%08lX  last=0x%08lX  calls=%lu\r\n",
+         static_cast<unsigned long>(g_timebase_first_call_delta),
+         static_cast<unsigned long>(g_timebase_first_call_delta / (SystemCoreClock / 1000000u)),
+         static_cast<unsigned long>(g_timebase_first_call_now_cycle),
+         static_cast<unsigned long>(g_timebase_first_call_last_cycle),
+         static_cast<unsigned long>(g_timebase_first_call_count));
 }
 
 using namespace flight_computer;
