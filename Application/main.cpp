@@ -336,14 +336,16 @@ extern "C" void app_super_loop_setup(void) {
     }
     g_imu_module = &g_superloop.imuModule;
 
-    // ── FSYNC: DISABLED for debugging — check if timestamps recover ────────
-    // if (fsync_pwm_init(6400u)) {
-    //     g_superloop.invImu1.enableFsync();
-    //     printf("[APP] FSYNC PWM started on PD14 @ 6400 Hz\r\n");
-    // } else {
-    //     printf("[APP] WARNING: FSYNC PWM init failed — IMU timestamps may drift\r\n");
-    // }
-    printf("[APP] FSYNC DISABLED for timestamp debugging\r\n");
+    // ── FSYNC: lock IMU timestamps to MCU crystal ──────────────────────────
+    // Start 6400 Hz PWM on PD14 → ICM-45686 INT2 (FSYNC input), then tell
+    // the IMU to use it. Order matters: clock must be running before the IMU
+    // is told to listen to it, otherwise the IMU sees no edges.
+    if (fsync_pwm_init(6400u)) {
+        g_superloop.invImu1.enableFsync();
+        printf("[APP] FSYNC PWM started on PD14 @ 6400 Hz\r\n");
+    } else {
+        printf("[APP] WARNING: FSYNC PWM init failed — IMU timestamps may drift\r\n");
+    }
 
     // ── Baro init diagnostics ──────────────────────────────────────────────
     // Print SPI handle states after IMU init (IMU uses SPI4, baros use SPI4+SPI5)

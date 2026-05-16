@@ -390,6 +390,16 @@ void InvIMU_STM32::configureFifo() {
         printf("FIFO_CONFIG4 (0x22) AFTER  clear: intended=0x%02X readback=0x%02X\r\n", r22, r22_rb);
     }
 
+    // Enable the FIFO timestamp counter (TMST_EN in SMC_CONTROL_0).
+    // Without this, the 16-bit timestamp field in FIFO frames is always 0,
+    // causing all samples in a burst to get the same absolute timestamp.
+    {
+        smc_control_0_t smc;
+        inv_imu_read_reg(&_dev, SMC_CONTROL_0, 1, (uint8_t *)&smc);
+        smc.tmst_en = INV_IMU_ENABLE;
+        inv_imu_write_reg(&_dev, SMC_CONTROL_0, 1, (uint8_t *)&smc);
+    }
+
     // INT1 pin: push-pull, PULSE mode, active-high.
     // PULSE mode generates a ~100 µs rising edge per event and self-de-asserts.
     // LATCH mode was avoided because INT1 can fire during init (before g_imu_module
@@ -553,6 +563,18 @@ bool InvIMU_STM32::parseFrameInto(IMUData& out, const uint8_t* p, uint8_t /*fram
     // For 0xF0 frames (timestamp_bit=0) p[15..16] may be ES1 data or padding —
     // use it anyway as a monotonic proxy counter for relative unwrapping.
     uint16_t raw_ts = (uint16_t)((p[16] << 8) | p[15]);
+    // Debug: dump first few raw timestamps to see if they're incrementing
+    {
+        static uint32_t ts_diag_count = 0;
+        if (ts_diag_count < 10) {
+            printf("[FIFO-TS] #%u  hdr=0x%02X  raw_ts=%u  last=%u  delta=%d  unwrapped=%llu\r\n",
+                (unsigned)ts_diag_count, (unsigned)header,
+                (unsigned)raw_ts, (unsigned)_last_fifo_ts,
+                (int)(int16_t)(raw_ts - _last_fifo_ts),
+                (unsigned long long)_last_unwrapped_ts);
+            ts_diag_count++;
+        }
+    }
     if (!_timestamp_initialized) {
         _last_fifo_ts          = raw_ts;
         _last_unwrapped_ts     = 0;
