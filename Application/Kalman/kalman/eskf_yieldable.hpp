@@ -514,6 +514,7 @@ class EskfYieldable {
   uint64_t peekNextBaroTimestamp() const;
   uint64_t peekNextEventTimestamp() const;
   EventType peekNextEventType() const;
+  uint64_t latestAvailableImuTimestamp() const;
   
   void processNextImu();
   void processNextBaro();

@@ -247,6 +247,12 @@ void EskfYieldable::setBaroMeasurement(size_t slot, eskf_scalar alt_m,
 }
 
 void EskfYieldable::triggerBaro(uint64_t trigger_timestamp_us) {
+  // If a previous trigger was never completed, mark its slot as dropped
+  // so discardStalePendingBaro() can advance past it.
+  if (has_pending_baro_) {
+    baro_buffer_[pending_baro_slot_].dropped = true;
+    stats_.baro_drops++;
+  }
   // Simpler API: capture snapshot and store slot internally
   pending_baro_slot_ = reserveBaro(trigger_timestamp_us);
   has_pending_baro_ = true;
@@ -692,11 +698,22 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
   
   while (kalman_timestamp_us_ <= target_timestamp_us) {
     discardStalePendingBaro();
+
+    // IMU is the time authority: do not process aiding measurements beyond
+    // the latest available IMU timestamp.  This prevents baro/GPS/mag from
+    // advancing kalman_timestamp_us_ past the IMU frontier, which would
+    // cause subsequent IMU samples to appear stale.
+    const uint64_t imu_horizon_us = latestAvailableImuTimestamp();
     
     // Find next event (earliest timestamp across all buffers)
     uint64_t next_imu_ts = peekNextImuTimestamp();
     uint64_t next_baro_ts = peekNextBaroTimestamp();
     uint64_t next_event_ts = peekNextEventTimestamp();
+
+    // Gate non-IMU events by IMU horizon: they must wait until
+    // IMU propagation has reached their timestamp.
+    if (next_baro_ts > imu_horizon_us) next_baro_ts = UINT64_MAX;
+    if (next_event_ts > imu_horizon_us) next_event_ts = UINT64_MAX;
     
     // Find minimum (UINT64_MAX means buffer exhausted)
     uint64_t earliest = next_imu_ts;
@@ -745,30 +762,32 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
     }
 
     // ── Guard: skip stale entries from ring-buffer wrap-around ──
-    // With sequence-number indexing this should be rare, but keep as safety net
-    // in case a rewind or other edge case leaves stale timestamps visible.
-    // Threshold: 1 ms — comfortably above any normal jitter but far below
-    // the ~500 ms span of the full ring buffer.
+    // With the IMU-horizon gate above, steady-state stale events should be
+    // near-zero.  This guard remains as a safety net for rewind edge cases
+    // and any residual out-of-order timestamps.
     constexpr uint64_t kStaleThresholdUs = 1000;
     if (earliest + kStaleThresholdUs < kalman_timestamp_us_) {
       // Advance the correct read index past this stale entry.
-      if (earliest == next_imu_ts)       { imu_read_seq_++; }
-      else if (earliest == next_baro_ts) { baro_read_idx_++; }
-      else                               { event_read_idx_++; }
+      const char* stale_type = "evt";
+      if (earliest == next_imu_ts)       { imu_read_seq_++; stale_type = "imu"; }
+      else if (earliest == next_baro_ts) { baro_read_idx_++; stale_type = "baro"; }
+      else                               { event_read_idx_++; stale_type = "evt"; }
       stats_.stale_skips++;
 #if KALMAN_DEBUG_PRINT
       static uint32_t stale_log_counter = 0;
       static uint32_t stale_detail_counter = 0;
-      if (stale_detail_counter < 10) {
-        printf("[CATCHUP] STALE-DETAIL: ts=%u:%u  kalTs=%u:%u  "
-               "readSeq=%u  slot=%u  staleSkips=%u\r\n",
+      // Print first 50, then every 50th for steady-state analysis
+      if (stale_detail_counter < 50 || (stats_.stale_skips % 50 == 0)) {
+        printf("[CATCHUP] STALE-DETAIL: type=%s ts=%u:%u  kalTs=%u:%u  "
+               "gap=%u  staleSkips=%u  imuHorizon=%u:%u\r\n",
+               stale_type,
                (unsigned)(earliest >> 32), (unsigned)earliest,
                (unsigned)(kalman_timestamp_us_ >> 32),
                (unsigned)kalman_timestamp_us_,
-               (unsigned)imu_read_seq_,
-               (unsigned)(imu_read_seq_ % ESKF_IMU_BUFFER_SIZE),
-               (unsigned)stats_.stale_skips);
-        stale_detail_counter++;
+               (unsigned)(kalman_timestamp_us_ - earliest),
+               (unsigned)stats_.stale_skips,
+               (unsigned)(imu_horizon_us >> 32), (unsigned)imu_horizon_us);
+        if (stale_detail_counter < 50) stale_detail_counter++;
       }
       if (++stale_log_counter >= 3000) {
         stale_log_counter = 0;
@@ -798,8 +817,10 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       processNextEvent();
     }
 
-    // Keep timeline monotonic even if a stale out-of-order entry is consumed.
-    if (earliest > kalman_timestamp_us_) {
+    // Keep timeline monotonic — only advance on IMU events (predict).
+    // Aiding measurements (baro, GPS, mag) correct state at an already-
+    // propagated time; they must not advance the filter clock.
+    if (earliest == next_imu_ts && earliest > kalman_timestamp_us_) {
       kalman_timestamp_us_ = earliest;
     }
     events_processed++;
@@ -1151,6 +1172,13 @@ uint64_t EskfYieldable::peekNextImuTimestamp() const {
   
   const size_t slot = imu_read_seq_ % ESKF_IMU_BUFFER_SIZE;
   return imu_buffer_[slot].imu.timestamp_us;
+}
+
+uint64_t EskfYieldable::latestAvailableImuTimestamp() const {
+  if (imu_push_seq_ == 0) return kalman_timestamp_us_;
+  const uint64_t newest_seq = imu_push_seq_ - 1;
+  const size_t newest_slot = newest_seq % ESKF_IMU_BUFFER_SIZE;
+  return imu_buffer_[newest_slot].imu.timestamp_us;
 }
 
 uint64_t EskfYieldable::peekNextBaroTimestamp() const {

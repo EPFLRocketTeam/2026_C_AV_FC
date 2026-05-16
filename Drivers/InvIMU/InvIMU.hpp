@@ -174,6 +174,7 @@ namespace InvIMU {
         volatile uint64_t _irq_time_us = 0;
         int64_t _fifo_to_abs_offset_us = 0;
         bool _fifo_to_abs_offset_initialized = false;
+        uint64_t _last_emitted_ts_us = 0;
 
         // Frame header statistics
         uint32_t _frame_count_0x78 = 0;

@@ -387,7 +387,15 @@ void InvIMU_STM32::configureFifo() {
         spi_write(0x22, r22);
         uint8_t r22_rb = 0;
         spi_read(0x22, &r22_rb, 1);
-        printf("FIFO_CONFIG4 (0x22) AFTER  clear: intended=0x%02X readback=0x%02X\r\n", r22, r22_rb);
+        printf("FIFO_CONFIG4 (0x22) AFTER  clear: intended=0x%02X readback=0x%02X (bit1=tmst_fsync_en)\r\n", r22, r22_rb);
+        // Verify bit1 is set — if not, force it
+        if (!(r22_rb & 0x02)) {
+            printf("WARNING: fifo_tmst_fsync_en NOT set, forcing...\r\n");
+            r22_rb |= 0x02;
+            spi_write(0x22, r22_rb);
+            spi_read(0x22, &r22_rb, 1);
+            printf("FIFO_CONFIG4 forced readback=0x%02X\r\n", r22_rb);
+        }
     }
 
     // Enable the FIFO timestamp counter (TMST_EN in SMC_CONTROL_0).
@@ -398,6 +406,10 @@ void InvIMU_STM32::configureFifo() {
         inv_imu_read_reg(&_dev, SMC_CONTROL_0, 1, (uint8_t *)&smc);
         smc.tmst_en = INV_IMU_ENABLE;
         inv_imu_write_reg(&_dev, SMC_CONTROL_0, 1, (uint8_t *)&smc);
+        // Readback verify
+        smc_control_0_t smc_rb;
+        inv_imu_read_reg(&_dev, SMC_CONTROL_0, 1, (uint8_t *)&smc_rb);
+        printf("SMC_CONTROL_0 tmst_en readback=%u (expect 1)\r\n", (unsigned)smc_rb.tmst_en);
     }
 
     // INT1 pin: push-pull, PULSE mode, active-high.
@@ -472,7 +484,8 @@ bool InvIMU_STM32::parseFrameInto(IMUData& out, const uint8_t* p, uint8_t /*fram
     bool hires = (header & 0x10u) != 0u;
 
     // Track frame header types for diagnostics
-    if (header == 0x78) ++_frame_count_0x78;
+    // 0x78 = standard hires, 0x7C = hires+FSYNC_TAG, 0xF0 = ext_header hires
+    if ((header & 0xF8u) == 0x78) ++_frame_count_0x78;  // 0x78 or 0x7C
     else if (header == 0xF0) ++_frame_count_0xF0;
     else ++_frame_count_other;
 
@@ -567,11 +580,11 @@ bool InvIMU_STM32::parseFrameInto(IMUData& out, const uint8_t* p, uint8_t /*fram
     {
         static uint32_t ts_diag_count = 0;
         if (ts_diag_count < 10) {
-            printf("[FIFO-TS] #%u  hdr=0x%02X  raw_ts=%u  last=%u  delta=%d  unwrapped=%llu\r\n",
+            printf("[FIFO-TS] #%u  hdr=0x%02X  raw_ts=%u  p[14..16]=%02X %02X %02X  p[0..3]=%02X %02X %02X %02X\r\n",
                 (unsigned)ts_diag_count, (unsigned)header,
-                (unsigned)raw_ts, (unsigned)_last_fifo_ts,
-                (int)(int16_t)(raw_ts - _last_fifo_ts),
-                (unsigned long long)_last_unwrapped_ts);
+                (unsigned)raw_ts,
+                (unsigned)p[14], (unsigned)p[15], (unsigned)p[16],
+                (unsigned)p[0], (unsigned)p[1], (unsigned)p[2], (unsigned)p[3]);
             ts_diag_count++;
         }
     }
@@ -627,7 +640,14 @@ void InvIMU_STM32::processPendingRx() {
     }
     for (uint16_t i = 0; i < parsed; ++i) {
         IMUData d = _burst_buffer[i];
-        d.timestamp_us = (uint64_t)((int64_t)d.timestamp_us + _fifo_to_abs_offset_us);
+        uint64_t abs_ts = (uint64_t)((int64_t)d.timestamp_us + _fifo_to_abs_offset_us);
+        // Enforce monotonicity: never emit a timestamp <= the previous one.
+        // Inter-burst offset corrections can cause small backwards jumps.
+        if (_last_emitted_ts_us > 0 && abs_ts <= _last_emitted_ts_us) {
+            abs_ts = _last_emitted_ts_us + 1u;
+        }
+        _last_emitted_ts_us = abs_ts;
+        d.timestamp_us = abs_ts;
         applyAlignment(d);
         const uint16_t next_head = (uint16_t)((_head + 1u) % kRingCapacity);
         if (next_head == _tail) {

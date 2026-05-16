@@ -71,6 +71,22 @@ bool BMP390_SDK::init() {
               static_cast<OsrTemp>(cfg_.osr_t),
               static_cast<IIRFilter>(cfg_.iir));
 
+    // Verify PWR_CTRL was written correctly (press_en, temp_en)
+    {
+        uint8_t pwr_ctrl = 0;
+        bmp3_get_regs(BMP3_REG_PWR_CTRL, &pwr_ctrl, 1, &dev_);
+        const bool press_ok = (pwr_ctrl & BMP3_PRESS_EN_MSK) != 0;
+        const bool temp_ok  = (pwr_ctrl & BMP3_TEMP_EN_MSK)  != 0;
+        printf("[BMP390] PWR_CTRL readback: 0x%02X  press_en=%d temp_en=%d\r\n",
+               pwr_ctrl, (int)press_ok, (int)temp_ok);
+        if (!press_ok || !temp_ok) {
+            printf("[BMP390] WARNING: press/temp not enabled, writing directly\r\n");
+            uint8_t reg_addr = BMP3_REG_PWR_CTRL;
+            uint8_t reg_data = BMP3_PRESS_EN_MSK | BMP3_TEMP_EN_MSK; // sleep mode + enables
+            bmp3_set_regs(&reg_addr, &reg_data, 1, &dev_);
+        }
+    }
+
     healthy_ = true;
     printf("[BMP390] init complete, healthy=true\r\n");
     return true;
@@ -154,8 +170,17 @@ bool BMP390_SDK::triggerConversion() {
 
     triggerTs_us_ = bmp3_now_us();
 
-    devSettings_.op_mode = BMP3_MODE_FORCED;
-    int8_t rs = bmp3_set_op_mode(&devSettings_, &dev_);
+    // Write PWR_CTRL (0x1B) atomically: press_en=1, temp_en=1, mode=forced.
+    // The Bosch SDK's bmp3_set_op_mode() does a read-modify-write, which can
+    // lose press_en/temp_en bits if the SPI read returns stale/garbage data.
+    // That causes the sensor to run an "empty" forced conversion that never
+    // updates the ADC registers, producing the POR-default 84257 Pa / 22.7 °C.
+    // Writing the full byte avoids the R-M-W hazard.
+    uint8_t reg_addr = BMP3_REG_PWR_CTRL;
+    uint8_t reg_data = BMP3_PRESS_EN_MSK     // bit 0 = press_en
+                     | BMP3_TEMP_EN_MSK      // bit 1 = temp_en
+                     | (BMP3_MODE_FORCED << BMP3_OP_MODE_POS);  // bits[5:4] = forced
+    int8_t rs = bmp3_set_regs(&reg_addr, &reg_data, 1, &dev_);
     if (rs != BMP3_OK) {
         snprintf(lastErr_, sizeof(lastErr_), "set_op_mode=%d", (int)rs);
         statusFlags_ |= BMP390_STATUS_SPI_ERROR;
