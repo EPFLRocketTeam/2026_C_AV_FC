@@ -376,14 +376,14 @@ void InvIMU_STM32::configureFifo() {
     // that bit gets written back set — silently enabling delta-compression.
     // Compressed frames have ext_header=1 (0xF0 instead of 0x70) and a completely
     // different binary layout; parsing them as raw hi-res data produces garbage.
-    // Explicitly clear bit2 (comp_en) AND bit1 (tmst_fsync_en) here.
-    // fifo_tmst_fsync_en=1 floods the FIFO with ODR timestamp event frames (ext_header=1, header=0xF0)
-    // at ~3x the sensor ODR, drowning out the real 0x78 hires frames.
+    // Clear bit2 (comp_en) only. Do NOT clear bit1 (fifo_tmst_fsync_en) — that
+    // bit enables the 16-bit timestamp field in each FIFO frame. Without it,
+    // all timestamp bytes are 0x0000.
     {
         uint8_t r22 = 0;
         spi_read(0x22, &r22, 1);
         printf("FIFO_CONFIG4 (0x22) BEFORE clear: 0x%02X  (bit2=comp_en bit1=tmst_fsync_en bit0=es0_6b_9b)\r\n", r22);
-        r22 &= ~(uint8_t)0x06;  // clear fifo_comp_en (bit2) AND fifo_tmst_fsync_en (bit1)
+        r22 &= ~(uint8_t)0x04;  // clear fifo_comp_en (bit2) only; keep fifo_tmst_fsync_en (bit1) — it enables timestamps in FIFO frames
         spi_write(0x22, r22);
         uint8_t r22_rb = 0;
         spi_read(0x22, &r22_rb, 1);
