@@ -82,6 +82,109 @@ AppImuRingBuffer imuData3;
 // AppImuRingBuffer imuData4;
 
 RingBuffer<GpsBasicFixData, 100> gpsData;
+
+// ── Fake GNSS injection for pipeline testing ──────────────────────────────────
+// Enable with -DFAKE_GNSS_ENABLE=1.  Injects synthetic 3D-fix data at 16 Hz
+// directly into the gpsData ring buffer, exercising the full GNSS→ESKF→rewind
+// pipeline without a real GPS receiver.
+#ifndef FAKE_GNSS_ENABLE
+#define FAKE_GNSS_ENABLE 1
+#endif
+
+#if FAKE_GNSS_ENABLE
+namespace {
+
+// Simulated launch site: 45.5088° N, -73.5878° W, 30m MSL (Montreal)
+constexpr int32_t kFakeLat        = 455088000;   // 1e-7 deg
+constexpr int32_t kFakeLon        = -735878000;  // 1e-7 deg
+constexpr int32_t kFakeHMSL       = 30000;       // mm
+constexpr int32_t kFakeHeight     = 30000;       // mm (ellipsoid ≈ MSL here)
+constexpr uint32_t kFakeHAcc      = 1500;        // mm (1.5 m CEP)
+constexpr uint32_t kFakeVAcc      = 3000;        // mm (3 m)
+constexpr uint32_t kFakeSAcc      = 500;         // mm/s
+constexpr uint8_t  kFakeNumSV     = 12;
+constexpr uint16_t kFakePDOP      = 120;         // 1.2 (×100)
+
+// Start with 1 Hz to stress-test the rewind pipeline safely.
+// Each measurement triggers an individual 100ms rewind.
+// Increase gradually: 1 → 4 → 8 → 16 Hz.
+#ifndef FAKE_GNSS_RATE_HZ
+#define FAKE_GNSS_RATE_HZ 16
+#endif
+constexpr uint32_t kFakeGpsPeriodUs = 1000000u / FAKE_GNSS_RATE_HZ;
+
+struct FakeGnssState {
+    uint64_t next_inject_us = 0;    // next injection time
+    uint64_t last_pps_us    = 0;    // last simulated PPS pulse time
+    uint32_t itow_ms        = 0;    // GPS time-of-week (ms), wraps at 604800000
+    uint32_t sample_count   = 0;
+};
+FakeGnssState g_fake_gnss;
+
+void fake_gnss_inject(uint64_t now_us) {
+    // Don't inject until well after force-flight (15s) to avoid
+    // preflight buffer accumulation and early-liftoff edge cases.
+    constexpr uint64_t kFakeGnssStartDelayUs = 15000000ULL;  // 15 seconds
+    if (now_us < kFakeGnssStartDelayUs) return;
+
+    if (now_us < g_fake_gnss.next_inject_us) return;
+    g_fake_gnss.next_inject_us = now_us + kFakeGpsPeriodUs;
+
+    // PPS: set to 0 so each measurement uses its own reception timestamp.
+    // This triggers individual ~100ms rewinds per measurement
+    // (via ESKF_DEFAULT_GPS_DELAY_US = -100000).
+
+    GpsBasicFixData fix{};
+    fix.timestamp_us     = now_us;
+    fix.pps_timestamp_us = 0;  // use reception time → unique rewinds
+
+    // Time fields (synthetic)
+    fix.iTOW  = g_fake_gnss.itow_ms;
+    fix.year  = 2025; fix.month = 5; fix.day = 16;
+    fix.hour  = 12; fix.min = 0;
+    fix.sec   = static_cast<uint8_t>((g_fake_gnss.itow_ms / 1000) % 60);
+    fix.nano  = static_cast<int32_t>((g_fake_gnss.itow_ms % 1000) * 1000000);
+
+    // Validity
+    fix.valid.validDate     = true;
+    fix.valid.validTime     = true;
+    fix.valid.fullyResolved = true;
+    fix.valid.validMag      = false;
+
+    // Fix info
+    fix.fixType         = GpsFixType::FIX_3D;
+    fix.flags.gnssFixOK = true;
+    fix.flags.diffSoln  = false;
+    fix.flags.headVehValid = false;
+    fix.flags.psmState  = GpsPowerSaveMode::NOT_ACTIVE;
+    fix.flags.carrSoln  = GpsCarrierPhaseStatus::NONE;
+    fix.numSV           = kFakeNumSV;
+
+    // Position (constant)
+    fix.lat    = kFakeLat;
+    fix.lon    = kFakeLon;
+    fix.height = kFakeHeight;
+    fix.hMSL   = kFakeHMSL;
+    fix.hAcc   = kFakeHAcc;
+    fix.vAcc   = kFakeVAcc;
+
+    // Velocity (zero — static on ground)
+    fix.velN = 0; fix.velE = 0; fix.velD = 0;
+    fix.gSpeed  = 0;
+    fix.headMot = 0;
+    fix.sAcc    = kFakeSAcc;
+    fix.headAcc = 1000000; // 10° (× 1e-5)
+
+    fix.pDOP = kFakePDOP;
+
+    gpsData.append(fix);
+    g_fake_gnss.itow_ms += (kFakeGpsPeriodUs / 1000); // advance iTOW by ~62 ms
+    if (g_fake_gnss.itow_ms >= 604800000u) g_fake_gnss.itow_ms = 0;
+    g_fake_gnss.sample_count++;
+}
+
+} // namespace
+#endif // FAKE_GNSS_ENABLE
 RingBuffer<BaroData, 100> baroData1;
 RingBuffer<BaroData, 100> baroData2;
 RingBuffer<BaroData, 100> baroData3;
@@ -370,10 +473,15 @@ extern "C" void app_super_loop_setup(void) {
         printf("WARNING: No barometers initialized\r\n");
     }
 
+#if FAKE_GNSS_ENABLE
+    printf("[APP] FAKE_GNSS_ENABLE=1: skipping real GPS init, using synthetic 16Hz GNSS\r\n");
+    // Don't init real GPS — no hardware attached.
+#else
     if (!g_superloop.gpsModule.init()) {
         g_superloop.ready = false;
         return;
     }
+#endif
     g_superloop.ready = true;
 }
 
@@ -398,7 +506,13 @@ extern "C" void app_super_loop_iterate(void) {
         g_baro_status_flags[i] = g_superloop.baroModule.sensorStatusFlags(i);
     }
     (void)g_superloop.baroModule.takeProducedCount();
+#if !FAKE_GNSS_ENABLE
     g_superloop.gpsModule.update(now_ms);
+#endif
+
+#if FAKE_GNSS_ENABLE
+    fake_gnss_inject(iteration_start_us);
+#endif
 
     (void)kalman_loop();
 

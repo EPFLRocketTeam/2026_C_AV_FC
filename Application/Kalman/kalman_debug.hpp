@@ -345,6 +345,22 @@ inline void printDebugLine(
         const_cast<app::EskfEstimator&>(estimator).resetImuProcBreakdown();
     }
 
+    // Line 9c: GPS rewind details
+    {
+        const uint32_t rwd_n = stats.rewind_count;
+        const uint64_t rwd_tot = stats.rewind_total_depth_us;
+        const uint32_t avg_depth = rwd_n > 0 ? static_cast<uint32_t>(rwd_tot / rwd_n) : 0;
+        printf("[KAL] GPS-rwd: n=%lu  avgDepth=%luus  noChk=%lu  gap=%lu  "
+               "velRej=%lu  posRej=%lu  covRst=%lu\r\n",
+               static_cast<unsigned long>(rwd_n),
+               static_cast<unsigned long>(avg_depth),
+               static_cast<unsigned long>(stats.rewind_no_checkpoint_count),
+               static_cast<unsigned long>(stats.rewind_data_gap_count),
+               static_cast<unsigned long>(stats.gps_vel_rejects),
+               static_cast<unsigned long>(stats.gps_pos_rejects),
+               static_cast<unsigned long>(stats.gps_covariance_resets));
+    }
+
     // Line 10: BURN-phase diagnostics (ESKF state, aero-blind, corrections)
     if (fsm_state == flight_computer::State::BURN ||
         fsm_state == flight_computer::State::ASCENT ||
