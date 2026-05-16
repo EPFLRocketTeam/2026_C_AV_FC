@@ -5,6 +5,7 @@
 #include "Modules/baro_module.hpp"
 #include "Modules/imu_modlue.hpp"
 #include "Modules/gps_module.hpp"
+#include "plume_driver.hpp"
 
 extern "C" {
 #include "Application/main.h"
@@ -110,6 +111,10 @@ RingBuffer<BaroData, 100> baroData4;
 #endif
 
 namespace {
+
+SDCardInterface g_sd_interface;
+const size_t g_sd_arena_length = 64 * 1024;
+uint8_t g_sd_arena_buffer[g_sd_arena_length];
 
 ImuModule<1>* g_imu_module = nullptr;
 uint8_t g_imu_healthy[1] = {0u};
@@ -336,6 +341,24 @@ extern "C" void app_super_loop_setup(void) {
     }
     g_imu_module = &g_superloop.imuModule;
 
+    printf("[APP] Initializing SD Card...\n");
+    // TODO add handle for SD
+    SD_HandleTypeDef *sd_hsd = NULL;
+    if (hsd == NULL) {
+        printf("[APP] Please provide handle for SD Card or comment code related to SD card.\n");
+        return ;
+    }
+    if (!g_sd_interface.init_sd_card(sd_hsd, g_sd_arena_buffer, g_sd_arena_length)) {
+        printf("[APP] Failure of init SD card.\n");
+        return ;
+    }
+
+    printf("Opening file...\n");
+    if (!g_sd_interface.open_file()) {
+        printf("[APP] Failure of open on SD card.\n");
+        return ;
+    }
+
     // ── FSYNC: DISABLED for debugging — check if timestamps recover ────────
     // if (fsync_pwm_init(6400u)) {
     //     g_superloop.invImu1.enableFsync();
@@ -379,6 +402,14 @@ extern "C" void app_super_loop_iterate(void) {
     if (!g_superloop.ready) {
         return;
     }
+
+    // TODO decide when to store data dump
+    // TODO setup error handling on write & tick
+    if (false) {
+        const flight_computer::DataDump &dataDump = flight_computer::GOATStore::get_instance().get();
+        g_sd_interface.write((const uint8_t*)(&dataDump), sizeof(flight_computer::DataDump));
+    }
+    g_sd_interface.tick();
 
     const uint64_t iteration_start_us = app_timebase_now_us();
     const uint32_t now_ms = HAL_GetTick();
