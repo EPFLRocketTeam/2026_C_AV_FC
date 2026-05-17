@@ -2,6 +2,12 @@
 #include "Application/Data/data.hpp"
 #include "Application/FlightControl/threshold.h"
 #include "Application/Kalman/kalman_lifecycle.h"
+
+extern "C" {
+#include "Application/FlightControl/uart_cmd.h"
+}
+
+#include <cstdio>
 #include <iostream>
 
 AvState::AvState() { this->currentState = State::INIT; }
@@ -230,7 +236,27 @@ State AvState::fromAbortInFlight(DataDump const &dump) {
 void AvState::update(const DataDump &dump) {
   const State previous_state = currentState;
 
-  switch (currentState) {
+  // ── Override: UART force-liftoff command ──────────────────────────
+  // If the "LIFTOFF" command was received via USB CDC, jump straight
+  // to BURN from any ground state.  The flag is consumed (cleared)
+  // here so it acts as a one-shot.
+  if (g_uart_force_liftoff) {
+    g_uart_force_liftoff = false;
+    if (currentState <= State::IGNITION) {  // any pre-flight state
+      currentState = State::BURN;
+    }
+  }
+
+  // ── Override: IMU-based liftoff detection ─────────────────────────
+  // The dual-window detector in the Kalman subsystem sets this flag
+  // once sustained excess acceleration is confirmed.
+  if (dump.event.imu_liftoff_detected && currentState <= State::IGNITION) {
+    currentState = State::BURN;
+  }
+
+  // ── Normal FSM transitions ────────────────────────────────────────
+  if (currentState == previous_state) {
+    switch (currentState) {
   case State::INIT:
     currentState = fromInit(dump);
     break;
@@ -270,8 +296,12 @@ void AvState::update(const DataDump &dump) {
   default:
     currentState = State::ABORT_ON_GROUND;
   }
+  } // end if (currentState == previous_state)
 
   if (currentState != previous_state) {
+    printf("[FSM] %s -> %s\r\n",
+           stateToString(previous_state).c_str(),
+           stateToString(currentState).c_str());
     kalman_on_state_change(static_cast<uint32_t>(currentState));
 
     // Liftoff contract: first in-flight state reached by this FSM is BURN.
@@ -322,4 +352,25 @@ std::string AvState::stateToString(State state) {
     return "ERROR";
     break;
   }
+}
+
+// ── Global FSM instance and super-loop tick ────────────────────────────────
+// Called from main.cpp super-loop after kalman_loop().  We own the AvState
+// instance here to keep the BMP390-conflicting data.hpp include out of
+// main.cpp.
+// NOTE: Meyers singleton pattern avoids file-scope static constructor order
+// issues with <iostream> / <string> on bare-metal.
+static AvState& fsm_instance() {
+  static AvState inst;
+  return inst;
+}
+
+void fsm_tick(void) {
+  auto& goat = flight_computer::GOATStore::get_instance();
+  const auto& dump = goat.get();
+  AvState& fsm = fsm_instance();
+  fsm.update(dump);
+  // Publish the new FSM state so everyone else sees it.
+  auto* live = goat.get_ref();
+  live->av_state = fsm.getCurrentState();
 }

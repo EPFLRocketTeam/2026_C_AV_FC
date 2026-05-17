@@ -20,7 +20,8 @@ Event::Event()
     cut_off_detected(false),
     apogee_detected(false),
     touchdown_detected(false),
-    vertical_acc_hold(ACC_HOLD_NOT_ELAPSED)
+    vertical_acc_hold(ACC_HOLD_NOT_ELAPSED),
+    imu_liftoff_detected(false)
 {}
 
 EventStore::EventStore() {}
@@ -63,3 +64,6 @@ void EventStore::set_ignition_failed(bool value) { data_.ignition_failed = value
 
 bool EventStore::get_catastrophic_failure() const { return data_.catastrophic_failure; }
 void EventStore::set_catastrophic_failure(bool value) { data_.catastrophic_failure = value; }
+
+bool EventStore::get_imu_liftoff_detected() const { return data_.imu_liftoff_detected; }
+void EventStore::set_imu_liftoff_detected(bool value) { data_.imu_liftoff_detected = value; }

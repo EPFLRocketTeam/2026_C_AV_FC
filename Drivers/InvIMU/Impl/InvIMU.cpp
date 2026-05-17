@@ -485,7 +485,8 @@ bool InvIMU_STM32::parseFrameInto(IMUData& out, const uint8_t* p, uint8_t /*fram
 
     // Track frame header types for diagnostics
     // 0x78 = standard hires, 0x7C = hires+FSYNC_TAG, 0xF0 = ext_header hires
-    if ((header & 0xF8u) == 0x78) ++_frame_count_0x78;  // 0x78 or 0x7C
+    if (header == 0x7Cu) ++_frame_count_0x7C;
+    else if ((header & 0xF8u) == 0x78) ++_frame_count_0x78;
     else if (header == 0xF0) ++_frame_count_0xF0;
     else ++_frame_count_other;
 
@@ -622,29 +623,34 @@ void InvIMU_STM32::processPendingRx() {
     }
     if (parsed == 0u) return;
     const uint64_t last_fifo_us = _burst_buffer[parsed - 1u].timestamp_us;
-    const uint64_t irq_us = _dma_irq_time_us;
+    const uint64_t anchor_us = _dma_irq_time_us;
     if (!_fifo_to_abs_offset_initialized) {
-        _fifo_to_abs_offset_us = (int64_t)irq_us - (int64_t)last_fifo_us;
+        _fifo_to_abs_offset_us = (int64_t)anchor_us - (int64_t)last_fifo_us;
         _fifo_to_abs_offset_initialized = true;
-    } else {
-        const int64_t predicted_irq = (int64_t)last_fifo_us + _fifo_to_abs_offset_us;
-        const int64_t err = (int64_t)irq_us - predicted_irq;
-        // Always correct the offset to track IMU-vs-MCU clock drift.
-        // The IMU's internal oscillator can differ from the MCU crystal by
-        // ~0.1%, which causes ~1 ms/s of timestamp drift if uncorrected.
-        // Previous 500µs dead zone let drift accumulate for tens of seconds.
-        _fifo_to_abs_offset_us += err;
-        if (err > 500 || err < -500) {
-            _status_flags |= IMU_STATUS_TIMESTAMP_DESYNC;
-        }
     }
+
+    // Snapshot the offset for this burst — all frames in THIS burst use
+    // the same offset, preserving FIFO-relative spacing.
+    const int64_t emit_offset_us = _fifo_to_abs_offset_us;
+
     for (uint16_t i = 0; i < parsed; ++i) {
         IMUData d = _burst_buffer[i];
-        uint64_t abs_ts = (uint64_t)((int64_t)d.timestamp_us + _fifo_to_abs_offset_us);
-        // Enforce monotonicity: never emit a timestamp <= the previous one.
-        // Inter-burst offset corrections can cause small backwards jumps.
+        uint64_t abs_ts = (uint64_t)((int64_t)d.timestamp_us + emit_offset_us);
+        // Last-resort monotonicity guard: use FIFO delta as repair spacing
+        // instead of +1µs, preserving realistic sample intervals.
         if (_last_emitted_ts_us > 0 && abs_ts <= _last_emitted_ts_us) {
-            abs_ts = _last_emitted_ts_us + 1u;
+            uint64_t repair_dt_us = 156u; // default: one sample at 6400Hz
+            if (i > 0) {
+                const uint64_t fifo_prev = _burst_buffer[i - 1u].timestamp_us;
+                const uint64_t fifo_curr = _burst_buffer[i].timestamp_us;
+                if (fifo_curr > fifo_prev) {
+                    repair_dt_us = fifo_curr - fifo_prev;
+                }
+            }
+            if (repair_dt_us == 0u) repair_dt_us = 1u;
+            abs_ts = _last_emitted_ts_us + repair_dt_us;
+            _monotonic_repair_count++;
+            _status_flags |= IMU_STATUS_TIMESTAMP_DESYNC;
         }
         _last_emitted_ts_us = abs_ts;
         d.timestamp_us = abs_ts;
@@ -659,6 +665,64 @@ void InvIMU_STM32::processPendingRx() {
         __DMB();
         _head = next_head;
         _ring_write_count++;
+    }
+
+    // Update offset estimate for FUTURE bursts only (slewed, not instant).
+    // The current burst was emitted with the snapshot; this correction
+    // applies to the next burst.
+    {
+        const int64_t predicted_irq = (int64_t)last_fifo_us + _fifo_to_abs_offset_us;
+        const int64_t err = (int64_t)anchor_us - predicted_irq;
+        _last_offset_err_us = (int32_t)err;
+
+        // Convergence-aware outlier gate:
+        // Phase 1 (boot): gate disabled, slew runs freely to converge from ~-43ms to 0.
+        // Phase 2 (converged): once err stays below threshold for N consecutive bursts,
+        //   gate activates. Any subsequent spike (e.g. BURN transition) with |err| > gate
+        //   threshold is rejected, preventing offset contamination.
+        constexpr int64_t kConvergedThresholdUs = 1000;
+        constexpr int64_t kOutlierGateUs = 5000;
+        constexpr uint32_t kConvergedStreakRequired = 50;  // ~1s
+        const int64_t abs_err = (err >= 0) ? err : -err;
+
+        const bool reject = _offset_converged && (abs_err > kOutlierGateUs);
+
+        if (reject) {
+            _offset_update_reject_count++;
+            const int32_t abs_max = (_max_rejected_err_us >= 0) ? _max_rejected_err_us : -_max_rejected_err_us;
+            if ((int32_t)abs_err > abs_max) {
+                _max_rejected_err_us = (int32_t)err;
+            }
+        } else {
+            // Bounded/smoothed correction: divide by 4, clamp to ±32µs per burst.
+            constexpr int64_t kCorrectionDivisor = 4;
+            constexpr int64_t kMaxCorrectionPerBurstUs = 32;
+            constexpr int64_t kErrDeadbandUs = 10;
+
+            if (err > kErrDeadbandUs || err < -kErrDeadbandUs) {
+                int64_t correction = err / kCorrectionDivisor;
+                if (correction > kMaxCorrectionPerBurstUs) {
+                    correction = kMaxCorrectionPerBurstUs;
+                } else if (correction < -kMaxCorrectionPerBurstUs) {
+                    correction = -kMaxCorrectionPerBurstUs;
+                }
+                _fifo_to_abs_offset_us += correction;
+            }
+
+            // Convergence tracking (only when not rejecting)
+            if (abs_err < kConvergedThresholdUs) {
+                if (_converge_streak < UINT32_MAX) _converge_streak++;
+                if (_converge_streak >= kConvergedStreakRequired) {
+                    _offset_converged = true;
+                }
+            } else {
+                _converge_streak = 0;
+            }
+        }
+
+        if (err > 500 || err < -500) {
+            _status_flags |= IMU_STATUS_TIMESTAMP_DESYNC;
+        }
     }
 }
 

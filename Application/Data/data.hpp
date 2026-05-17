@@ -491,6 +491,9 @@ struct Event {
   /// @see AccHoldStatus
   uint8_t vertical_acc_hold;
 
+  /// IMU-based dual-window liftoff detection (set by LiftoffDetector).
+  bool imu_liftoff_detected;
+
   // bool ascent_max_duration;  // TODO: update the store
   // bool descent_max_duration; // TODO: update the store
 
@@ -539,6 +542,9 @@ public:
 
   bool get_catastrophic_failure() const;
   void set_catastrophic_failure(bool value);
+
+  bool get_imu_liftoff_detected() const;
+  void set_imu_liftoff_detected(bool value);
 };
 
 class StateStore : public IStore<State> {

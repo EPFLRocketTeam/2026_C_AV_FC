@@ -19,6 +19,8 @@ void app_on_imu_spi_rx_complete(SPI_HandleTypeDef* hspi);
 uint8_t app_imu_sensor_healthy(uint8_t sensor_index);
 uint32_t app_imu_sensor_status_flags(uint8_t sensor_index);
 void app_imu_frame_counts(uint32_t* h78, uint32_t* hF0, uint32_t* other);
+void app_imu_ts_diagnostics(uint32_t* h7C, uint32_t* mono_repairs, int32_t* last_err,
+                            uint32_t* reject_count, int32_t* max_rejected_err);
 uint8_t app_baro_sensor_healthy(uint8_t sensor_index);
 uint32_t app_baro_sensor_status_flags(uint8_t sensor_index);
 

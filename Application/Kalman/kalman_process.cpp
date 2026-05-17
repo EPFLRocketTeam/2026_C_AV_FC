@@ -12,6 +12,7 @@
 #include "Application/Data/fsm.hpp"
 #include "Application/Data/data.hpp"
 #include "Application/FlightControl/threshold.h"
+#include "Application/FlightControl/liftoff_detector.hpp"
 #include "Application/Modules/baro_module.hpp"
 #include "Application/Modules/imu_modlue.hpp"
 
@@ -20,6 +21,7 @@ extern "C" {
 #include "Application/app_timebase.h"
 #include "Application/main.h"
 #include "Drivers/InvIMU/InvIMU.h"
+#include "Application/FlightControl/uart_cmd.h"
 }
 #include "Drivers/InvIMU/InvIMU.hpp"
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
@@ -171,6 +173,7 @@ struct KalmanRuntime {
 	size_t active_imu_sources = 3u;
 	static constexpr size_t kActiveBaroSources = 4u;
 	LiftoffAccHold acc_hold;  ///< Liftoff acceleration-hold evaluator
+	LiftoffDetector liftoff_detector;  ///< IMU dual-window liftoff detector
 
 #if KALMAN_DEBUG_PRINT
 	kalman_debug::RawSensorSnapshot debug_raw_sensor_{};
@@ -262,6 +265,7 @@ struct KalmanRuntime {
 			apogee_detected = false;
 			last_body_accel_mps2 = {};
 			acc_hold.reset();
+			liftoff_detector.reset();
 			KalmanHealthStore::instance().reset();
 		}
 
@@ -471,6 +475,25 @@ struct KalmanRuntime {
 
 			estimator.processImuBatch(batch);
 
+			// ── Feed liftoff detector with each sample in the slice ─────
+			if (!liftoff_detector.isDetected()) {
+				const bool gate = estimator.railShadow().isGateOpen();
+				const bool was_armed = liftoff_detector.isArmed();
+				for (size_t i = 0; i < slice_count; ++i) {
+					liftoff_detector.update(
+						slice[i].accel_x,
+						slice[i].accel_y,
+						slice[i].accel_z,
+						gate);
+				}
+				if (!was_armed && liftoff_detector.isArmed()) {
+					printf("[LIFTOFF] Detector ARMED (pad stable for ~2s)\r\n");
+				}
+				if (liftoff_detector.isDetected()) {
+					printf("[LIFTOFF] IMU liftoff DETECTED!\r\n");
+				}
+			}
+
 			last_body_accel_mps2.x = slice[slice_count - 1u].accel_x;
 			last_body_accel_mps2.y = slice[slice_count - 1u].accel_y;
 			last_body_accel_mps2.z = slice[slice_count - 1u].accel_z;
@@ -574,10 +597,10 @@ struct KalmanRuntime {
 		// and transitions to DESCENT. The robustness checks listed above are
 		// NOT yet implemented there — this is a flight-safety TODO.
 
-		if (set_catastrophic_failure || set_apogee_detected || acc_hold_terminal) {
-//			if (eventStoreMutexHandle != nullptr) {
-//				osMutexAcquire(eventStoreMutexHandle, osWaitForever);
-//			}
+		// ── IMU liftoff detector → EventStore ────────────────────────
+		const bool imu_liftoff = liftoff_detector.isDetected();
+
+		if (set_catastrophic_failure || set_apogee_detected || acc_hold_terminal || imu_liftoff) {
 
 			auto event = goat.eventStore.get();
 			if (set_catastrophic_failure) {
@@ -588,6 +611,9 @@ struct KalmanRuntime {
 			}
 			if (acc_hold_terminal) {
 				event.vertical_acc_hold = static_cast<uint8_t>(acc_hold_result);
+			}
+			if (imu_liftoff) {
+				event.imu_liftoff_detected = true;
 			}
 			goat.eventStore.set(event);
 
@@ -861,15 +887,14 @@ int kalman_loop() {
 			kalman.force_flight_start_ms_ = now_ms;
 		}
 		if ((now_ms - kalman.force_flight_start_ms_) >= KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS) {
-			const uint32_t liftoff_ms = app_timebase_now_ms();
-			printf("[KAL-DBG] Force-flight: injecting BURN state + liftoff  "
-			       "(waited %lu ms, liftoff_ms=%lu, HAL_ms=%lu)\r\n",
+			printf("[KAL-DBG] Force-flight: triggering liftoff via FSM  "
+			       "(waited %lu ms, HAL_ms=%lu)\r\n",
 			       (unsigned long)(now_ms - kalman.force_flight_start_ms_),
-			       (unsigned long)liftoff_ms,
 			       (unsigned long)HAL_GetTick());
-			kalman_on_state_change(
-				static_cast<uint32_t>(flight_computer::State::BURN));
-			kalman_on_liftoff(liftoff_ms);
+			// Route through the FSM instead of bypassing it.
+			// The FSM will call kalman_on_state_change(BURN) and
+			// kalman_on_liftoff() on the next tick.
+			g_uart_force_liftoff = true;
 			kalman.force_flight_done_ = true;
 		}
 	}
@@ -884,6 +909,12 @@ int kalman_loop() {
 		&kalman.debug_raw_sensor_.frame_h78,
 		&kalman.debug_raw_sensor_.frame_hF0,
 		&kalman.debug_raw_sensor_.frame_other);
+	app_imu_ts_diagnostics(
+		&kalman.debug_raw_sensor_.frame_h7C,
+		&kalman.debug_raw_sensor_.imu_monotonic_repairs,
+		&kalman.debug_raw_sensor_.imu_last_offset_err,
+		&kalman.debug_raw_sensor_.imu_offset_reject_count,
+		&kalman.debug_raw_sensor_.imu_max_rejected_err);
 	kalman.debug_raw_sensor_.imu_status_flags =
 		app_imu_sensor_status_flags(0);
 	// Use the health snapshot's yieldable_imu_drops as it's already tracked

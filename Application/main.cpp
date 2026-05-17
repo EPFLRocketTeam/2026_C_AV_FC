@@ -5,6 +5,8 @@
 #include "Modules/baro_module.hpp"
 #include "Modules/imu_modlue.hpp"
 #include "Modules/gps_module.hpp"
+// Forward-declared — defined in av_state.cpp to avoid BMP390 header clash.
+void fsm_tick(void);
 
 extern "C" {
 #include "Application/main.h"
@@ -367,6 +369,16 @@ extern "C" void app_imu_frame_counts(uint32_t* h78, uint32_t* hF0, uint32_t* oth
     *other = ctx.invArr[0]->frameCountOther();
 }
 
+extern "C" void app_imu_ts_diagnostics(uint32_t* h7C, uint32_t* mono_repairs, int32_t* last_err,
+                                       uint32_t* reject_count, int32_t* max_rejected_err) {
+    auto& imu = g_superloop.invImu1;
+    *h7C = imu.frameCount0x7C();
+    *mono_repairs = imu.monotonicRepairCount();
+    *last_err = imu.lastOffsetErrUs();
+    *reject_count = imu.offsetUpdateRejectCount();
+    *max_rejected_err = imu.maxRejectedErrUs();
+}
+
 extern "C" uint8_t app_baro_sensor_healthy(uint8_t sensor_index) {
     if (sensor_index >= 4u) {
         return 0u;
@@ -515,6 +527,10 @@ extern "C" void app_super_loop_iterate(void) {
 #endif
 
     (void)kalman_loop();
+
+    // ── FSM tick ────────────────────────────────────────────────────────
+    // Runs after kalman_loop so that imu_liftoff_detected is fresh.
+    fsm_tick();
 
     const uint64_t iteration_end_us = app_timebase_now_us();
     const uint64_t elapsed_us = iteration_end_us - iteration_start_us;

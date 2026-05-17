@@ -119,6 +119,13 @@ namespace InvIMU {
         uint32_t frameCount0xF0() const override { return _frame_count_0xF0; }
         uint32_t frameCountOther() const override { return _frame_count_other; }
 
+        // Timestamp diagnostic accessors
+        uint32_t monotonicRepairCount() const { return _monotonic_repair_count; }
+        int32_t lastOffsetErrUs() const { return _last_offset_err_us; }
+        uint32_t frameCount0x7C() const { return _frame_count_0x7C; }
+        uint32_t offsetUpdateRejectCount() const { return _offset_update_reject_count; }
+        int32_t maxRejectedErrUs() const { return _max_rejected_err_us; }
+
         void onInterrupt(uint64_t irq_us = 0) override;
         void tick() override;        
         void onDmaComplete() override;
@@ -176,12 +183,23 @@ namespace InvIMU {
         bool _fifo_to_abs_offset_initialized = false;
         uint64_t _last_emitted_ts_us = 0;
 
+        // Timestamp diagnostic counters
+        uint32_t _monotonic_repair_count = 0;
+        int32_t _last_offset_err_us = 0;
+
         // Frame header statistics
         uint32_t _frame_count_0x78 = 0;
+        uint32_t _frame_count_0x7C = 0;  // FSYNC-tagged frames
         uint32_t _frame_count_0xF0 = 0;
         uint32_t _frame_count_other = 0;
 
         float _R_body_from_sensor[3][3];
+
+        // Convergence-aware outlier gate (placed at end to avoid layout disruption)
+        bool _offset_converged = false;
+        uint32_t _converge_streak = 0;       // consecutive low-error bursts
+        uint32_t _offset_update_reject_count = 0;
+        int32_t _max_rejected_err_us = 0;
 
         static void enable_dwt_cyccnt();
         static bool dwt_is_running();

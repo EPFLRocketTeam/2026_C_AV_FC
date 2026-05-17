@@ -123,10 +123,15 @@ struct RawSensorSnapshot {
     float imu_per_sensor_amag[3];    // |a| per IMU source (m/s²)
     uint8_t imu_per_sensor_alive;    // Bitmask of IMUs that produced data
     uint32_t frame_h78;  // Count of 0x78 frames (normal hires)
+    uint32_t frame_h7C;  // Count of 0x7C frames (hires+FSYNC tag)
     uint32_t frame_hF0;  // Count of 0xF0 frames (ext_header)
     uint32_t frame_other; // Count of other/unknown frames
     uint32_t imu_status_flags; // IMU driver status flags (SPI errors etc)
     uint32_t imu_drop_count;   // IMU ring buffer overflow count
+    uint32_t imu_monotonic_repairs; // Timestamp monotonicity repair count
+    int32_t imu_last_offset_err; // Last FIFO-to-abs offset error (µs)
+    uint32_t imu_offset_reject_count; // Offset update rejections
+    int32_t imu_max_rejected_err; // Largest rejected error (µs)
     // Timing breakdown (filled by kalman_loop)
     uint32_t t_imu_drain_us;   // Time spent draining IMU ring buffers
     uint32_t t_imu_process_us; // Time spent in IMU ingestion + predict
@@ -299,13 +304,21 @@ inline void printDebugLine(
            static_cast<double>(gb[2]));
 
     // Line 7: IMU FIFO frame header statistics
-    printf("[KAL] fifoHdr: 0x78=%lu  0xF0=%lu  other=%lu  "
+    printf("[KAL] fifoHdr: 0x78=%lu  0x7C=%lu  0xF0=%lu  other=%lu  "
            "imuFlags=0x%lX  imuDrvDrop=%lu\r\n",
            static_cast<unsigned long>(raw.frame_h78),
+           static_cast<unsigned long>(raw.frame_h7C),
            static_cast<unsigned long>(raw.frame_hF0),
            static_cast<unsigned long>(raw.frame_other),
            static_cast<unsigned long>(raw.imu_status_flags),
            static_cast<unsigned long>(raw.imu_drop_count));
+
+    // Line 7b: Timestamp estimator diagnostics
+    printf("[KAL] tsEst: monoRepairs=%lu  lastErr=%ld us  rejects=%lu  maxRejErr=%ld\r\n",
+           static_cast<unsigned long>(raw.imu_monotonic_repairs),
+           static_cast<long>(raw.imu_last_offset_err),
+           static_cast<unsigned long>(raw.imu_offset_reject_count),
+           static_cast<long>(raw.imu_max_rejected_err));
 
     // Line 8: CatchUp budget details
     {
