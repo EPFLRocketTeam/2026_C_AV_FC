@@ -682,17 +682,17 @@ void InvIMU_STM32::processPendingRx() {
         // Phase 3 (re-acquire): if reject streak exceeds limit, assume timing
         //   regime changed. Reset warmup to allow re-convergence.
         constexpr int64_t kOutlierGateUs = 5000;
-        constexpr uint32_t kWarmupBursts = 2000;  // ~6.25s at 320 bursts/s
-        constexpr uint32_t kRejectStreakBeforeReconverge = 500; // ~1.5s
+        constexpr uint32_t kWarmupFrames = 20000;  // ~6.25s at ~3200 frames/s
+        constexpr uint32_t kRejectStreakBeforeReconverge = 500; // ~1.5s of batches
         const int64_t abs_err = (err >= 0) ? err : -err;
 
-        if (_offset_burst_count < kWarmupBursts) {
-            _offset_burst_count++;
-        } else if (!_offset_converged) {
-            _offset_converged = true;
+        if (_offset_burst_count < kWarmupFrames) {
+            _offset_burst_count += parsed;
+        } else if (!_offset_gate_armed) {
+            _offset_gate_armed = true;
         }
 
-        const bool reject = _offset_converged && (abs_err > kOutlierGateUs);
+        const bool reject = _offset_gate_armed && (abs_err > kOutlierGateUs);
 
         if (reject) {
             _offset_update_reject_count++;
@@ -704,24 +704,28 @@ void InvIMU_STM32::processPendingRx() {
             // Re-convergence: if too many consecutive rejects, assume
             // timing regime changed. Reset warmup + reopen gate.
             if (_offset_reject_streak >= kRejectStreakBeforeReconverge) {
-                _offset_converged = false;
+                _offset_gate_armed = false;
                 _offset_burst_count = 0;
                 _offset_reject_streak = 0;
             }
         } else {
             _offset_reject_streak = 0;
 
-            // Bounded/smoothed correction: divide by 4, clamp to ±32µs per burst.
+            // Bounded/smoothed correction: divide by 4, clamp to ±32µs per batch.
+            // CONSTRAINT: per-batch correction MUST be < one ODR period (156µs at
+            // 6400Hz) to avoid monotonicity violations across batch boundaries.
+            // Frame-scaled correction was attempted but causes monoRepairs when
+            // the per-batch total exceeds 156µs. Fixed cap is the safe approach.
             constexpr int64_t kCorrectionDivisor = 4;
-            constexpr int64_t kMaxCorrectionPerBurstUs = 32;
+            constexpr int64_t kMaxCorrectionPerBatchUs = 32;
             constexpr int64_t kErrDeadbandUs = 10;
 
             if (err > kErrDeadbandUs || err < -kErrDeadbandUs) {
                 int64_t correction = err / kCorrectionDivisor;
-                if (correction > kMaxCorrectionPerBurstUs) {
-                    correction = kMaxCorrectionPerBurstUs;
-                } else if (correction < -kMaxCorrectionPerBurstUs) {
-                    correction = -kMaxCorrectionPerBurstUs;
+                if (correction > kMaxCorrectionPerBatchUs) {
+                    correction = kMaxCorrectionPerBatchUs;
+                } else if (correction < -kMaxCorrectionPerBatchUs) {
+                    correction = -kMaxCorrectionPerBatchUs;
                 }
                 _fifo_to_abs_offset_us += correction;
             }
@@ -826,6 +830,10 @@ void InvIMU_STM32::tick() {
     const bool use_dma_path = _hw.use_dma && dma_hw_ready;
 
     if (!use_dma_path) {
+        // Check SPI state before FIFO read (diagnostic counter)
+        if (_hw.hspi && _hw.hspi->State != HAL_SPI_STATE_READY) {
+            _spi_state_not_ready_count++;
+        }
         // Blocking SPI FIFO read.
         // If this returns != 0, the HAL likely returned HAL_BUSY because
         // CubeMX has DMA streams configured for this SPI peripheral.
@@ -834,6 +842,7 @@ void InvIMU_STM32::tick() {
         int rc = spi_read_fifo(REG_FIFO_DATA, _dma_rx_buffer, count);
         if (rc != 0) {
             _status_flags |= IMU_STATUS_SPI_ERROR;
+            _spi_fifo_read_fail_count++;
             static uint32_t _spi_fail_cnt = 0;
             if ((_spi_fail_cnt++ % 1000u) == 0u) {
                 printf("[IMU] SPI blocking read FAIL #%lu  count=%u  "

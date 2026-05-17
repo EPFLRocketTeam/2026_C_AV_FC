@@ -90,7 +90,7 @@ RingBuffer<GpsBasicFixData, 100> gpsData;
 // directly into the gpsData ring buffer, exercising the full GNSS→ESKF→rewind
 // pipeline without a real GPS receiver.
 #ifndef FAKE_GNSS_ENABLE
-#define FAKE_GNSS_ENABLE 1
+#define FAKE_GNSS_ENABLE 0
 #endif
 
 #if FAKE_GNSS_ENABLE
@@ -370,13 +370,19 @@ extern "C" void app_imu_frame_counts(uint32_t* h78, uint32_t* hF0, uint32_t* oth
 }
 
 extern "C" void app_imu_ts_diagnostics(uint32_t* h7C, uint32_t* mono_repairs, int32_t* last_err,
-                                       uint32_t* reject_count, int32_t* max_rejected_err) {
+                                       uint32_t* reject_count, int32_t* max_rejected_err,
+                                       uint32_t* spi_fifo_fail, uint32_t* spi_not_ready,
+                                       uint32_t* burst_count, uint8_t* gate_armed) {
     auto& imu = g_superloop.invImu1;
     *h7C = imu.frameCount0x7C();
     *mono_repairs = imu.monotonicRepairCount();
     *last_err = imu.lastOffsetErrUs();
     *reject_count = imu.offsetUpdateRejectCount();
     *max_rejected_err = imu.maxRejectedErrUs();
+    *spi_fifo_fail = imu.spiFifoReadFailCount();
+    *spi_not_ready = imu.spiStateNotReadyCount();
+    *burst_count = imu.offsetBurstCount();
+    *gate_armed = imu.offsetGateArmed() ? 1u : 0u;
 }
 
 extern "C" uint8_t app_baro_sensor_healthy(uint8_t sensor_index) {

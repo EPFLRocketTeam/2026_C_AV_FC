@@ -914,7 +914,11 @@ int kalman_loop() {
 		&kalman.debug_raw_sensor_.imu_monotonic_repairs,
 		&kalman.debug_raw_sensor_.imu_last_offset_err,
 		&kalman.debug_raw_sensor_.imu_offset_reject_count,
-		&kalman.debug_raw_sensor_.imu_max_rejected_err);
+		&kalman.debug_raw_sensor_.imu_max_rejected_err,
+		&kalman.debug_raw_sensor_.imu_spi_fifo_fail,
+		&kalman.debug_raw_sensor_.imu_spi_not_ready,
+		&kalman.debug_raw_sensor_.imu_offset_burst_count,
+		&kalman.debug_raw_sensor_.imu_gate_armed);
 	kalman.debug_raw_sensor_.imu_status_flags =
 		app_imu_sensor_status_flags(0);
 	// Use the health snapshot's yieldable_imu_drops as it's already tracked

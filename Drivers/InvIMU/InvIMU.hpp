@@ -125,6 +125,10 @@ namespace InvIMU {
         uint32_t frameCount0x7C() const { return _frame_count_0x7C; }
         uint32_t offsetUpdateRejectCount() const { return _offset_update_reject_count; }
         int32_t maxRejectedErrUs() const { return _max_rejected_err_us; }
+        uint32_t spiFifoReadFailCount() const { return _spi_fifo_read_fail_count; }
+        uint32_t spiStateNotReadyCount() const { return _spi_state_not_ready_count; }
+        uint32_t offsetBurstCount() const { return _offset_burst_count; }
+        bool offsetGateArmed() const { return _offset_gate_armed; }
 
         void onInterrupt(uint64_t irq_us = 0) override;
         void tick() override;        
@@ -196,11 +200,15 @@ namespace InvIMU {
         float _R_body_from_sensor[3][3];
 
         // Convergence-aware outlier gate (placed at end to avoid layout disruption)
-        bool _offset_converged = false;
+        bool _offset_gate_armed = false;
         uint32_t _offset_burst_count = 0;    // total bursts since init
         uint32_t _offset_reject_streak = 0;  // consecutive rejected bursts
         uint32_t _offset_update_reject_count = 0;
         int32_t _max_rejected_err_us = 0;
+
+        // SPI diagnostic counters
+        uint32_t _spi_fifo_read_fail_count = 0;
+        uint32_t _spi_state_not_ready_count = 0;
 
         static void enable_dwt_cyccnt();
         static bool dwt_is_running();

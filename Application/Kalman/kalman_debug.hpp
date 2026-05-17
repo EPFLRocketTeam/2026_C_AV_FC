@@ -132,6 +132,10 @@ struct RawSensorSnapshot {
     int32_t imu_last_offset_err; // Last FIFO-to-abs offset error (µs)
     uint32_t imu_offset_reject_count; // Offset update rejections
     int32_t imu_max_rejected_err; // Largest rejected error (µs)
+    uint32_t imu_spi_fifo_fail; // SPI FIFO read failures
+    uint32_t imu_spi_not_ready; // SPI state not ready before FIFO read
+    uint32_t imu_offset_burst_count; // Gate warmup burst count
+    uint8_t  imu_gate_armed; // Gate armed flag
     // Timing breakdown (filled by kalman_loop)
     uint32_t t_imu_drain_us;   // Time spent draining IMU ring buffers
     uint32_t t_imu_process_us; // Time spent in IMU ingestion + predict
@@ -314,11 +318,15 @@ inline void printDebugLine(
            static_cast<unsigned long>(raw.imu_drop_count));
 
     // Line 7b: Timestamp estimator diagnostics
-    printf("[KAL] tsEst: monoRepairs=%lu  lastErr=%ld us  rejects=%lu  maxRejErr=%ld\r\n",
+    printf("[KAL] tsEst: monoRepairs=%lu  lastErr=%ld us  rejects=%lu  maxRejErr=%ld  spiFail=%lu/%lu  bursts=%lu  armed=%u\r\n",
            static_cast<unsigned long>(raw.imu_monotonic_repairs),
            static_cast<long>(raw.imu_last_offset_err),
            static_cast<unsigned long>(raw.imu_offset_reject_count),
-           static_cast<long>(raw.imu_max_rejected_err));
+           static_cast<long>(raw.imu_max_rejected_err),
+           static_cast<unsigned long>(raw.imu_spi_fifo_fail),
+           static_cast<unsigned long>(raw.imu_spi_not_ready),
+           static_cast<unsigned long>(raw.imu_offset_burst_count),
+           static_cast<unsigned>(raw.imu_gate_armed));
 
     // Line 8: CatchUp budget details
     {
