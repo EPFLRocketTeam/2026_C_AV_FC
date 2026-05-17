@@ -675,25 +675,42 @@ void InvIMU_STM32::processPendingRx() {
         const int64_t err = (int64_t)anchor_us - predicted_irq;
         _last_offset_err_us = (int32_t)err;
 
-        // Convergence-aware outlier gate:
-        // Phase 1 (boot): gate disabled, slew runs freely to converge from ~-43ms to 0.
-        // Phase 2 (converged): once err stays below threshold for N consecutive bursts,
-        //   gate activates. Any subsequent spike (e.g. BURN transition) with |err| > gate
-        //   threshold is rejected, preventing offset contamination.
-        constexpr int64_t kConvergedThresholdUs = 1000;
+        // Convergence-aware outlier gate with burst-count warmup:
+        // Phase 1 (warmup): first N bursts run freely so the slew can converge
+        //   from the initial ~-43ms offset error.
+        // Phase 2 (locked): gate active. Reject |err| > threshold.
+        // Phase 3 (re-acquire): if reject streak exceeds limit, assume timing
+        //   regime changed. Reset warmup to allow re-convergence.
         constexpr int64_t kOutlierGateUs = 5000;
-        constexpr uint32_t kConvergedStreakRequired = 50;  // ~1s
+        constexpr uint32_t kWarmupBursts = 2000;  // ~6.25s at 320 bursts/s
+        constexpr uint32_t kRejectStreakBeforeReconverge = 500; // ~1.5s
         const int64_t abs_err = (err >= 0) ? err : -err;
+
+        if (_offset_burst_count < kWarmupBursts) {
+            _offset_burst_count++;
+        } else if (!_offset_converged) {
+            _offset_converged = true;
+        }
 
         const bool reject = _offset_converged && (abs_err > kOutlierGateUs);
 
         if (reject) {
             _offset_update_reject_count++;
+            _offset_reject_streak++;
             const int32_t abs_max = (_max_rejected_err_us >= 0) ? _max_rejected_err_us : -_max_rejected_err_us;
             if ((int32_t)abs_err > abs_max) {
                 _max_rejected_err_us = (int32_t)err;
             }
+            // Re-convergence: if too many consecutive rejects, assume
+            // timing regime changed. Reset warmup + reopen gate.
+            if (_offset_reject_streak >= kRejectStreakBeforeReconverge) {
+                _offset_converged = false;
+                _offset_burst_count = 0;
+                _offset_reject_streak = 0;
+            }
         } else {
+            _offset_reject_streak = 0;
+
             // Bounded/smoothed correction: divide by 4, clamp to ±32µs per burst.
             constexpr int64_t kCorrectionDivisor = 4;
             constexpr int64_t kMaxCorrectionPerBurstUs = 32;
@@ -707,16 +724,6 @@ void InvIMU_STM32::processPendingRx() {
                     correction = -kMaxCorrectionPerBurstUs;
                 }
                 _fifo_to_abs_offset_us += correction;
-            }
-
-            // Convergence tracking (only when not rejecting)
-            if (abs_err < kConvergedThresholdUs) {
-                if (_converge_streak < UINT32_MAX) _converge_streak++;
-                if (_converge_streak >= kConvergedStreakRequired) {
-                    _offset_converged = true;
-                }
-            } else {
-                _converge_streak = 0;
             }
         }
 

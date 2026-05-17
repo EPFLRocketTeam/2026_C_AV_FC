@@ -197,7 +197,8 @@ namespace InvIMU {
 
         // Convergence-aware outlier gate (placed at end to avoid layout disruption)
         bool _offset_converged = false;
-        uint32_t _converge_streak = 0;       // consecutive low-error bursts
+        uint32_t _offset_burst_count = 0;    // total bursts since init
+        uint32_t _offset_reject_streak = 0;  // consecutive rejected bursts
         uint32_t _offset_update_reject_count = 0;
         int32_t _max_rejected_err_us = 0;
 
