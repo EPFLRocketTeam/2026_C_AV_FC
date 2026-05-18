@@ -26,6 +26,7 @@ extern "C" {
 extern SPI_HandleTypeDef hspi4;
 extern SPI_HandleTypeDef hspi5;
 extern UART_HandleTypeDef huart6;
+extern SD_HandleTypeDef hsd1;
 
 using Drivers::InvIMU::Config;
 using Drivers::InvIMU::IMUData;
@@ -475,7 +476,7 @@ extern "C" void app_super_loop_setup(void) {
     printf("[APP] Initializing SD Card...\n");
     // TODO add handle for SD
     SD_HandleTypeDef *sd_hsd = NULL;
-    if (hsd == NULL) {
+    if (hsd1.Instance == NULL) {
         printf("[APP] Please provide handle for SD Card or comment code related to SD card.\n");
         return ;
     }

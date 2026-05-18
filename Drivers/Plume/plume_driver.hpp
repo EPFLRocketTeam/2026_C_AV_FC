@@ -17,7 +17,7 @@ public:
         uint8_t* arena_buffer,
         size_t   arena_length
     );
-    bool SDCardInterface::open_file ();
+    bool open_file ();
 
     size_t number_files_remaining ();
     size_t disk_size_remaining ();

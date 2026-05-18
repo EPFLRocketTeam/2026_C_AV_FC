@@ -5,6 +5,7 @@ extern "C" {
     #include "plume/status.h"
 }
 
+#include <cstdio>
 #include "plume_driver.hpp"
 
 void plume_manual_test (SD_HandleTypeDef *hsd) {
@@ -13,11 +14,11 @@ void plume_manual_test (SD_HandleTypeDef *hsd) {
     const size_t arena_length = 64 * 1024;
     uint8_t arena_buffer[arena_length];
     
-    printf("SD Card & Plume -- Manual Test\n");
-    printf("Initializing SD Card...\n");
+    printf("SD Card & Plume -- Manual Test\r\n");
+    printf("Initializing SD Card...\r\n");
 
     if (!interface.init_sd_card(hsd, arena_buffer, arena_length)) {
-        printf("Failure of init.\n");
+        printf("Failure of init.\r\n");
         return ;
     }
 

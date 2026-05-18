@@ -1,0 +1,710 @@
+Start Init super loop␍␊
+DEBUG: IMU WHO_AM_I Read = 0xE9␍␊
+EDMP disable rc=0␍␊
+EDMP readback: EN0=0x00 (expect 0x00) EN1=0x00 (expect 0x00, bit6=edmp_enable)␍␊
+FIFO_CONFIG4 (0x22) BEFORE clear: 0x02  (bit2=comp_en bit1=tmst_fsync_en bit0=es0_6b_9b)␍␊
+FIFO_CONFIG4 (0x22) AFTER  clear: intended=0x00 readback=0x00␍␊
+Finished Init super loop␍␊
+[KAL] FSM=INIT   Rail(p=  +0.3 r=  -1.6)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27611us(max 27626)  mainLoop=30675us(max 30751)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=10198  baro=50  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  -0.02 ay=  +0.20 az=  -9.69  gx=+0.002 gy=+0.002 gz=+0.003  |a|=9.70  P=96267Pa T=34.8C␍␊
+[KAL] gyroBias: +0.00002 +0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=10200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.5 r=  -1.5)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27609us(max 27627)  mainLoop=30677us(max 31789)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=20398  baro=100  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.03 ay=  +0.24 az=  -9.65  gx=+0.003 gy=-0.001 gz=+0.006  |a|=9.65  P=97207Pa T=33.6C␍␊
+[KAL] gyroBias: +0.00000 +0.00001 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=20400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.4 r=  -1.7)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27612us(max 27630)  mainLoop=30685us(max 31789)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=30598  baro=150  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.08 ay=  +0.21 az=  -9.50  gx=-0.001 gy=-0.008 gz=+0.005  |a|=9.50  P=95040Pa T=24.1C␍␊
+[KAL] gyroBias: +0.00001 +0.00000 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=30600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.4 r=  -1.5)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27622us(max 27630)  mainLoop=30679us(max 31789)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=40798  baro=200  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.04 ay=  +0.20 az=  -9.65  gx=-0.002 gy=-0.005 gz=+0.004  |a|=9.65  P=96008Pa T=33.7C␍␊
+[KAL] gyroBias: -0.00000 +0.00000 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=40800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.5 r=  -1.5)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27610us(max 27630)  mainLoop=30685us(max 31789)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=50998  baro=250  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.11 ay=  +0.33 az=  -9.54  gx=-0.004 gy=+0.003 gz=+0.007  |a|=9.55  P=93870Pa T=24.2C␍␊
+[KAL] gyroBias: -0.00001 -0.00001 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=51000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.6 r=  -1.5)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27610us(max 27632)  mainLoop=30683us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=61198  baro=300  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.22 az=  -9.62  gx=-0.004 gy=+0.001 gz=+0.014  |a|=9.62  P=96278Pa T=35.1C␍␊
+[KAL] gyroBias: -0.00000 +0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=61200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.3 r=  -1.4)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27610us(max 27632)  mainLoop=30675us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=71398  baro=350  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.04 ay=  +0.24 az=  -9.69  gx=-0.004 gy=+0.003 gz=-0.001  |a|=9.69  P=94782Pa T=23.2C␍␊
+[KAL] gyroBias: +0.00000 +0.00000 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=71400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.4 r=  -1.5)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27625us(max 27632)  mainLoop=30677us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=81598  baro=400  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.32 az=  -9.59  gx=+0.004 gy=+0.003 gz=+0.002  |a|=9.60  P=95739Pa T=32.8C␍␊
+[KAL] gyroBias: -0.00001 +0.00000 -0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=81600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.5 r=  -1.6)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27616us(max 27632)  mainLoop=30681us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=91798  baro=450  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.03 ay=  +0.23 az=  -9.67  gx=+0.004 gy=-0.002 gz=+0.001  |a|=9.67  P=95754Pa T=32.8C␍␊
+[KAL] gyroBias: -0.00001 -0.00000 -0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=91800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.4 r=  -1.5)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27613us(max 27632)  mainLoop=30677us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=101998  baro=500  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.13 ay=  +0.22 az=  -9.61  gx=+0.005 gy=-0.006 gz=-0.006  |a|=9.61  P=96954Pa T=32.8C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 -0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=102000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  -0.1 r=  -1.8)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27205us(max 27685)  mainLoop=30676us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=112198  baro=550  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  -0.02 ay=  +0.09 az=  -9.95  gx=+0.035 gy=-0.027 gz=-0.003  |a|=9.95  P=95753Pa T=32.9C␍␊
+[KAL] gyroBias: +0.00015 -0.00012 +0.00005 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=112200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.7 r=  -1.5)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27657us(max 27685)  mainLoop=30711us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=122398  baro=600  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.15 ay=  +0.26 az=  -9.55  gx=-0.002 gy=+0.004 gz=+0.002  |a|=9.55  P=96277Pa T=35.2C␍␊
+[KAL] gyroBias: -0.00005 +0.00015 +0.00010 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=122400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.6 r=  -1.7)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27614us(max 27685)  mainLoop=30672us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=132598  baro=650  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.03 ay=  +0.31 az=  -9.61  gx=-0.006 gy=-0.005 gz=+0.003  |a|=9.61  P=96286Pa T=35.1C␍␊
+[KAL] gyroBias: -0.00000 +0.00000 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=132600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.2 r=  -1.7)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27612us(max 27685)  mainLoop=30673us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=142798  baro=700  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.09 ay=  +0.23 az=  -9.65  gx=+0.010 gy=+0.008 gz=+0.003  |a|=9.65  P=96284Pa T=35.0C␍␊
+[KAL] gyroBias: -0.00000 +0.00001 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=142800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  -0.8 r=  -1.9)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27612us(max 27685)  mainLoop=30678us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=152998  baro=750  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.01 ay=  +0.22 az=  -9.52  gx=-0.014 gy=-0.012 gz=+0.000  |a|=9.52  P=96271Pa T=35.0C␍␊
+[KAL] gyroBias: -0.00021 -0.00033 -0.00007 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=153000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.7 r=  -1.8)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27627us(max 27685)  mainLoop=30658us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=163198  baro=800  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.15 ay=  +0.22 az=  -9.57  gx=-0.003 gy=+0.009 gz=+0.001  |a|=9.58  P=96269Pa T=35.0C␍␊
+[KAL] gyroBias: +0.00014 +0.00023 +0.00006 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=163200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +1.1 r=  -1.4)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27645us(max 27685)  mainLoop=30713us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=173398  baro=850  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.04 ay=  +0.25 az=  -9.67  gx=+0.014 gy=+0.014 gz=+0.000  |a|=9.68  P=96267Pa T=34.9C␍␊
+[KAL] gyroBias: +0.00005 +0.00018 +0.00003 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=173400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.1 r=  -1.3)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27663us(max 27685)  mainLoop=30743us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=183598  baro=900  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.04 ay=  +0.23 az=  -9.68  gx=-0.000 gy=-0.003 gz=-0.006  |a|=9.68  P=95998Pa T=33.5C␍␊
+[KAL] gyroBias: +0.00001 -0.00001 -0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=183600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  -0.1 r=  -1.4)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27678us(max 27689)  mainLoop=30743us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=193798  baro=950  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.04 ay=  +0.17 az=  -9.64  gx=-0.000 gy=+0.005 gz=+0.000  |a|=9.64  P=96000Pa T=33.5C␍␊
+[KAL] gyroBias: -0.00000 -0.00001 -0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=193800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.3 r=  -1.6)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27672us(max 27690)  mainLoop=30739us(max 31806)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=203998  baro=1000  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.09 ay=  +0.25 az=  -9.58  gx=+0.006 gy=-0.004 gz=-0.001  |a|=9.58  P=96013Pa T=33.6C␍␊
+[KAL] gyroBias: +0.00000 +0.00000 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=204000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.4 r=  -1.6)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27689us(max 27702)  mainLoop=30751us(max 31808)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=214198  baro=1050  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.06 ay=  +0.24 az=  -9.59  gx=+0.013 gy=+0.003 gz=+0.005  |a|=9.59  P=96012Pa T=33.7C␍␊
+[KAL] gyroBias: -0.00000 -0.00001 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=214200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.4 r=  -1.5)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27682us(max 27703)  mainLoop=30745us(max 31895)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=224398  baro=1100  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.08 ay=  +0.25 az=  -9.59  gx=+0.007 gy=-0.001 gz=+0.009  |a|=9.59  P=96010Pa T=33.7C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=224400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.5 r=  -1.6)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27893us(max 27911)  mainLoop=30949us(max 31895)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=234598  baro=1150  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.09 ay=  +0.27 az=  -9.65  gx=+0.004 gy=+0.002 gz=+0.007  |a|=9.66  P=96277Pa T=35.0C␍␊
+[KAL] gyroBias: +0.00000 +0.00000 -0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=234600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.3 r=  -1.7)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27895us(max 27911)  mainLoop=30965us(max 32029)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=244798  baro=1200  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.34 az=  -9.64  gx=+0.006 gy=+0.002 gz=+0.003  |a|=9.64  P=95751Pa T=32.7C␍␊
+[KAL] gyroBias: -0.00001 +0.00001 -0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=244800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.5 r=  -1.7)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27886us(max 27911)  mainLoop=30945us(max 32083)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=254998  baro=1250  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.02 ay=  +0.29 az=  -9.61  gx=+0.011 gy=+0.001 gz=+0.010  |a|=9.62  P=95746Pa T=32.8C␍␊
+[KAL] gyroBias: -0.00000 -0.00000 -0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=255000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.1 r=  -1.7)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27875us(max 27911)  mainLoop=30932us(max 32083)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=265198  baro=1300  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.29 az=  -9.67  gx=+0.001 gy=-0.004 gz=+0.002  |a|=9.68  P=95749Pa T=32.8C␍␊
+[KAL] gyroBias: -0.00000 -0.00000 -0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=265200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.1 r=  -1.8)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27872us(max 27911)  mainLoop=30938us(max 32083)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=275398  baro=1350  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  -0.00 ay=  +0.34 az=  -9.60  gx=+0.005 gy=+0.002 gz=-0.003  |a|=9.60  P=96945Pa T=32.8C␍␊
+[KAL] gyroBias: -0.00001 -0.00000 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=275400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.4 r=  -1.6)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27856us(max 27911)  mainLoop=30916us(max 32083)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=285598  baro=1400  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.10 ay=  +0.30 az=  -9.66  gx=+0.005 gy=+0.001 gz=+0.004  |a|=9.66  P=96946Pa T=32.9C␍␊
+[KAL] gyroBias: -0.00000 -0.00001 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=285600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=INIT   Rail(p=  +0.4 r=  -1.6)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27813us(max 27911)  mainLoop=30876us(max 32083)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=295798  baro=1450  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.35 az=  -9.59  gx=+0.007 gy=+0.001 gz=+0.005  |a|=9.60  P=95737Pa T=32.9C␍␊
+[KAL] gyroBias: -0.00000 -0.00000 +0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=295800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL-DBG] Force-flight: injecting BURN state + liftoff␍␊
+[KAL] FSM=INIT   Rail(p=  +0.5 r=  -1.6)  ESKF(p=  +0.0 r=  +0.0 y=  +0.0)  alt=-0.0m vD=+0.0␍␊
+[KAL] hlth=0x1E  loop=27804us(max 27911)  mainLoop=30874us(max 32083)  NIS=0.0  hiNIS=0  yields=0␍␊
+[KAL] IMU=305998  baro=1500  gps=0  imuDrop=0  baroDrop=0  evtDrop=0  imuBuf=3200  baroBuf=0  evtBuf=0  rwd=0  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.19 ay=  +0.36 az=  -9.70  gx=+0.010 gy=+0.004 gz=+0.008  |a|=9.71  P=96947Pa T=32.9C␍␊
+[KAL] gyroBias: +0.00001 -0.00001 -0.00000 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=306000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=0␍␊
+[KAL] catchUp: budget=2000us  last=0us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+0.1m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47224us(max 77510)  mainLoop=50276us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=316198  baro=1550  gps=0  imuDrop=6888  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=33  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.03 ay=  +0.20 az=  -9.56  gx=+0.007 gy=+0.006 gz=-0.003  |a|=9.56  P=94792Pa T=23.4C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=316200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=6888␍␊
+[KAL] catchUp: budget=2000us  last=14us  events=1  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+0.1m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47225us(max 77510)  mainLoop=50274us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=326398  baro=1600  gps=0  imuDrop=17088  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.10 ay=  +0.25 az=  -9.58  gx=+0.001 gy=-0.002 gz=-0.006  |a|=9.58  P=95737Pa T=33.0C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=326400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=17088␍␊
+[KAL] catchUp: budget=2000us  last=14us  events=1  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+0.1m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47225us(max 77510)  mainLoop=50274us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=336598  baro=1650  gps=0  imuDrop=27288  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.22 az=  -9.62  gx=+0.007 gy=+0.002 gz=+0.000  |a|=9.62  P=95737Pa T=33.0C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=336600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=27288␍␊
+[KAL] catchUp: budget=2000us  last=14us  events=1  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+0.1m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47227us(max 77510)  mainLoop=50274us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=346798  baro=1700  gps=0  imuDrop=37488  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.09 ay=  +0.24 az=  -9.53  gx=-0.008 gy=-0.008 gz=+0.003  |a|=9.53  P=95733Pa T=33.0C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=346800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=37488␍␊
+[KAL] catchUp: budget=2000us  last=14us  events=1  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47226us(max 77510)  mainLoop=50284us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=356998  baro=1750  gps=0  imuDrop=47688  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.02 ay=  +0.28 az=  -9.59  gx=+0.003 gy=-0.010 gz=-0.002  |a|=9.59  P=96939Pa T=33.1C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=357000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=47688␍␊
+[KAL] catchUp: budget=2000us  last=14us  events=1  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47215us(max 77510)  mainLoop=50273us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=367198  baro=1800  gps=0  imuDrop=57888  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.08 ay=  +0.35 az=  -9.62  gx=+0.005 gy=-0.005 gz=-0.003  |a|=9.63  P=95747Pa T=33.1C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=367200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=57888␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47216us(max 77510)  mainLoop=50276us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=377398  baro=1850  gps=0  imuDrop=68088  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.08 ay=  +0.32 az=  -9.63  gx=+0.005 gy=+0.003 gz=+0.001  |a|=9.64  P=96938Pa T=33.1C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=377400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=68088␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47215us(max 77510)  mainLoop=50276us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=387598  baro=1900  gps=0  imuDrop=78288  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.03 ay=  +0.25 az=  -9.54  gx=+0.004 gy=-0.004 gz=-0.003  |a|=9.55  P=96949Pa T=33.1C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=387600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=78288␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47207us(max 77510)  mainLoop=50275us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=397798  baro=1950  gps=0  imuDrop=88488  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.07 ay=  +0.27 az=  -9.66  gx=+0.005 gy=+0.001 gz=-0.003  |a|=9.66  P=96946Pa T=33.1C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=397800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=88488␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47220us(max 77510)  mainLoop=50275us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=407998  baro=2000  gps=0  imuDrop=98688  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.08 ay=  +0.22 az=  -9.63  gx=+0.006 gy=+0.004 gz=-0.006  |a|=9.63  P=95735Pa T=33.1C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=408000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=98688␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47210us(max 77510)  mainLoop=50274us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=418198  baro=2050  gps=0  imuDrop=108888  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.10 ay=  +0.27 az=  -9.73  gx=-0.001 gy=-0.003 gz=-0.002  |a|=9.73  P=96939Pa T=33.1C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=418200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=108888␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47216us(max 77510)  mainLoop=50272us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=428398  baro=2100  gps=0  imuDrop=119088  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.06 ay=  +0.26 az=  -9.52  gx=+0.004 gy=+0.004 gz=-0.002  |a|=9.52  P=96936Pa T=33.1C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=428400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=119088␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47221us(max 77510)  mainLoop=50271us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=438598  baro=2150  gps=0  imuDrop=129288  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.01 ay=  +0.21 az=  -9.64  gx=-0.002 gy=-0.002 gz=+0.003  |a|=9.64  P=95740Pa T=33.1C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=438600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=129288␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47220us(max 77510)  mainLoop=50287us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=448798  baro=2200  gps=0  imuDrop=139488  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.06 ay=  +0.24 az=  -9.62  gx=+0.002 gy=-0.003 gz=+0.005  |a|=9.62  P=93605Pa T=23.6C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=448800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=139488␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47215us(max 77510)  mainLoop=50278us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=458998  baro=2250  gps=0  imuDrop=149688  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.04 ay=  +0.20 az=  -9.56  gx=+0.006 gy=+0.001 gz=+0.005  |a|=9.56  P=96932Pa T=33.1C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=459000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=149688␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47217us(max 77510)  mainLoop=50279us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=469198  baro=2300  gps=0  imuDrop=159888  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.10 ay=  +0.43 az=  -9.61  gx=-0.003 gy=-0.002 gz=-0.000  |a|=9.62  P=94782Pa T=23.6C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=469200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=159888␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47219us(max 77510)  mainLoop=50286us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=479398  baro=2350  gps=0  imuDrop=170088  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.27 az=  -9.64  gx=+0.003 gy=-0.004 gz=-0.000  |a|=9.64  P=95732Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=479400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=170088␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47216us(max 77510)  mainLoop=50281us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=489598  baro=2400  gps=0  imuDrop=180288  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.24 az=  -9.59  gx=+0.002 gy=+0.003 gz=-0.005  |a|=9.59  P=95754Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=489600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=180288␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47218us(max 77510)  mainLoop=50280us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=499798  baro=2450  gps=0  imuDrop=190488  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.26 az=  -9.70  gx=+0.012 gy=+0.004 gz=+0.007  |a|=9.71  P=95734Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=499800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=190488␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47208us(max 77510)  mainLoop=50277us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=509998  baro=2500  gps=0  imuDrop=200688  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.08 ay=  +0.27 az=  -9.54  gx=+0.008 gy=-0.007 gz=-0.004  |a|=9.54  P=96926Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=510000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=200688␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47221us(max 77510)  mainLoop=50272us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=520198  baro=2550  gps=0  imuDrop=210888  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.22 az=  -9.71  gx=-0.000 gy=+0.004 gz=+0.007  |a|=9.72  P=96947Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=520200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=210888␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47208us(max 77510)  mainLoop=50274us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=530398  baro=2600  gps=0  imuDrop=221088  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.06 ay=  +0.30 az=  -9.57  gx=-0.003 gy=+0.001 gz=+0.004  |a|=9.58  P=96946Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=530400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=221088␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47221us(max 77510)  mainLoop=50282us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=540598  baro=2650  gps=0  imuDrop=231288  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.00 ay=  +0.31 az=  -9.63  gx=+0.013 gy=-0.005 gz=+0.003  |a|=9.64  P=95726Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=540600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=231288␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47219us(max 77510)  mainLoop=50282us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=550798  baro=2700  gps=0  imuDrop=241488  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.06 ay=  +0.27 az=  -9.63  gx=+0.004 gy=+0.009 gz=+0.003  |a|=9.63  P=95711Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=550800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=241488␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47218us(max 77510)  mainLoop=50282us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=560998  baro=2750  gps=0  imuDrop=251688  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  -0.02 ay=  +0.34 az=  -9.60  gx=+0.006 gy=+0.005 gz=-0.011  |a|=9.60  P=96910Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=561000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=251688␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47208us(max 77510)  mainLoop=50278us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=571198  baro=2800  gps=0  imuDrop=261888  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.07 ay=  +0.29 az=  -9.63  gx=+0.001 gy=-0.005 gz=+0.004  |a|=9.64  P=95710Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=571200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=261888␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47222us(max 77510)  mainLoop=50275us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=581398  baro=2850  gps=0  imuDrop=272088  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.14 ay=  +0.21 az=  -9.68  gx=+0.007 gy=+0.005 gz=+0.005  |a|=9.68  P=96912Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=581400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=272088␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47211us(max 77510)  mainLoop=50276us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=591598  baro=2900  gps=0  imuDrop=282288  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  -0.02 ay=  +0.20 az=  -9.59  gx=+0.007 gy=+0.001 gz=+0.013  |a|=9.59  P=96917Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=591600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=282288␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47220us(max 77510)  mainLoop=50277us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=601798  baro=2950  gps=0  imuDrop=292488  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.09 ay=  +0.20 az=  -9.58  gx=+0.005 gy=-0.003 gz=+0.005  |a|=9.58  P=96902Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=601800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=292488␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47216us(max 77510)  mainLoop=50274us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=611998  baro=3000  gps=0  imuDrop=302688  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.21 az=  -9.65  gx=+0.002 gy=-0.003 gz=+0.000  |a|=9.65  P=95687Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=612000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=302688␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47208us(max 77510)  mainLoop=50280us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=622198  baro=3050  gps=0  imuDrop=312888  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.03 ay=  +0.28 az=  -9.63  gx=+0.004 gy=+0.007 gz=+0.002  |a|=9.63  P=93546Pa T=23.6C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=622200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=312888␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47220us(max 77510)  mainLoop=50276us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=632398  baro=3100  gps=0  imuDrop=323088  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.16 ay=  +0.30 az=  -9.53  gx=-0.003 gy=+0.006 gz=-0.006  |a|=9.53  P=95679Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=632400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=323088␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47215us(max 77510)  mainLoop=50276us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=642598  baro=3150  gps=0  imuDrop=333288  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.08 ay=  +0.28 az=  -9.61  gx=+0.001 gy=+0.001 gz=-0.008  |a|=9.62  P=96891Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=642600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=333288␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47209us(max 77510)  mainLoop=50274us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=652798  baro=3200  gps=0  imuDrop=343488  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.05 ay=  +0.23 az=  -9.64  gx=+0.008 gy=+0.001 gz=-0.001  |a|=9.64  P=96882Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=652800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=343488␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47208us(max 77510)  mainLoop=50279us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=662998  baro=3250  gps=0  imuDrop=353688  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.02 ay=  +0.30 az=  -9.60  gx=+0.005 gy=-0.003 gz=+0.009  |a|=9.61  P=95685Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=663000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=353688␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47218us(max 77510)  mainLoop=50275us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=673198  baro=3300  gps=0  imuDrop=363888  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.02 ay=  +0.37 az=  -9.54  gx=+0.002 gy=+0.006 gz=+0.007  |a|=9.54  P=96893Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=673200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=363888␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47215us(max 77510)  mainLoop=50271us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=683398  baro=3350  gps=0  imuDrop=374088  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.14 ay=  +0.27 az=  -9.69  gx=+0.004 gy=+0.004 gz=+0.009  |a|=9.70  P=96210Pa T=35.6C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=683400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=374088␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47213us(max 77510)  mainLoop=50278us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=693598  baro=3400  gps=0  imuDrop=384288  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.03 ay=  +0.24 az=  -9.68  gx=+0.001 gy=+0.005 gz=+0.000  |a|=9.69  P=95684Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=693600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=384288␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47216us(max 77510)  mainLoop=50279us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=703798  baro=3450  gps=0  imuDrop=394488  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.07 ay=  +0.30 az=  -9.61  gx=+0.002 gy=+0.006 gz=-0.010  |a|=9.61  P=96887Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=703800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=394488␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47219us(max 77510)  mainLoop=50280us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=713998  baro=3500  gps=0  imuDrop=404688  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.04 ay=  +0.34 az=  -9.66  gx=-0.003 gy=+0.006 gz=-0.007  |a|=9.66  P=95676Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=714000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=404688␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47215us(max 77510)  mainLoop=50276us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=724198  baro=3550  gps=0  imuDrop=414888  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.08 ay=  +0.27 az=  -9.55  gx=+0.005 gy=+0.007 gz=-0.003  |a|=9.56  P=96880Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=724200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=414888␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47214us(max 77510)  mainLoop=50273us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=734398  baro=3600  gps=0  imuDrop=425088  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.15 ay=  +0.22 az=  -9.65  gx=+0.009 gy=+0.001 gz=-0.006  |a|=9.65  P=95679Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=734400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=425088␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47217us(max 77510)  mainLoop=50281us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=744598  baro=3650  gps=0  imuDrop=435288  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.14 ay=  +0.23 az=  -9.61  gx=+0.000 gy=+0.001 gz=+0.004  |a|=9.61  P=95680Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=744600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=435288␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47215us(max 77510)  mainLoop=50273us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=754798  baro=3700  gps=0  imuDrop=445488  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.08 ay=  +0.25 az=  -9.69  gx=+0.007 gy=+0.006 gz=+0.008  |a|=9.69  P=95679Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=754800  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=445488␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47216us(max 77510)  mainLoop=50280us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=764998  baro=3750  gps=0  imuDrop=455688  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.11 ay=  +0.33 az=  -9.60  gx=+0.002 gy=+0.001 gz=+0.002  |a|=9.60  P=94720Pa T=23.6C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=765000  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=455688␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47215us(max 77510)  mainLoop=50275us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=775198  baro=3800  gps=0  imuDrop=465888  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.06 ay=  +0.30 az=  -9.56  gx=+0.011 gy=-0.008 gz=+0.019  |a|=9.56  P=96898Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=775200  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=465888␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47218us(max 77510)  mainLoop=50279us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=785398  baro=3850  gps=0  imuDrop=476088  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.06 ay=  +0.22 az=  -9.60  gx=+0.014 gy=-0.001 gz=-0.004  |a|=9.60  P=96888Pa T=33.2C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=785400  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=476088␍␊
+[KAL] catchUp: budget=2000us  last=7us  events=0  dtClamp=0␍␊
+---␍␊
+[KAL] FSM=BURN   Rail(p=  +0.8 r=  -1.5)  ESKF(p=  +0.8 r=  -1.5 y=  -0.0)  alt=+20.6m vD=+0.0␍␊
+[KAL] hlth=0x17  loop=47207us(max 77510)  mainLoop=50276us(max 80596)  NIS=622.1  hiNIS=10  yields=18␍␊
+[KAL] IMU=795598  baro=3900  gps=0  imuDrop=486288  baroDrop=16  evtDrop=0  imuBuf=3200  baroBuf=50  evtBuf=1  rwd=1  drained=102␍␊
+[KAL] ring_hwm=[102,0,0]  gate=OPEN  grnd=OK  hdg=NO␍␊
+[KAL] raw: ax=  +0.10 ay=  +0.26 az=  -9.59  gx=+0.001 gy=+0.004 gz=+0.005  |a|=9.59  P=97432Pa T=35.6C␍␊
+[KAL] gyroBias: +0.00001 -0.00000 +0.00001 (rad/s)␍␊
+[KAL] fifoHdr: 0x78=795600  0xF0=0  other=0  imuFlags=0x24  imuDrvDrop=486288␍␊
+[KAL] catchUp: budget=2000us  last=6us  events=0  dtClamp=0␍␊
+---␍␊
