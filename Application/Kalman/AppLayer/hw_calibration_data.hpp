@@ -337,6 +337,16 @@ constexpr eskf_scalar kIdentity3x3[3][3] = {
   {0.0, 0.0, 1.0}
 };
 
+// IMU sensor-to-body rotation: sensor Z → body X (nose/up).
+// All 4 IMUs are mounted with sensor Z pointing toward the rocket nose.
+// Body frame: X=forward(nose), Y=right, Z=down.
+// v_body = kImuSensorToBody * v_sensor
+constexpr eskf_scalar kImuSensorToBody[3][3] = {
+  { 0.0,  0.0,  1.0},  // body_x = +sensor_z (nose)
+  { 0.0,  1.0,  0.0},  // body_y = +sensor_y
+  {-1.0,  0.0,  0.0},  // body_z = -sensor_x
+};
+
 } // namespace detail
 
 /// Get IMU position for lever-arm correction.
@@ -347,9 +357,10 @@ inline const eskf_scalar* getImuPosition(size_t index) {
 }
 
 /// Get IMU sensor-to-body rotation matrix (3x3).
+/// All 4 IMUs have Z-up mounting → body X=nose rotation.
 inline const eskf_scalar (*getImuSensorToBody(size_t index))[3] {
   (void)index;
-  return detail::kIdentity3x3;
+  return detail::kImuSensorToBody;
 }
 
 /// Get magnetometer sensor-to-body rotation matrix (3x3).

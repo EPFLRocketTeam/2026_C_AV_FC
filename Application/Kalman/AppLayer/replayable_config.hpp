@@ -479,7 +479,7 @@ inline ReplayableConfig getDefaultConfig() {
     // Precision & Physics
     .force_float32 = static_cast<uint8_t>(ESKF_FORCE_FLOAT32),
     .launch_latitude_deg = static_cast<float>(ESKF_LAUNCH_SITE_LATITUDE_DEG),
-    .launch_longitude_deg = 8.0f, // Default (placeholder)
+    .launch_longitude_deg = 6.919788f, // Payerne, Switzerland
     .local_gravity = static_cast<float>(eskf::constants::kGravityLocal),
     
     // Magnetometer Site-Specific

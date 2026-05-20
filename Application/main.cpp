@@ -84,7 +84,7 @@ static bool fsync_pwm_init(uint32_t freq_hz) {
 AppImuRingBuffer imuData1;
 AppImuRingBuffer imuData2;
 AppImuRingBuffer imuData3;
-// AppImuRingBuffer imuData4;
+AppImuRingBuffer imuData4;
 
 RingBuffer<GpsBasicFixData, 100> gpsData;
 
@@ -230,9 +230,9 @@ constexpr uint32_t kLogIntervalMs = 16;  // ~62.5 Hz
 uint32_t g_last_log_ms = 0;
 flight_computer::State g_last_fsm_state = flight_computer::INIT;
 
-ImuModule<1>* g_imu_module = nullptr;
-uint8_t g_imu_healthy[1] = {0u};
-uint32_t g_imu_status_flags[1] = {IMU_STATUS_OK};
+ImuModule<4>* g_imu_module = nullptr;
+uint8_t g_imu_healthy[4] = {0u, 0u, 0u, 0u};
+uint32_t g_imu_status_flags[4] = {IMU_STATUS_OK, IMU_STATUS_OK, IMU_STATUS_OK, IMU_STATUS_OK};
 uint8_t g_baro_healthy[4] = {0u, 0u, 0u, 0u};
 uint32_t g_baro_status_flags[4] = {
     Drivers::BMP390::BMP390_STATUS_OK,
@@ -248,8 +248,11 @@ constexpr uint16_t kGpsRateMs = static_cast<uint16_t>(
 constexpr uint16_t kGpsRateMs = 1000u;
 #endif
 
-constexpr uint16_t kImuIntPins[1] = {
+constexpr uint16_t kImuIntPins[4] = {
     APP_IMU1_INT_PIN,
+    APP_IMU2_INT_PIN,
+    APP_IMU3_INT_PIN,
+    APP_IMU4_INT_PIN,
 };
 
 Config makeImuConfig(SPI_HandleTypeDef* hspi, GPIO_TypeDef* cs_port, uint16_t cs_pin) {
@@ -276,12 +279,18 @@ Drivers::BMP390::BMP390_SDK::Config makeBaroConfig(SPI_HandleTypeDef* hspi,
 
 struct SuperLoopContext {
     Config imu_cfg1 = makeImuConfig(&hspi4, ICM_CS4_GPIO_Port, ICM_CS4_Pin);
+    Config imu_cfg2 = makeImuConfig(&hspi4, ICM_CS2_GPIO_Port, ICM_CS2_Pin);
+    Config imu_cfg3 = makeImuConfig(&hspi4, ICM_CS3_GPIO_Port, ICM_CS3_Pin);
+    Config imu_cfg4 = makeImuConfig(&hspi4, ICM_CS1_GPIO_Port, ICM_CS1_Pin);
 
     InvIMU_STM32 invImu1{imu_cfg1};
+    InvIMU_STM32 invImu2{imu_cfg2};
+    InvIMU_STM32 invImu3{imu_cfg3};
+    InvIMU_STM32 invImu4{imu_cfg4};
 
-    InvIMU_Interface* invArr[1] = {&invImu1};
-    AppImuRingBuffer* ringArr[1] = {&imuData1};
-    ImuModule<1> imuModule{invArr, ringArr};
+    InvIMU_Interface* invArr[4] = {&invImu1, &invImu2, &invImu3, &invImu4};
+    AppImuRingBuffer* ringArr[4] = {&imuData1, &imuData2, &imuData3, &imuData4};
+    ImuModule<4> imuModule{invArr, ringArr};
 
 #ifdef UNIT_TEST_ENV
     Drivers::BMP390::BMP390_Mock baro1{};
@@ -333,7 +342,7 @@ extern "C" void app_on_imu_exti(uint16_t gpio_pin) {
 
     const uint64_t irq_us = app_timebase_now_us();
     const uint32_t now_ms = HAL_GetTick();
-    for (size_t i = 0; i < 1; ++i) {
+    for (size_t i = 0; i < 4; ++i) {
         if (kImuIntPins[i] == 0u) {
             continue;
         }
@@ -358,14 +367,14 @@ extern "C" void app_on_imu_spi_rx_complete(SPI_HandleTypeDef* hspi) {
 }
 
 extern "C" uint8_t app_imu_sensor_healthy(uint8_t sensor_index) {
-    if (sensor_index >= 1u) {
+    if (sensor_index >= 4u) {
         return 0u;
     }
     return g_imu_healthy[sensor_index];
 }
 
 extern "C" uint32_t app_imu_sensor_status_flags(uint8_t sensor_index) {
-    if (sensor_index >= 1u) {
+    if (sensor_index >= 4u) {
         return IMU_STATUS_OK;
     }
     return g_imu_status_flags[sensor_index];
@@ -476,7 +485,10 @@ extern "C" void app_super_loop_setup(void) {
     // the IMU to use it. Order matters: clock must be running before the IMU
     // is told to listen to it, otherwise the IMU sees no edges.
     if (fsync_pwm_init(6400u)) {
-        g_superloop.invImu1.enableFsync();
+        if (!g_superloop.imuModule.sensorFailed(0)) g_superloop.invImu1.enableFsync();
+        if (!g_superloop.imuModule.sensorFailed(1)) g_superloop.invImu2.enableFsync();
+        if (!g_superloop.imuModule.sensorFailed(2)) g_superloop.invImu3.enableFsync();
+        if (!g_superloop.imuModule.sensorFailed(3)) g_superloop.invImu4.enableFsync();
         printf("[APP] FSYNC PWM started on PD14 @ 6400 Hz\r\n");
     } else {
         printf("[APP] WARNING: FSYNC PWM init failed — IMU timestamps may drift\r\n");
@@ -565,7 +577,7 @@ extern "C" void app_super_loop_iterate(void) {
     const uint32_t now_ms = HAL_GetTick();
     g_superloop.imuModule.update(now_ms);
 
-    for (size_t i = 0; i < 1; ++i) {
+    for (size_t i = 0; i < 4; ++i) {
         g_imu_healthy[i] = g_superloop.imuModule.sensorHealthy(i) ? 1u : 0u;
         g_imu_status_flags[i] = g_superloop.imuModule.sensorStatusFlags(i);
     }

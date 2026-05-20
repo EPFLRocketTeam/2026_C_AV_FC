@@ -192,7 +192,7 @@ struct TuningConfig {
   // Physics / Launch Site
   // ============================================================
   float launch_latitude_deg = ESKF_LAUNCH_SITE_LATITUDE_DEG;       // Launch site latitude (degrees)
-  float launch_longitude_deg = 8.0f;       // Launch site longitude (degrees) - for future WMM
+  float launch_longitude_deg = 6.919788f;  // Launch site longitude (degrees) - Payerne, CH
   float local_gravity = 9.80665f;          // Local gravity (m/s²), computed from latitude
 
   // ============================================================

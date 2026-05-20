@@ -18,7 +18,7 @@ using AppImuRingBuffer = RingBuffer<IMUData, APP_IMU_RING_CAPACITY>;
 extern AppImuRingBuffer imuData1;
 extern AppImuRingBuffer imuData2;
 extern AppImuRingBuffer imuData3;
-// extern AppImuRingBuffer imuData4;
+extern AppImuRingBuffer imuData4;
 
 #ifndef APP_IMU_ENABLE_FSYNC
 #define APP_IMU_ENABLE_FSYNC 1u
@@ -66,14 +66,18 @@ public:
       : Base(drivers, buffers) {}
 
   bool init() override {
+    size_t ok_count = 0;
+    bool master_set = false;
     for (size_t i = 0; i < kNumSensors; ++i) {
       if (!drivers_[i]->init()) {
         printf("Error starting imu %u\r\n", (unsigned)i);
-        return false;
+        sensor_state_[i].failed = true;
+        continue;
       }
       if (!drivers_[i]->ping()) {
         printf("Error pinging imu %u\r\n", (unsigned)i);
-        return false;
+        sensor_state_[i].failed = true;
+        continue;
       }
       drivers_[i]->configure(AccelRange::_32G, GyroRange::_4000DPS, ODR::_6_4kHz);
       drivers_[i]->configureFifo();
@@ -81,9 +85,16 @@ public:
       drivers_[i]->enableFsync();
 #endif
       sensor_state_[i] = SensorRuntimeState{};
+      if (!master_set) {
+        master_index_ = i;
+        master_set = true;
+      }
+      ++ok_count;
+      printf("IMU %u init OK\r\n", (unsigned)i);
     }
     last_master_irq_ms_ = HAL_GetTick();
-    return true;
+    printf("[IMU] %u/%u sensors initialized\r\n", (unsigned)ok_count, (unsigned)kNumSensors);
+    return ok_count > 0;
   }
 
   void onImuInterrupt(size_t sensor_index, uint32_t irq_tick_ms, uint64_t irq_us = 0) {
@@ -102,6 +113,7 @@ public:
   void onSpiRxComplete(SPI_HandleTypeDef *hspi) {
     (void)hspi;
     for (size_t i = 0; i < kNumSensors; ++i) {
+      if (sensor_state_[i].failed) continue;
       drivers_[i]->onDmaComplete();
     }
   }
@@ -112,7 +124,13 @@ public:
 
 #if (APP_IMU_ENABLE_FAILOVER != 0u) && (APP_IMU_SOFT_TRIGGER_MASTER_FALLBACK == 0u)
     if ((tick_ms - last_master_irq_ms_) > APP_IMU_MASTER_TIMEOUT_MS) {
-      master_index_ = (master_index_ + 1u) % kNumSensors;
+      // Find next non-failed sensor for failover
+      size_t next = (master_index_ + 1u) % kNumSensors;
+      for (size_t attempt = 0; attempt < kNumSensors; ++attempt) {
+        if (!sensor_state_[next].failed) break;
+        next = (next + 1u) % kNumSensors;
+      }
+      master_index_ = next;
       master_irq_pending_ = false;
       last_master_irq_ms_ = tick_ms;
       failover_occurred_ = true;
@@ -132,7 +150,7 @@ public:
 
 #if (APP_IMU_SOFT_TRIGGER_SECONDARIES != 0u)
     for (size_t i = 0; i < kNumSensors; ++i) {
-      if (i == master_index_) {
+      if (i == master_index_ || sensor_state_[i].failed) {
         continue;
       }
       drivers_[i]->onInterrupt();
@@ -145,7 +163,7 @@ public:
     }
 
     for (size_t i = 0; i < kNumSensors; ++i) {
-      if (i == master_index_) {
+      if (i == master_index_ || sensor_state_[i].failed) {
         continue;
       }
       (void)drainSensor(i, g, tick_ms);
@@ -173,6 +191,13 @@ public:
 
   size_t masterIndex() const {
     return master_index_;
+  }
+
+  bool sensorFailed(size_t sensor_index) const {
+    if (sensor_index >= kNumSensors) {
+      return true;
+    }
+    return sensor_state_[sensor_index].failed;
   }
 
   bool sensorHealthy(size_t sensor_index) const {
@@ -211,10 +236,12 @@ private:
     uint32_t drop_count = 0;
     uint32_t alignment_mismatch_count = 0;
     bool healthy = false;
+    bool failed = false;
   };
 
   size_t drainSensor(size_t sensor_index, flight_computer::GOATStore &g,
                      uint32_t tick_ms) {
+    if (sensor_state_[sensor_index].failed) return 0;
     drivers_[sensor_index]->tick();
 
     IMUData frame{};

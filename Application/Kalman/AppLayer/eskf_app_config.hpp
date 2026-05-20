@@ -19,7 +19,7 @@
 #endif
 
 #ifndef ESKF_APP_IMU_COUNT
-#define ESKF_APP_IMU_COUNT 2
+#define ESKF_APP_IMU_COUNT 4
 #endif
 
 #ifndef ESKF_IMU0_POS_X
@@ -47,5 +47,5 @@
 #endif
 
 #ifndef ESKF_LAUNCH_LATITUDE_DEG
-#define ESKF_LAUNCH_LATITUDE_DEG 45.0
+#define ESKF_LAUNCH_LATITUDE_DEG 46.848199
 #endif

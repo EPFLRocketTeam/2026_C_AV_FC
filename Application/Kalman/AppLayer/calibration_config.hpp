@@ -19,7 +19,7 @@ namespace appcfg {
 constexpr size_t kMaxCgTableEntries = 8;
 
 /// Maximum number of IMUs supported
-constexpr size_t kMaxCalibImus = 2;
+constexpr size_t kMaxCalibImus = 4;
 
 /// Maximum number of barometers supported
 constexpr size_t kMaxCalibBaros = 4;

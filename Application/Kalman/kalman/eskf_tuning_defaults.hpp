@@ -354,7 +354,7 @@
 
 #ifndef ESKF_LAUNCH_SITE_LATITUDE_DEG
 #define ESKF_LAUNCH_SITE_LATITUDE_DEG                                          \
-  46.0 // Default: Central Europe (~Switzerland)
+  46.848199 // Launch site: Payerne, Switzerland
 #endif
 
 // ============================================================

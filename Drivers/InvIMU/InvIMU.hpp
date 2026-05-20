@@ -34,7 +34,7 @@ namespace InvIMU {
     // Compile-time tuning knobs (RAM safety)
     // ======================================================================
     #ifndef INVIMU_RING_CAPACITY
-    #define INVIMU_RING_CAPACITY 512u
+    #define INVIMU_RING_CAPACITY 128u
     #endif
 
     // Default linker section for the ring buffer and burst buffer.

@@ -38,6 +38,7 @@ extern "C" {
 extern AppImuRingBuffer imuData1;
 extern AppImuRingBuffer imuData2;
 extern AppImuRingBuffer imuData3;
+extern AppImuRingBuffer imuData4;
 
 extern RingBuffer<GpsBasicFixData, 100> gpsData;
 
@@ -165,12 +166,12 @@ struct KalmanRuntime {
 	bool apogee_detected = false;
 	uint32_t liftoff_ms = 0;
 	bool initialized = false;
-	uint64_t last_imu_ts_us[3] = {0, 0, 0};
-	bool has_prev_imu_ts[3] = {false, false, false};
+	uint64_t last_imu_ts_us[4] = {0, 0, 0, 0};
+	bool has_prev_imu_ts[4] = {false, false, false, false};
 	flight_computer::State last_state = flight_computer::State::INIT;
 	flight_computer::Vector3 last_body_accel_mps2{};
 	KalmanHealthSnapshot health{};
-	size_t active_imu_sources = 3u;
+	size_t active_imu_sources = 4u;
 	static constexpr size_t kActiveBaroSources = 4u;
 	LiftoffAccHold acc_hold;  ///< Liftoff acceleration-hold evaluator
 	LiftoffDetector liftoff_detector;  ///< IMU dual-window liftoff detector
@@ -190,7 +191,7 @@ struct KalmanRuntime {
 		}
 
 		estimator.reset();
-		estimator.configureReplaySensorCounts(3, kActiveBaroSources);
+		estimator.configureReplaySensorCounts(4, kActiveBaroSources);
 		if (!apogee_ready) {
 			const int idx = apogee_hub.addAlgorithm(app::createConsensusApogeeDetector());
 			apogee_hub.setPrimary(idx);
@@ -252,15 +253,17 @@ struct KalmanRuntime {
 
 		if (state == flight_computer::State::INIT) {
 			estimator.reset();
-			estimator.configureReplaySensorCounts(3u, kActiveBaroSources);
-			active_imu_sources = 3u;
+			estimator.configureReplaySensorCounts(4u, kActiveBaroSources);
+			active_imu_sources = 4u;
 			apogee_hub.reset();
 			last_imu_ts_us[0] = 0;
 			last_imu_ts_us[1] = 0;
 			last_imu_ts_us[2] = 0;
+			last_imu_ts_us[3] = 0;
 			has_prev_imu_ts[0] = false;
 			has_prev_imu_ts[1] = false;
 			has_prev_imu_ts[2] = false;
+			has_prev_imu_ts[3] = false;
 			liftoff_ms = 0;
 			apogee_detected = false;
 			last_body_accel_mps2 = {};
@@ -735,15 +738,15 @@ int kalman_loop() {
 	const uint32_t current_state = kalman_current_state();
 	kalman.onStateChange(current_state);
 
-	AppImuRingBuffer *buffers[] = {&imuData1, &imuData2, &imuData3};
+	AppImuRingBuffer *buffers[] = {&imuData1, &imuData2, &imuData3, &imuData4};
 
-	static IMUData staged_samples[3][kMaxImuSamplesPerSourcePerRun] = {};
-	size_t staged_count[3] = {0, 0, 0};
-	size_t staged_index[3] = {0, 0, 0};
-	bool source_healthy[3] = {false, false, false};
+	static IMUData staged_samples[4][kMaxImuSamplesPerSourcePerRun] = {};
+	size_t staged_count[4] = {0, 0, 0, 0};
+	size_t staged_index[4] = {0, 0, 0, 0};
+	bool source_healthy[4] = {false, false, false, false};
 	size_t healthy_source_count = 0;
 	int drained = 0;
-	for (size_t i = 0; i < 3; ++i) {
+	for (size_t i = 0; i < 4; ++i) {
 		source_healthy[i] =
 			(app_imu_sensor_healthy(static_cast<uint8_t>(i)) != 0U);
 		if (source_healthy[i]) {
@@ -770,10 +773,10 @@ int kalman_loop() {
 #endif
 
 	for (;;) {
-		size_t best_source = 3;
+		size_t best_source = 4;
 		uint64_t best_ts = UINT64_MAX;
 
-		for (size_t i = 0; i < 3; ++i) {
+		for (size_t i = 0; i < 4; ++i) {
 			if (!source_healthy[i]) {
 				continue;
 			}
@@ -788,12 +791,12 @@ int kalman_loop() {
 			}
 		}
 
-		if (best_source >= 3) {
+		if (best_source >= 4) {
 			break;
 		}
 
 		uint64_t next_other_ts = UINT64_MAX;
-		for (size_t i = 0; i < 3; ++i) {
+		for (size_t i = 0; i < 4; ++i) {
 			if (i == best_source || !source_healthy[i]) {
 				continue;
 			}
