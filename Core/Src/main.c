@@ -107,6 +107,11 @@ int main(void)
   /* MPU Configuration--------------------------------------------------------*/
   MPU_Config();
 
+  /* Enable CPU caches for performance (Kalman, IMU processing).
+   * DMA coherency for SDMMC is handled by cache-clean in plume_driver. */
+  SCB_EnableICache();
+  SCB_EnableDCache();
+
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
@@ -135,21 +140,9 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   HAL_Delay(1500); // Small delay to let USB enumerate
-  printf("Starting SD Benchmark\r\n");
-  // Wait for serial connection to be established
-  for (int i = 10; i > 0; i--) {
-      printf("Benchmark starts in %d...\r\n", i);
-      HAL_Delay(1000);
-  }
-  //app_super_loop_setup();
-  //manual_test_buzzer();
+  printf("USB on\r\n");
 
-  sd_benchmark_run(&hsd1);
-  printf("Finished SD Benchmark\r\n");
-
-  //imu_manual_test();
-  HAL_Delay(500);
-
+  app_super_loop_setup();
 
   /* USER CODE END 2 */
 
@@ -160,12 +153,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  //manual_test_imu();
-	  // BMP390_ManualTest_Run();
-	  // manual_test_gps();
-	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_0);
-	  //app_super_loop_iterate();
-      HAL_Delay(500);
+	  app_super_loop_iterate();
   }
   /* USER CODE END 3 */
 }

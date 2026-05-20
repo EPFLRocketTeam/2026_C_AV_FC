@@ -48,6 +48,8 @@ uint8_t plume_stm32_disk_information (SD_HandleTypeDef* hsd, struct plume_disk* 
 uint8_t plume_stm32_read_block (SD_HandleTypeDef* hsd, struct plume_context* context, uint8_t* buffer, uint64_t block_id) {
     HAL_StatusTypeDef status = HAL_SD_ReadBlocks(hsd, buffer, (uint32_t) block_id, 1, HAL_MAX_DELAY);
     if (status == HAL_OK) {
+        /* Invalidate D-cache so CPU sees data written by IDMA. */
+        SCB_InvalidateDCache_by_Addr((uint32_t*)buffer, 512);
         return PLUME_OK;
     }
 
@@ -62,6 +64,9 @@ uint8_t plume_stm32_write_block (SD_HandleTypeDef* hsd, struct plume_context* co
             return PLUME_OK_RETRY;
         }
     }
+
+    /* Flush D-cache so IDMA reads committed data from AXI SRAM. */
+    SCB_CleanDCache_by_Addr((uint32_t*)buffer, 512);
 
     g_sd_dma_complete = 0;
     g_sd_dma_error    = 0;
@@ -83,6 +88,9 @@ uint8_t plume_stm32_write_blocks (SD_HandleTypeDef* hsd, struct plume_context* c
             return PLUME_OK_RETRY;
         }
     }
+
+    /* Flush D-cache for the entire batch so IDMA sees committed data. */
+    SCB_CleanDCache_by_Addr((uint32_t*)buffer, num_blocks * 512);
 
     g_sd_dma_complete = 0;
     g_sd_dma_error    = 0;

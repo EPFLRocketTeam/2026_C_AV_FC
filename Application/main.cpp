@@ -6,6 +6,7 @@
 #include "Modules/imu_modlue.hpp"
 #include "Modules/gps_module.hpp"
 #include "plume_driver.hpp"
+#include "Modules/sd_logger.hpp"
 // Forward-declared — defined in av_state.cpp to avoid BMP390 header clash.
 void fsm_tick(void);
 
@@ -221,6 +222,13 @@ namespace {
 SDCardInterface g_sd_interface;
 const size_t g_sd_arena_length = 64 * 1024;
 uint8_t g_sd_arena_buffer[g_sd_arena_length];
+bool g_sd_logging_active = false;  // Set after successful init+open
+SdLogger g_sd_logger;
+
+// Logging decimation: write DataDump every N ms
+constexpr uint32_t kLogIntervalMs = 16;  // ~62.5 Hz
+uint32_t g_last_log_ms = 0;
+flight_computer::State g_last_fsm_state = flight_computer::INIT;
 
 ImuModule<1>* g_imu_module = nullptr;
 uint8_t g_imu_healthy[1] = {0u};
@@ -484,6 +492,10 @@ extern "C" void app_super_loop_setup(void) {
             printf("[APP] Failure of open on SD card (non-fatal).\n");
         } else {
             printf("[APP] SD card file opened OK.\n");
+            g_sd_logging_active = true;
+            g_sd_logger.init(&g_sd_interface);
+            eskf::setEskfLogger(&g_sd_logger);
+            printf("[APP] SD logger active, ESKF logger connected.\n");
         }
     }
 
@@ -527,11 +539,25 @@ extern "C" void app_super_loop_iterate(void) {
         return;
     }
 
-    // TODO decide when to store data dump
-    // TODO setup error handling on write & tick
-    if (false) {
-        const flight_computer::DataDump &dataDump = flight_computer::GOATStore::get_instance().get();
-        g_sd_interface.write((const uint8_t*)(&dataDump), sizeof(flight_computer::DataDump));
+    // ── SD Card Logging ────────────────────────────────────────────────────
+    // Write DataDump at ~62.5 Hz + on FSM transitions.
+    // tick() is always called to drain the ring buffer via DMA.
+    if (g_sd_logging_active) {
+        const uint32_t now_ms = HAL_GetTick();
+        bool should_log = (now_ms - g_last_log_ms >= kLogIntervalMs);
+
+        // Detect FSM state change (force immediate log on transition)
+        const flight_computer::DataDump& dump = flight_computer::GOATStore::get_instance().get();
+        if (dump.av_state != g_last_fsm_state) {
+            g_sd_logger.logFsmTransition(g_last_fsm_state, dump.av_state);
+            g_last_fsm_state = dump.av_state;
+            should_log = true;  // Force DataDump on transition
+        }
+
+        if (should_log) {
+            g_sd_logger.logDataDump(&dump, sizeof(dump));
+            g_last_log_ms = now_ms;
+        }
     }
     g_sd_interface.tick();
 
