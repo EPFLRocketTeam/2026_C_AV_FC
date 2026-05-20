@@ -7,6 +7,21 @@ extern "C" {
     #include "plume/status.h"
 };
 
+/* ── DMA completion flags (set from IRQ context) ─────────────────────────── */
+volatile uint8_t g_sd_dma_complete = 1;   /* 1 = idle/done */
+volatile uint8_t g_sd_dma_error    = 0;
+
+extern "C" void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd) {
+    (void)hsd;
+    g_sd_dma_complete = 1;
+}
+
+extern "C" void HAL_SD_ErrorCallback(SD_HandleTypeDef *hsd) {
+    (void)hsd;
+    g_sd_dma_error    = 1;
+    g_sd_dma_complete = 1;       /* unblock the ready check */
+}
+
 #define DBG(...) printf(" - " #__VA_ARGS__ ": %u \r\n", __VA_ARGS__);
 uint8_t plume_stm32_disk_information (SD_HandleTypeDef* hsd, struct plume_disk* disk_info) {
     if (hsd->State != HAL_SD_STATE_READY) {
@@ -39,14 +54,55 @@ uint8_t plume_stm32_read_block (SD_HandleTypeDef* hsd, struct plume_context* con
     return -45;
 }
 uint8_t plume_stm32_write_block (SD_HandleTypeDef* hsd, struct plume_context* context, const uint8_t* buffer, uint64_t block_id) {
-	HAL_StatusTypeDef status = HAL_SD_WriteBlocks(hsd, buffer, (uint32_t) block_id, 1, HAL_MAX_DELAY);
-	if (status == HAL_OK) {
-        return PLUME_OK;
+    /* Wait for card to reach TRANSFER state (previous write programming done). */
+    uint32_t t0 = HAL_GetTick();
+    while (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {
+        if (HAL_GetTick() - t0 > 500) {
+            HAL_SD_Abort(hsd);
+            return PLUME_OK_RETRY;
+        }
     }
 
-    return -40;
+    g_sd_dma_complete = 0;
+    g_sd_dma_error    = 0;
+
+    HAL_StatusTypeDef status = HAL_SD_WriteBlocks_DMA(hsd, (uint8_t*)buffer, (uint32_t)block_id, 1);
+    if (status != HAL_OK) {
+        g_sd_dma_complete = 1;
+        return PLUME_OK_RETRY;
+    }
+    return PLUME_OK_SENT_DMA;
 }
+
+uint8_t plume_stm32_write_blocks (SD_HandleTypeDef* hsd, struct plume_context* context, const uint8_t* buffer, uint64_t block_id, uint32_t num_blocks) {
+    /* Wait for card to reach TRANSFER state. */
+    uint32_t t0 = HAL_GetTick();
+    while (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {
+        if (HAL_GetTick() - t0 > 500) {
+            HAL_SD_Abort(hsd);
+            return PLUME_OK_RETRY;
+        }
+    }
+
+    g_sd_dma_complete = 0;
+    g_sd_dma_error    = 0;
+
+    HAL_StatusTypeDef status = HAL_SD_WriteBlocks_DMA(hsd, (uint8_t*)buffer, (uint32_t)block_id, num_blocks);
+    if (status != HAL_OK) {
+        g_sd_dma_complete = 1;
+        return PLUME_OK_RETRY;
+    }
+    return PLUME_OK_SENT_DMA;
+}
+
 uint8_t plume_stm32_write_block_ready (SD_HandleTypeDef* hsd, struct plume_context* context) {
+    if (!g_sd_dma_complete) {
+        return 0;          /* DMA transfer still in progress */
+    }
+    /* DMA finished — also wait for the card to finish programming. */
+    if (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {
+        return 0;
+    }
     return 1;
 }
 
@@ -76,6 +132,9 @@ bool SDCardInterface::init_sd_card (
     driver.write_block_ready = 
         PLUME_WRITE_BLOCK_READY_FN_TYPE
         plume_stm32_write_block_ready;
+    driver.write_blocks =
+        PLUME_WRITE_BLOCKS_FN_TYPE
+        plume_stm32_write_blocks;
 
     context.arena_buffer = arena_buffer;
     context.arena_length = arena_length;

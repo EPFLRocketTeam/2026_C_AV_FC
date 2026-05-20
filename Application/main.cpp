@@ -474,21 +474,17 @@ extern "C" void app_super_loop_setup(void) {
         printf("[APP] WARNING: FSYNC PWM init failed — IMU timestamps may drift\r\n");
     }
     printf("[APP] Initializing SD Card...\n");
-    // TODO add handle for SD
-    SD_HandleTypeDef *sd_hsd = NULL;
     if (hsd1.Instance == NULL) {
-        printf("[APP] Please provide handle for SD Card or comment code related to SD card.\n");
-        return ;
-    }
-    if (!g_sd_interface.init_sd_card(sd_hsd, g_sd_arena_buffer, g_sd_arena_length)) {
-        printf("[APP] Failure of init SD card.\n");
-        return ;
-    }
-
-    printf("Opening file...\n");
-    if (!g_sd_interface.open_file()) {
-        printf("[APP] Failure of open on SD card.\n");
-        return ;
+        printf("[APP] SD Card not initialized (hsd1.Instance == NULL).\n");
+    } else if (!g_sd_interface.init_sd_card(&hsd1, g_sd_arena_buffer, g_sd_arena_length)) {
+        printf("[APP] Failure of init SD card (non-fatal, continuing).\n");
+    } else {
+        printf("Opening file...\n");
+        if (!g_sd_interface.open_file()) {
+            printf("[APP] Failure of open on SD card (non-fatal).\n");
+        } else {
+            printf("[APP] SD card file opened OK.\n");
+        }
     }
 
     // ── Baro init diagnostics ──────────────────────────────────────────────

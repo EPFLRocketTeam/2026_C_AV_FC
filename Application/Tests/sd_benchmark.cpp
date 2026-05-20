@@ -5,6 +5,8 @@ extern "C" {
 #include <string.h>
 }
 
+#include "plume_driver.hpp"
+
 // ---------------------------------------------------------------------------
 // SD Card Benchmark — measures raw HAL_SD_WriteBlocks latency
 // Reports throughput, p50, p95, p99, p99.9, max for single-block
@@ -25,9 +27,9 @@ static uint8_t g_buf_4k[4096]    __attribute__((aligned(32)));
 static uint8_t g_buf_8k[8192]    __attribute__((aligned(32)));
 static uint8_t g_buf_16k[16384]  __attribute__((aligned(32)));
 
-// DMA completion flag
-static volatile bool g_dma_tx_complete = false;
-static volatile bool g_dma_tx_error = false;
+// DMA completion flags — defined in plume_driver.cpp, set by HAL callbacks
+extern volatile uint8_t g_sd_dma_complete;
+extern volatile uint8_t g_sd_dma_error;
 
 // ---------------------------------------------------------------------------
 // Simple shell sort for uint32_t array (fast enough for 4096 elements)
@@ -323,17 +325,172 @@ static void bench_sustained(SD_HandleTypeDef* hsd) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// HAL DMA callbacks
-// ---------------------------------------------------------------------------
-extern "C" void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd) {
-    (void)hsd;
-    g_dma_tx_complete = true;
-}
+// HAL DMA callbacks are in plume_driver.cpp (g_sd_dma_complete / g_sd_dma_error)
 
-extern "C" void HAL_SD_ErrorCallback(SD_HandleTypeDef *hsd) {
-    (void)hsd;
-    g_dma_tx_error = true;
+// ---------------------------------------------------------------------------
+// Phase 5: End-to-end Plume write/tick test
+// Verifies multi-block DMA integration through the full Plume stack.
+// ---------------------------------------------------------------------------
+static uint8_t g_plume_arena[64 * 1024] __attribute__((aligned(32)));
+
+static void bench_plume_e2e(SD_HandleTypeDef* hsd) {
+    printf("[SD-BENCH] Phase 5: Plume end-to-end write+tick test...\r\n");
+
+    SDCardInterface plume;
+    if (!plume.init_sd_card(hsd, g_plume_arena, sizeof(g_plume_arena))) {
+        printf("[SD-BENCH]   Plume init FAILED!\r\n");
+        return;
+    }
+    printf("[SD-BENCH]   Plume init OK. Files remaining=%lu, Disk remaining=%lu bytes\r\n",
+           (unsigned long)plume.number_files_remaining(),
+           (unsigned long)plume.disk_size_remaining());
+
+    if (!plume.open_file()) {
+        printf("[SD-BENCH]   Plume open_file FAILED!\r\n");
+        return;
+    }
+    printf("[SD-BENCH]   Plume file opened.\r\n");
+
+    // Write test data: simulate flight DataDump writes
+    // Each write is 504 bytes (512 - 8 byte header) per block usable
+    // We'll write 256-byte payloads to fill the ring buffer, then tick to flush
+    static uint8_t payload[256];
+    for (uint32_t i = 0; i < sizeof(payload); i++) {
+        payload[i] = (uint8_t)(i ^ 0xAB);
+    }
+
+    // Phase 5a: Measure write+tick throughput (how fast can Plume flush?)
+    constexpr uint32_t kPlumeWriteCount = 4096;
+    uint32_t writes_ok = 0;
+    uint32_t writes_retry = 0;
+    uint32_t tick_calls = 0;
+    uint32_t tick_busy = 0;    // tick returned immediately (DMA busy)
+    uint32_t tick_flushed = 0; // tick initiated a new DMA transfer
+    uint32_t total_bytes_written = 0;
+
+    uint32_t t_start = dwt_cycles();
+
+    for (uint32_t i = 0; i < kPlumeWriteCount; i++) {
+        // Fill payload with unique data
+        payload[0] = (uint8_t)(i & 0xFF);
+        payload[1] = (uint8_t)((i >> 8) & 0xFF);
+
+        // Write into ring buffer
+        uint8_t wr = plume.write(payload, sizeof(payload));
+        if (wr == 0) {  // PLUME_OK
+            writes_ok++;
+            total_bytes_written += sizeof(payload);
+        } else if (wr == 2) {  // PLUME_OK_RETRY — arena full, need to tick
+            // Tick until there's space
+            uint32_t retry_limit = 100000;
+            while (wr == 2 && retry_limit-- > 0) {
+                uint8_t tk = plume.tick();
+                tick_calls++;
+                if (tk == 0 || tk == 1) {
+                    tick_flushed++;
+                }
+                wr = plume.write(payload, sizeof(payload));
+            }
+            if (wr == 0) {
+                writes_ok++;
+                total_bytes_written += sizeof(payload);
+                writes_retry++;
+            } else {
+                printf("[SD-BENCH]   Write %lu failed after retries: %u\r\n",
+                       (unsigned long)i, wr);
+                break;
+            }
+        } else {
+            printf("[SD-BENCH]   Write %lu failed: %u\r\n", (unsigned long)i, wr);
+            break;
+        }
+
+        // Tick after each write to drain the ring buffer
+        uint8_t tk = plume.tick();
+        tick_calls++;
+        if (tk == 0 || tk == 1) {
+            tick_flushed++;
+        }
+    }
+
+    // Drain remaining blocks from ring buffer
+    uint32_t drain_limit = 200000;
+    uint8_t drain_status = 0;
+    while (drain_limit-- > 0) {
+        drain_status = plume.tick();
+        tick_calls++;
+        if (drain_status == 0) {
+            // Check if truly idle: tick again to be sure
+            uint8_t tk2 = plume.tick();
+            tick_calls++;
+            if (tk2 == 0) {
+                break;  // Ring buffer fully drained
+            }
+        }
+    }
+
+    uint32_t t_end = dwt_cycles();
+    uint32_t total_us = cycles_to_us(t_end - t_start);
+
+    uint32_t throughput_kBs = 0;
+    if (total_us > 0) {
+        throughput_kBs = (uint32_t)((uint64_t)total_bytes_written * 1000000ull / total_us / 1024ull);
+    }
+
+    printf("[SD-BENCH]   Writes: %lu OK (%lu retried), %lu bytes total\r\n",
+           (unsigned long)writes_ok, (unsigned long)writes_retry,
+           (unsigned long)total_bytes_written);
+    printf("[SD-BENCH]   Ticks: %lu total, %lu flushed\r\n",
+           (unsigned long)tick_calls, (unsigned long)tick_flushed);
+    printf("[SD-BENCH]   Time: %lu us => %lu KB/s\r\n",
+           (unsigned long)total_us, (unsigned long)throughput_kBs);
+
+    if (drain_limit == 0) {
+        printf("[SD-BENCH]   WARNING: drain did not complete! status=%u\r\n", drain_status);
+    } else {
+        printf("[SD-BENCH]   Ring buffer fully drained.\r\n");
+    }
+
+    // Phase 5b: Measure tick latency (time per tick call)
+    printf("[SD-BENCH] Phase 5b: Plume tick latency profile...\r\n");
+    constexpr uint32_t kTickLatencyWrites = 2048;
+    uint32_t tick_latency_count = 0;
+
+    for (uint32_t i = 0; i < kTickLatencyWrites; i++) {
+        payload[0] = (uint8_t)(i & 0xFF);
+        payload[1] = (uint8_t)((i >> 8) & 0xFF);
+
+        uint8_t wr = plume.write(payload, sizeof(payload));
+        while (wr == 2) {
+            plume.tick();
+            wr = plume.write(payload, sizeof(payload));
+        }
+
+        uint32_t t0 = dwt_cycles();
+        plume.tick();
+        uint32_t t1 = dwt_cycles();
+
+        if (tick_latency_count < kSingleBlockCount) {
+            g_latencies[tick_latency_count++] = cycles_to_us(t1 - t0);
+        }
+    }
+
+    // Drain
+    for (uint32_t d = 0; d < 200000; d++) {
+        uint32_t t0 = dwt_cycles();
+        uint8_t tk = plume.tick();
+        uint32_t t1 = dwt_cycles();
+        if (tick_latency_count < kSingleBlockCount) {
+            g_latencies[tick_latency_count++] = cycles_to_us(t1 - t0);
+        }
+        if (tk == 0) {
+            uint8_t tk2 = plume.tick();
+            if (tk2 == 0) break;
+        }
+    }
+
+    sort_u32(g_latencies, tick_latency_count);
+    report_percentiles("Phase 5b tick", g_latencies, tick_latency_count);
 }
 
 // ---------------------------------------------------------------------------
@@ -364,8 +521,8 @@ static void bench_dma_multi_block(SD_HandleTypeDef* hsd, uint8_t* buf,
             }
         }
 
-        g_dma_tx_complete = false;
-        g_dma_tx_error = false;
+        g_sd_dma_complete = 0;
+        g_sd_dma_error = 0;
 
         uint32_t t0 = dwt_cycles();
         HAL_StatusTypeDef st = HAL_SD_WriteBlocks_DMA(hsd, buf,
@@ -383,9 +540,9 @@ static void bench_dma_multi_block(SD_HandleTypeDef* hsd, uint8_t* buf,
         // CPU is free here — count cycles until DMA completes
         uint32_t cpu_free_start = dwt_cycles();
         uint32_t timeout_tick = HAL_GetTick() + 5000; // 5s timeout
-        while (!g_dma_tx_complete && !g_dma_tx_error) {
+        while (!g_sd_dma_complete && !g_sd_dma_error) {
             if (HAL_GetTick() > timeout_tick) {
-                g_dma_tx_error = true;
+                g_sd_dma_error = 1;
                 printf("[SD-BENCH]   DMA timeout! state=%u err=0x%lX\r\n",
                        (unsigned)hsd->State, (unsigned long)hsd->ErrorCode);
                 break;
@@ -394,7 +551,7 @@ static void bench_dma_multi_block(SD_HandleTypeDef* hsd, uint8_t* buf,
         uint32_t t1 = dwt_cycles();
         total_cpu_free_cycles += (t1 - cpu_free_start);
 
-        if (g_dma_tx_error) {
+        if (g_sd_dma_error) {
             errors++;
             g_latencies[i] = 0;
             HAL_SD_Abort(hsd);
@@ -529,6 +686,7 @@ extern "C" void sd_benchmark_run(SD_HandleTypeDef* hsd) {
     printf("\r\n");
 
     // Run phases
+#if 1  // Set to 1 to run raw SD phases, 0 to only run Plume test
     bench_single_block(hsd);
     printf("\r\n");
 
@@ -562,6 +720,12 @@ extern "C" void sd_benchmark_run(SD_HandleTypeDef* hsd) {
 
     dma_base += 256 * 16 + 100;
     bench_dma_multi_block(hsd, g_buf_16k, 32, 128, dma_base, "Phase 4c");
+
+    printf("\r\n");
+#endif
+
+    // Phase 5: Plume end-to-end test
+    bench_plume_e2e(hsd);
 
     printf("\r\n========================================\r\n");
     printf("  Benchmark complete\r\n");
