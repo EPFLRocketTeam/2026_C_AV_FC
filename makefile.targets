@@ -19,5 +19,5 @@ deploy:
 	$(eval LOGFILE := $(LOG_FILE))
 	scp $(FIRMWARE) $(REMOTE):/tmp/firmware.bin
 	@echo "Flashed. Streaming UART → $(LOGFILE) (30s timeout)"
-	timeout 30 ssh $(REMOTE) "~/flash.sh /tmp/firmware.bin && sleep 5 && stty -F $(SERIAL) $(BAUD) raw && cat $(SERIAL)" >> $(LOGFILE) || true
+	timeout 60 ssh $(REMOTE) "~/flash.sh /tmp/firmware.bin && sleep 5 && stty -F $(SERIAL) $(BAUD) raw && cat $(SERIAL)" >> $(LOGFILE) || true
 	@echo "Log saved: $(LOGFILE)"

@@ -26,8 +26,10 @@
 #include "../../Drivers/InvIMU/Tests/Hardware/imu_manual_test.h"
 #include "../../Drivers/BMP390/Tests/Manual/bmp390_manual_test.h"
 #include "../../Drivers/UBX_GPS/Tests/Hardware/gps_manual_test.h"
-#include "../../Drivers/Plume/Tests/Hardware/plume_manual_test.h"
+//#include "../../Drivers/Plume/Tests/Hardware/plume_manual_test.h"
+#include "../../Application/Tests/sd_benchmark.h"
 #include "../../Drivers/Buzzer/Tests/Hardware/buzzer_manual_test.h"
+#include "../../Application/Modules/sd_hardware_init.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -127,14 +129,23 @@ int main(void)
   MX_SPI4_Init();
   MX_SPI5_Init();
   MX_USART6_UART_Init();
+  sd_pre_init();           /* PLL2/GPIO/NVIC for SDMMC1 — tracked file */
   MX_SDMMC1_SD_Init();
+  sd_post_init(&hsd1);     /* HS mode + 50 MHz clock — tracked file */
   /* USER CODE BEGIN 2 */
 
   HAL_Delay(1500); // Small delay to let USB enumerate
-  printf("Start Buzzer Test\r\n");
+  printf("Starting SD Benchmark\r\n");
+  // Wait for serial connection to be established
+  for (int i = 10; i > 0; i--) {
+      printf("Benchmark starts in %d...\r\n", i);
+      HAL_Delay(1000);
+  }
   //app_super_loop_setup();
-  manual_test_buzzer();
-  printf("Finished Buzzer Test\r\n");
+  //manual_test_buzzer();
+
+  sd_benchmark_run(&hsd1);
+  printf("Finished SD Benchmark\r\n");
 
   //imu_manual_test();
   HAL_Delay(500);
@@ -238,11 +249,12 @@ static void MX_SDMMC1_SD_Init(void)
   hsd1.Init.ClockEdge = SDMMC_CLOCK_EDGE_RISING;
   hsd1.Init.ClockPowerSave = SDMMC_CLOCK_POWER_SAVE_DISABLE;
   hsd1.Init.BusWide = SDMMC_BUS_WIDE_4B;
-  hsd1.Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
+  hsd1.Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_ENABLE;
   hsd1.Init.ClockDiv = 4;
   if (HAL_SD_Init(&hsd1) != HAL_OK)
   {
-    Error_Handler();
+    // SD card might not be inserted — non-fatal, benchmark will report error
+    printf("[SD-INIT] HAL_SD_Init FAILED — card not inserted?\r\n");
   }
   /* USER CODE BEGIN SDMMC1_Init 2 */
 
