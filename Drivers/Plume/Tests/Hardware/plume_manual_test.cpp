@@ -3,54 +3,66 @@ extern "C" {
     #include "stm32hal.h"
     #include "plume_manual_test.h"
     #include "plume/status.h"
+    #include <stdio.h>
 }
 
-#include <cstdio>
 #include "plume_driver.hpp"
+
+const size_t plume_manual_test_arena_length = 64 * 1024;
+uint8_t plume_manual_test_arena_buffer[plume_manual_test_arena_length] \
+	__attribute__((aligned(32))) \
+	__attribute__((section(".AXI_SRAM")));
 
 void plume_manual_test (SD_HandleTypeDef *hsd) {
     SDCardInterface interface;
-
-    const size_t arena_length = 64 * 1024;
-    uint8_t arena_buffer[arena_length];
     
-    printf("SD Card & Plume -- Manual Test\r\n");
-    printf("Initializing SD Card...\r\n");
+    printf("[PLUME] SD Card & Plume -- Manual Test\r\n");
+    printf("[PLUME] Initializing SD Card...\r\n");
 
-    if (!interface.init_sd_card(hsd, arena_buffer, arena_length)) {
-        printf("Failure of init.\r\n");
+    if (!interface.init_sd_card(hsd, plume_manual_test_arena_buffer, plume_manual_test_arena_length)) {
+        printf("[PLUME] Failure of init. Exiting...\r\n");
         return ;
     }
 
-    printf("Opening file...\n");
+    printf("[PLUME] Remaining number of files: %lu\r\n", interface.number_files_remaining());
+    printf("[PLUME] Remaining disk size: %lu\r\n", interface.disk_size_remaining());
+
+    printf("[PLUME] Opening file...\r\n");
     if (!interface.open_file()) {
-        printf("Failure of open.\n");
+        printf("[PLUME] Failure of open. Exiting...\r\n");
         return ;
     }
 
-    printf("Writing 'Hello, World !\\n'\n");
+    printf("[PLUME] Remaining number of files: %lu\r\n", interface.number_files_remaining());
+    printf("[PLUME] Remaining disk size: %lu\r\n", interface.disk_size_remaining());
+
+    printf("[PLUME] Writing 'Hello, World !\\n'\r\n");
     if (interface.write((const uint8_t*) "Hello, World !\n", 16) != PLUME_OK) {
-        printf("Failure of write.\n");
+        printf("[PLUME] Failure of write. Exiting\r\n");
         return ;
     }
 
-    printf("Starting write of 256 kB.\n");
+    printf("[PLUME] Starting write of 256 kB.\r\n");
     uint32_t start_tick = HAL_GetTick();
     for (uint32_t i = 0; i < 256 * 256; i ++) {
         uint32_t j = ((i ^ 0b1101100110111000) << 16) | i;
 
         uint8_t status = interface.write((const uint8_t*) (&j), sizeof(uint32_t));
         if (status != PLUME_OK) {
-            printf("Failure of write for %u. Error code: %u\n", i, (uint32_t) status);
+            printf("[PLUME] Failure of write for %u. Error code: %u\r\n", i, (uint32_t) status);
             return ;
         }
 
         status = interface.tick();
         if (status != PLUME_OK) {
-            printf("Failure of tick at %u. Error code: %u\n", i, (uint32_t) status);
+            printf("[PLUME] Failure of tick at %u. Error code: %u\r\n", i, (uint32_t) status);
             return ;
         }
     }
+
     uint32_t end_tick = HAL_GetTick();
-    printf("Done in %u ticks.", end_tick - start_tick);
+    printf("[PLUME] Done in %u ticks.\r\n", end_tick - start_tick);
+
+    printf("[PLUME] Remaining number of files: %lu\r\n", interface.number_files_remaining());
+    printf("[PLUME] Remaining disk size: %lu\r\n", interface.disk_size_remaining());
 }

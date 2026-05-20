@@ -7,34 +7,47 @@ extern "C" {
     #include "plume/status.h"
 };
 
+#define DBG(...) printf(" - " #__VA_ARGS__ ": %u \r\n", __VA_ARGS__);
 uint8_t plume_stm32_disk_information (SD_HandleTypeDef* hsd, struct plume_disk* disk_info) {
     if (hsd->State != HAL_SD_STATE_READY) {
-        return PLUME_EBAD_DISK;
+        return -50;
     }
 
     disk_info->number_blocks = hsd->SdCard.LogBlockNbr;
     disk_info->block_size    = hsd->SdCard.LogBlockSize;
+    printf("Information on disk: \r\n");
+    printf(" - number blocks : %u\r\n", (uint32_t) disk_info->number_blocks);
+    printf(" - block size    : %u\r\n", (uint32_t) disk_info->block_size);
+    DBG(hsd->SdCard.BlockNbr);
+    DBG(hsd->SdCard.BlockSize);
+    DBG(hsd->SdCard.CardSpeed);
+    DBG(hsd->SdCard.CardType);
+    DBG(hsd->SdCard.CardVersion);
+    DBG(hsd->SdCard.Class);
+    DBG(hsd->SdCard.LogBlockNbr);
+    DBG(hsd->SdCard.LogBlockSize);
+    DBG(hsd->SdCard.RelCardAdd);
 
     return PLUME_OK;
 }
 uint8_t plume_stm32_read_block (SD_HandleTypeDef* hsd, struct plume_context* context, uint8_t* buffer, uint64_t block_id) {
-    HAL_StatusTypeDef status = HAL_SD_ReadBlocks(hsd, buffer, block_id, 1, HAL_MAX_DELAY);
+    HAL_StatusTypeDef status = HAL_SD_ReadBlocks(hsd, buffer, (uint32_t) block_id, 1, HAL_MAX_DELAY);
     if (status == HAL_OK) {
         return PLUME_OK;
     }
 
-    return PLUME_EBAD_DISK;
+    return -45;
 }
 uint8_t plume_stm32_write_block (SD_HandleTypeDef* hsd, struct plume_context* context, const uint8_t* buffer, uint64_t block_id) {
-    HAL_StatusTypeDef status = HAL_SD_WriteBlocks(hsd, buffer, block_id, 1, HAL_MAX_DELAY);
-    if (status == HAL_OK) {
+	HAL_StatusTypeDef status = HAL_SD_WriteBlocks(hsd, buffer, (uint32_t) block_id, 1, HAL_MAX_DELAY);
+	if (status == HAL_OK) {
         return PLUME_OK;
     }
 
-    return PLUME_EBAD_DISK;
+    return -40;
 }
 uint8_t plume_stm32_write_block_ready (SD_HandleTypeDef* hsd, struct plume_context* context) {
-    return PLUME_OK;
+    return 1;
 }
 
 
@@ -67,7 +80,12 @@ bool SDCardInterface::init_sd_card (
     context.arena_buffer = arena_buffer;
     context.arena_length = arena_length;
 
-    return plume_init(&context, &driver) == PLUME_OK;
+    uint8_t err_code = plume_init(&context, &driver);
+    if (err_code != PLUME_OK) {
+    	printf("Failure of init: %u\r\n", err_code);
+    }
+
+    return err_code == PLUME_OK;
 }
 bool SDCardInterface::open_file () {
     return plume_open_write(&context) == PLUME_OK;

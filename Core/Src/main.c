@@ -26,6 +26,7 @@
 #include "../../Drivers/InvIMU/Tests/Hardware/imu_manual_test.h"
 #include "../../Drivers/BMP390/Tests/Manual/bmp390_manual_test.h"
 #include "../../Drivers/UBX_GPS/Tests/Hardware/gps_manual_test.h"
+#include "../../Drivers/Plume/Tests/Hardware/plume_manual_test.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -129,9 +130,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   HAL_Delay(1500); // Small delay to let USB enumerate
-  printf("Start Init super loop\r\n");
-  app_super_loop_setup();
-  printf("Finished Init super loop\r\n");
+  printf("Start Plume Test\r\n");
+  //app_super_loop_setup();
+  plume_manual_test(&hsd1);
+  printf("Finished Plume Test\r\n");
 
   //imu_manual_test();
   HAL_Delay(500);
@@ -150,9 +152,8 @@ int main(void)
 	  // BMP390_ManualTest_Run();
 	  // manual_test_gps();
 	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_0);
-	  app_super_loop_iterate();
-//	  printf("Completed an iteration\n");
-//    HAL_Delay(500);
+	  //app_super_loop_iterate();
+      HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }
@@ -237,7 +238,7 @@ static void MX_SDMMC1_SD_Init(void)
   hsd1.Init.ClockPowerSave = SDMMC_CLOCK_POWER_SAVE_DISABLE;
   hsd1.Init.BusWide = SDMMC_BUS_WIDE_4B;
   hsd1.Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
-  hsd1.Init.ClockDiv = 0;
+  hsd1.Init.ClockDiv = 4;
   if (HAL_SD_Init(&hsd1) != HAL_OK)
   {
     Error_Handler();
