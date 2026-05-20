@@ -27,6 +27,7 @@
 #include "../../Drivers/BMP390/Tests/Manual/bmp390_manual_test.h"
 #include "../../Drivers/UBX_GPS/Tests/Hardware/gps_manual_test.h"
 #include "../../Drivers/Plume/Tests/Hardware/plume_manual_test.h"
+#include "../../Drivers/Buzzer/Tests/Hardware/buzzer_manual_test.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -130,10 +131,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   HAL_Delay(1500); // Small delay to let USB enumerate
-  printf("Start Plume Test\r\n");
+  printf("Start Buzzer Test\r\n");
   //app_super_loop_setup();
-  plume_manual_test(&hsd1);
-  printf("Finished Plume Test\r\n");
+  manual_test_buzzer();
+  printf("Finished Buzzer Test\r\n");
 
   //imu_manual_test();
   HAL_Delay(500);
