@@ -60,6 +60,10 @@ public:
   void processImuBatch(const ImuBatch& batch) override;
   void processBaroBatch(const BaroBatch& batch) override;
 
+  /// Flush all pending IMU grouping state. Call after alignment discards
+  /// to prevent stale pending data from poisoning the next group.
+  void resetPendingImuGroup();
+
   /// Command mode barometer: call when triggering conversion to save ESKF snapshot
   void onBaroTrigger(uint64_t trigger_timestamp_us);
 
@@ -306,8 +310,23 @@ private:
   // IMU batch synchronization state
   // Buffers pending batches from each source until pairing is possible
   static constexpr size_t kMaxImuSources = ESKF_MAX_IMUS;
-  static constexpr uint32_t kImuSyncToleranceUs = 300;   // Safety net; primary alignment is drain-loop 200μs. Spread varies 100-200μs across boots.
-  static constexpr uint32_t kImuBatchTimeoutUs = 5000;   // Flush unpaired batch after this delay
+  static constexpr uint32_t kImuSyncToleranceCalibUs = 300;  // Wide tolerance during calibration phase
+  static constexpr uint32_t kImuSyncToleranceTightUs = 250;  // Post-calibration (raw spread ~200-226μs typical)
+  static constexpr uint32_t kImuBatchTimeoutUs = 5000;       // Flush unpaired batch after this delay
+
+  // Per-IMU timestamp bias calibration.
+  // Sequential SPI reads create fixed offsets between IMU timestamps.
+  // Calibrate by measuring per-source offset from anchor over first N groups.
+  static constexpr uint32_t kBiasCalibSamples = 200;
+  bool imu_bias_calibrated_ = false;
+  int64_t imu_ts_bias_[kMaxImuSources] = {};       // Per-source bias (subtracted from raw ts)
+  int64_t imu_bias_accumulator_[kMaxImuSources] = {}; // Running sum during calibration
+  uint32_t imu_bias_calib_count_ = 0;
+
+  /// Returns effective sync tolerance based on calibration state.
+  uint32_t effectiveSyncToleranceUs() const {
+    return imu_bias_calibrated_ ? kImuSyncToleranceTightUs : kImuSyncToleranceCalibUs;
+  }
 
   struct PendingImuBatch {
     std::vector<ImuSample> samples;  // Deep copy of batch samples
@@ -345,7 +364,9 @@ public:
   uint32_t imu_group_fire_count_ = 0;   // processSyncedImuGroup calls
   uint32_t imu_solo_flush_count_ = 0;   // processBufferedImuBatch (solo) calls
   uint32_t imu_stale_flush_count_ = 0;  // stale-timeout solo flushes
-  uint32_t imu_group_spread_max_us_ = 0; // max timestamp spread in successful groups
+  uint32_t imu_group_spread_max_us_ = 0; // max timestamp spread in successful groups (corrected)
+  bool imuBiasCalibrated() const { return imu_bias_calibrated_; }
+  uint32_t imuBiasCalibProgress() const { return imu_bias_calib_count_; }
 private:
 
   // Private helpers

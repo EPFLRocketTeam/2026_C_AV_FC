@@ -267,12 +267,13 @@ inline void printDebugLine(
 
     // Line 4b: Grouping stats
     printf("[KAL] grp: fired=%lu  soloFlush=%lu  staleFlush=%lu  "
-           "alignDiscard=%lu  spreadMax=%luus\r\n",
+           "alignDiscard=%lu  spreadMax=%luus  biasCalib=%s\r\n",
            static_cast<unsigned long>(estimator.imu_group_fire_count_),
            static_cast<unsigned long>(estimator.imu_solo_flush_count_),
            static_cast<unsigned long>(estimator.imu_stale_flush_count_),
            static_cast<unsigned long>(align_discarded_this_period),
-           static_cast<unsigned long>(estimator.imu_group_spread_max_us_));
+           static_cast<unsigned long>(estimator.imu_group_spread_max_us_),
+           estimator.imuBiasCalibrated() ? "OK" : "pending");
 
     // Line 5: Raw sensor values (last sample this tick)
     const double amag = std::sqrt(

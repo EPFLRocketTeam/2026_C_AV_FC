@@ -805,6 +805,11 @@ int kalman_loop() {
 				align_discarded++;
 			}
 		}
+		// If alignment discarded data, stale pending in the estimator
+		// might reference old timestamps. Reset to prevent poisoning.
+		if (align_discarded > 0) {
+			kalman.estimator.resetPendingImuGroup();
+		}
 	}
 
 	// Step 3: Round-robin drain — stop when ANY healthy ring empties.

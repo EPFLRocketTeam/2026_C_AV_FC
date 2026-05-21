@@ -21,8 +21,10 @@
 namespace app {
 
 constexpr size_t EskfEstimator::kMaxImuSources;
-constexpr uint32_t EskfEstimator::kImuSyncToleranceUs;
+constexpr uint32_t EskfEstimator::kImuSyncToleranceCalibUs;
+constexpr uint32_t EskfEstimator::kImuSyncToleranceTightUs;
 constexpr uint32_t EskfEstimator::kImuBatchTimeoutUs;
+constexpr uint32_t EskfEstimator::kBiasCalibSamples;
 constexpr size_t EskfEstimator::kMaxBaroSources;
 constexpr uint32_t EskfEstimator::kBaroSyncToleranceUs;
 constexpr uint32_t EskfEstimator::kBaroBatchTimeoutUs;
@@ -1008,7 +1010,7 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
   for (size_t i = 0; i < batch.count; ++i) {
     pending.samples[i] = batch.data[i];
   }
-  pending.t0_us = batch.t0_us;
+  pending.t0_us = batch.t0_us;  // Store RAW timestamp; bias applied at grouping time
   pending.dt_us = batch.dt_us > 0 ? batch.dt_us : 1000;
   pending.source = static_cast<uint8_t>(src);
   pending.valid = true;
@@ -1041,6 +1043,9 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
     return;
   }
 
+  // Compute raw anchor for grouping (proven reliable at 200μs tolerance).
+  // Also compute corrected timestamps for diagnostic spread tracking.
+  uint64_t corrected_ts[kMaxImuSources] = {};
   size_t valid_count = 0;
   uint64_t anchor_t0 = std::numeric_limits<uint64_t>::max();
   for (size_t i = 0; i < kMaxImuSources; ++i) {
@@ -1048,14 +1053,20 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
       continue;
     }
     ++valid_count;
+    // Raw anchor for grouping decision
     if (pending_imu_[i].t0_us < anchor_t0) {
       anchor_t0 = pending_imu_[i].t0_us;
     }
+    // Corrected timestamps for diagnostic/calibration tracking only
+    const int64_t raw = static_cast<int64_t>(pending_imu_[i].t0_us);
+    corrected_ts[i] = static_cast<uint64_t>(raw - imu_ts_bias_[i]);
   }
   if (valid_count < target_group_size) {
     return;
   }
 
+  // Group using RAW timestamps and fixed 200μs tolerance (proven: 0 soloFlush).
+  const uint32_t sync_tol = kImuSyncToleranceTightUs;
   const PendingImuBatch *group[kMaxImuSources] = {};
   size_t group_count = 0;
   for (size_t i = 0; i < kMaxImuSources; ++i) {
@@ -1064,7 +1075,7 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
     }
     const int64_t dt = static_cast<int64_t>(pending_imu_[i].t0_us) -
                        static_cast<int64_t>(anchor_t0);
-    if (std::llabs(dt) <= static_cast<int64_t>(kImuSyncToleranceUs)) {
+    if (std::llabs(dt) <= static_cast<int64_t>(sync_tol)) {
       group[group_count++] = &pending_imu_[i];
       if (group_count >= target_group_size) {
         break;
@@ -1080,17 +1091,63 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
              (unsigned)(anchor_t0 >> 32), (unsigned)anchor_t0);
       grp_fire_ctr++;
     }
-    // Track max timestamp spread in successful groups
-    uint64_t max_t0 = 0;
+    // Track max RAW timestamp spread in successful groups.
+    uint64_t max_raw = 0;
     for (size_t gi = 0; gi < group_count; ++gi) {
-      if (group[gi]->t0_us > max_t0) max_t0 = group[gi]->t0_us;
+      const size_t s = group[gi]->source;
+      if (pending_imu_[s].t0_us > max_raw) max_raw = pending_imu_[s].t0_us;
     }
-    const uint32_t spread = static_cast<uint32_t>(max_t0 - anchor_t0);
+    const uint32_t spread = static_cast<uint32_t>(max_raw - anchor_t0);
     if (spread > imu_group_spread_max_us_) imu_group_spread_max_us_ = spread;
+
+    // Bias calibration: accumulate per-source offset from anchor.
+    if (!imu_bias_calibrated_ && imu_bias_calib_count_ < kBiasCalibSamples) {
+      for (size_t gi = 0; gi < group_count; ++gi) {
+        const size_t s = group[gi]->source;
+        const int64_t offset = static_cast<int64_t>(pending_imu_[s].t0_us) -
+                               static_cast<int64_t>(anchor_t0);
+        imu_bias_accumulator_[s] += offset;
+      }
+      imu_bias_calib_count_++;
+      if (imu_bias_calib_count_ >= kBiasCalibSamples) {
+        // Compute mean bias per source (relative to anchor source).
+        // The source with the smallest average offset becomes the reference (bias=0).
+        int64_t min_mean = INT64_MAX;
+        for (size_t i = 0; i < kMaxImuSources; ++i) {
+          imu_ts_bias_[i] = imu_bias_accumulator_[i] / static_cast<int64_t>(kBiasCalibSamples);
+          if (imu_ts_bias_[i] < min_mean) min_mean = imu_ts_bias_[i];
+        }
+        // Normalize: reference source has bias=0.
+        for (size_t i = 0; i < kMaxImuSources; ++i) {
+          imu_ts_bias_[i] -= min_mean;
+        }
+        imu_bias_calibrated_ = true;
+        // Reset spread tracking now that calibration is active
+        imu_group_spread_max_us_ = 0;
+        printf("[GRP-BIAS] calibrated: bias=[%ld, %ld, %ld, %ld] us\r\n",
+               (long)imu_ts_bias_[0], (long)imu_ts_bias_[1],
+               (long)imu_ts_bias_[2], (long)imu_ts_bias_[3]);
+      }
+    }
+
     ++imu_group_fire_count_;
     processSyncedImuGroup(group, target_group_size);
   } else {
-    // Sync tolerance exceeded — log why
+    // Sync tolerance exceeded — flush the oldest pending (anchor source)
+    // to prevent cascading SYNC-FAILs from one stale slot.
+    size_t oldest_src = 0;
+    uint64_t oldest_ts = std::numeric_limits<uint64_t>::max();
+    for (size_t i = 0; i < kMaxImuSources; ++i) {
+      if (pending_imu_[i].valid && pending_imu_[i].t0_us < oldest_ts) {
+        oldest_ts = pending_imu_[i].t0_us;
+        oldest_src = i;
+      }
+    }
+    ++imu_solo_flush_count_;
+    processBufferedImuBatch(pending_imu_[oldest_src]);
+    pending_imu_[oldest_src].valid = false;
+
+    // Log why (limited)
     static uint32_t sync_fail_ctr = 0;
     if (sync_fail_ctr < 10) {
       printf("[GRP-SYNC-FAIL] valid=%u grouped=%u target=%u anchor=%u:%u "
@@ -1128,6 +1185,12 @@ void EskfEstimator::flushPendingImuIfStale(uint64_t current_t0_us) {
         pending_imu_[i].valid = false;
       }
     }
+  }
+}
+
+void EskfEstimator::resetPendingImuGroup() {
+  for (size_t i = 0; i < kMaxImuSources; ++i) {
+    pending_imu_[i].valid = false;
   }
 }
 
