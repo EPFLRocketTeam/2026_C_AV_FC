@@ -27,8 +27,10 @@ void SdLogger::writeRecord(SdLogRecordType type, const void* payload, uint16_t p
         sd_->write(buf, sizeof(hdr) + payload_len);
     } else {
         // Large record: write header then payload separately
+        sd_->beginTransaction();
         sd_->write(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr));
         sd_->write(reinterpret_cast<const uint8_t*>(payload), payload_len);
+        sd_->endTransaction();
     }
 }
 
@@ -153,9 +155,11 @@ void SdLogger::logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUDat
 
     // Write header, batch header, then samples (3 separate writes to avoid
     // large stack copy — Plume concatenates them into the arena).
+    sd_->beginTransaction();
     sd_->write(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr));
     sd_->write(reinterpret_cast<const uint8_t*>(&batch_hdr), sizeof(batch_hdr));
     sd_->write(reinterpret_cast<const uint8_t*>(samples), count * sizeof(Drivers::InvIMU::IMUData));
+    sd_->endTransaction();
 }
 
 void SdLogger::logBaroRaw(size_t sensor_index, const Drivers::BMP390::BaroData& sample) {

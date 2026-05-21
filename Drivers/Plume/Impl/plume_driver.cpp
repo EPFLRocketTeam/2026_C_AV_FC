@@ -225,8 +225,36 @@ size_t SDCardInterface::disk_size_remaining () {
     return (context.disk_info.number_blocks - context.next_valid_block) * context.disk_info.block_size;
 }
 
+void SDCardInterface::beginTransaction () {
+    if (inTransaction) {
+        return ;
+    }
+
+    inTransaction = true;
+    transactionFailed = false;
+
+    snapshot = plume_save(&context);
+}
+void SDCardInterface::endTransaction () {
+    if (!inTransaction) {
+        return ;
+    }
+
+    inTransaction = false;
+
+    if (transactionFailed) {
+        plume_rollback(&context, &snapshot);
+    }
+}
+
 uint8_t SDCardInterface::write (const uint8_t* buffer, int length) {
-    return plume_write(&context, buffer, length);
+    uint8_t worked = plume_write(&context, buffer, length);
+    
+    if (inTransaction && worked != PLUME_OK) {
+        transactionFailed = true;
+    }
+
+    return worked;
 }
 uint8_t SDCardInterface::tick () {
     return plume_tick(&context);
