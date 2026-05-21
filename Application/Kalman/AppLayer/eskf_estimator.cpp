@@ -989,6 +989,15 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
   // If we already have a pending batch for this source, flush it first to
   // avoid overwriting.
   if (pending_imu_[src].valid) {
+    static uint32_t solo_flush_ctr = 0;
+    if (solo_flush_ctr < 5) {
+      printf("[GRP-SOLO] src=%u overwrite-flush t0=%u:%u\r\n",
+             (unsigned)src,
+             (unsigned)(pending_imu_[src].t0_us >> 32),
+             (unsigned)pending_imu_[src].t0_us);
+      solo_flush_ctr++;
+    }
+    ++imu_solo_flush_count_;
     processBufferedImuBatch(pending_imu_[src]);
     pending_imu_[src].valid = false;
   }
@@ -1010,7 +1019,23 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
   const size_t target_group_size =
       std::max<size_t>(1, std::min<size_t>(active_imu_sources_,
                                            kMaxImuSources));
+
+  // One-shot diagnostic: confirm grouping configuration
+  {
+    static uint32_t grp_diag_ctr = 0;
+    if (grp_diag_ctr < 5) {
+      printf("[GRP-DIAG] #%u src=%u active=%u target=%u kMax=%u pending=[%d,%d,%d,%d]\r\n",
+             (unsigned)grp_diag_ctr, (unsigned)src,
+             (unsigned)active_imu_sources_, (unsigned)target_group_size,
+             (unsigned)kMaxImuSources,
+             (int)pending_imu_[0].valid, (int)pending_imu_[1].valid,
+             (int)pending_imu_[2].valid, (int)pending_imu_[3].valid);
+      grp_diag_ctr++;
+    }
+  }
+
   if (target_group_size == 1) {
+    ++imu_solo_flush_count_;
     processBufferedImuBatch(pending_imu_[src]);
     pending_imu_[src].valid = false;
     return;
@@ -1048,7 +1073,41 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
   }
 
   if (group_count >= target_group_size) {
+    static uint32_t grp_fire_ctr = 0;
+    if (grp_fire_ctr < 3) {
+      printf("[GRP-FIRE] grouped=%u target=%u anchor=%u:%u\r\n",
+             (unsigned)group_count, (unsigned)target_group_size,
+             (unsigned)(anchor_t0 >> 32), (unsigned)anchor_t0);
+      grp_fire_ctr++;
+    }
+    // Track max timestamp spread in successful groups
+    uint64_t max_t0 = 0;
+    for (size_t gi = 0; gi < group_count; ++gi) {
+      if (group[gi]->t0_us > max_t0) max_t0 = group[gi]->t0_us;
+    }
+    const uint32_t spread = static_cast<uint32_t>(max_t0 - anchor_t0);
+    if (spread > imu_group_spread_max_us_) imu_group_spread_max_us_ = spread;
+    ++imu_group_fire_count_;
     processSyncedImuGroup(group, target_group_size);
+  } else {
+    // Sync tolerance exceeded — log why
+    static uint32_t sync_fail_ctr = 0;
+    if (sync_fail_ctr < 10) {
+      printf("[GRP-SYNC-FAIL] valid=%u grouped=%u target=%u anchor=%u:%u "
+             "t0=[%u:%u, %u:%u, %u:%u, %u:%u] v=[%d,%d,%d,%d]\r\n",
+             (unsigned)valid_count, (unsigned)group_count,
+             (unsigned)target_group_size,
+             (unsigned)(anchor_t0 >> 32), (unsigned)anchor_t0,
+             (unsigned)(pending_imu_[0].t0_us >> 32), (unsigned)pending_imu_[0].t0_us,
+             (unsigned)(pending_imu_[1].t0_us >> 32), (unsigned)pending_imu_[1].t0_us,
+             (unsigned)(pending_imu_[2].t0_us >> 32), (unsigned)pending_imu_[2].t0_us,
+             (unsigned)(pending_imu_[3].t0_us >> 32), (unsigned)pending_imu_[3].t0_us,
+             (int)pending_imu_[0].valid, (int)pending_imu_[1].valid,
+             (int)pending_imu_[2].valid, (int)pending_imu_[3].valid);
+      sync_fail_ctr++;
+    }
+  }
+  if (group_count >= target_group_size) {
     for (size_t gi = 0; gi < target_group_size; ++gi) {
       const size_t source = group[gi]->source;
       if (source < kMaxImuSources) {
@@ -1064,6 +1123,7 @@ void EskfEstimator::flushPendingImuIfStale(uint64_t current_t0_us) {
       int64_t age = static_cast<int64_t>(current_t0_us) -
                     static_cast<int64_t>(pending_imu_[i].t0_us);
       if (age > static_cast<int64_t>(kImuBatchTimeoutUs)) {
+        ++imu_stale_flush_count_;
         processBufferedImuBatch(pending_imu_[i]);
         pending_imu_[i].valid = false;
       }

@@ -306,7 +306,7 @@ private:
   // IMU batch synchronization state
   // Buffers pending batches from each source until pairing is possible
   static constexpr size_t kMaxImuSources = ESKF_MAX_IMUS;
-  static constexpr uint32_t kImuSyncToleranceUs = 500;   // Max timestamp diff for pairing (~half sample period)
+  static constexpr uint32_t kImuSyncToleranceUs = 300;   // Safety net; primary alignment is drain-loop 200μs. Spread varies 100-200μs across boots.
   static constexpr uint32_t kImuBatchTimeoutUs = 5000;   // Flush unpaired batch after this delay
 
   struct PendingImuBatch {
@@ -339,6 +339,14 @@ private:
   static constexpr uint64_t kBaroSourceAliveTimeoutUs = 2000000; // 2 seconds
   size_t active_imu_sources_ = 2;
   size_t active_baro_sources_ = 1;
+
+public:
+  // Grouping diagnostics (public for debug printing)
+  uint32_t imu_group_fire_count_ = 0;   // processSyncedImuGroup calls
+  uint32_t imu_solo_flush_count_ = 0;   // processBufferedImuBatch (solo) calls
+  uint32_t imu_stale_flush_count_ = 0;  // stale-timeout solo flushes
+  uint32_t imu_group_spread_max_us_ = 0; // max timestamp spread in successful groups
+private:
 
   // Private helpers
   void initializeFilter();

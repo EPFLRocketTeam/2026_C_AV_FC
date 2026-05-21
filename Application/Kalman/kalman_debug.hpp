@@ -150,17 +150,22 @@ inline void printDebugLine(
     flight_computer::State fsm_state,
     uint32_t kalman_loop_us,
     uint32_t imu_drained,
+    uint32_t imu_align_discarded,
     RawSensorSnapshot& raw)
 {
     static uint32_t decimation_counter = 0;
     static uint32_t cumulative_drained = 0;
+    static uint32_t cumulative_align_discarded = 0;
     cumulative_drained += imu_drained;
+    cumulative_align_discarded += imu_align_discarded;
     if (++decimation_counter < KALMAN_DEBUG_PRINT_DECIMATION) {
         return;
     }
     decimation_counter = 0;
     const uint32_t drained_this_period = cumulative_drained;
+    const uint32_t align_discarded_this_period = cumulative_align_discarded;
     cumulative_drained = 0;
+    cumulative_align_discarded = 0;
 
     // ── Rail Shadow attitude (always running pre-flight) ─────────────
     const auto& rail = estimator.railShadow();
@@ -259,6 +264,15 @@ inline void printDebugLine(
            rail.isGateOpen() ? "OPEN" : "SHUT",
            rail.isGroundReferenceValid() ? "OK" : "NO",
            rail.isHeadingInitialized() ? "OK" : "NO");
+
+    // Line 4b: Grouping stats
+    printf("[KAL] grp: fired=%lu  soloFlush=%lu  staleFlush=%lu  "
+           "alignDiscard=%lu  spreadMax=%luus\r\n",
+           static_cast<unsigned long>(estimator.imu_group_fire_count_),
+           static_cast<unsigned long>(estimator.imu_solo_flush_count_),
+           static_cast<unsigned long>(estimator.imu_stale_flush_count_),
+           static_cast<unsigned long>(align_discarded_this_period),
+           static_cast<unsigned long>(estimator.imu_group_spread_max_us_));
 
     // Line 5: Raw sensor values (last sample this tick)
     const double amag = std::sqrt(

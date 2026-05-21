@@ -740,12 +740,10 @@ int kalman_loop() {
 
 	AppImuRingBuffer *buffers[] = {&imuData1, &imuData2, &imuData3, &imuData4};
 
-	static IMUData staged_samples[4][kMaxImuSamplesPerSourcePerRun] = {};
-	size_t staged_count[4] = {0, 0, 0, 0};
-	size_t staged_index[4] = {0, 0, 0, 0};
 	bool source_healthy[4] = {false, false, false, false};
 	size_t healthy_source_count = 0;
 	int drained = 0;
+	int align_discarded = 0;
 	for (size_t i = 0; i < 4; ++i) {
 		source_healthy[i] =
 			(app_imu_sensor_healthy(static_cast<uint8_t>(i)) != 0U);
@@ -756,15 +754,6 @@ int kalman_loop() {
 		const uint32_t ring_depth = static_cast<uint32_t>(buffers[i]->size());
 		kalman.health.imu_ring_hwm[i] =
 			std::max(kalman.health.imu_ring_hwm[i], ring_depth);
-
-		size_t source_samples = 0;
-		while (source_samples < kMaxImuSamplesPerSourcePerRun &&
-			   buffers[i]->pop(staged_samples[i][source_samples])) {
-			++source_samples;
-		}
-
-		staged_count[i] = source_samples;
-		drained += static_cast<int>(source_samples);
 	}
 	kalman.setActiveImuSources(healthy_source_count);
 
@@ -772,60 +761,70 @@ int kalman_loop() {
 	const uint64_t t_imu_drain_end = app_timebase_now_us();
 #endif
 
+	/* ── Aligned round-robin drain ──────────────────────────────────
+	 *
+	 *  Problem: ring buffers can be deeply unbalanced (overflow discards
+	 *  oldest samples unevenly). Source 1 may have data 17ms ahead of
+	 *  source 0, breaking the 500μs sync tolerance in processImuBatch.
+	 *
+	 *  Solution:
+	 *   1. Align all rings to the NEWEST oldest-sample within 200μs
+	 *      (well inside the 500μs sync tolerance in processImuBatch).
+	 *   2. Round-robin drain 1 sample per source per iteration.
+	 *   3. Stop when ANY healthy ring empties (prevents partial groups).
+	 *      Leftover samples in longer rings survive to next tick.
+	 * ─────────────────────────────────────────────────────────────── */
+
+	// Step 1: Find the latest front timestamp across all healthy rings.
+	uint64_t align_ts = 0;
+	for (size_t i = 0; i < 4; ++i) {
+		if (!source_healthy[i]) continue;
+		const IMUData *front = buffers[i]->get(0);
+		if (front && front->timestamp_us > align_ts) {
+			align_ts = front->timestamp_us;
+		}
+	}
+
+	// Step 2: Discard old samples to align all rings.
+	//         The inter-IMU timestamp offset from sequential SPI reads
+	//         can be 100-170μs (varies by boot). Since this overlaps the
+	//         156μs FSYNC period, a threshold < period cannot reliably
+	//         distinguish same-edge from adjacent-edge. Use 200μs:
+	//         empirically gives staleSkip=0, soloFlush=0 in steady state.
+	static constexpr uint64_t kDrainAlignToleranceUs = 200;
+	if (align_ts > 0) {
+		const uint64_t align_floor = (align_ts > kDrainAlignToleranceUs) ? (align_ts - kDrainAlignToleranceUs) : 0u;
+		for (size_t i = 0; i < 4; ++i) {
+			if (!source_healthy[i]) continue;
+			IMUData discard;
+			while (buffers[i]->size() > 0) {
+				const IMUData *front = buffers[i]->get(0);
+				if (!front || front->timestamp_us >= align_floor) break;
+				buffers[i]->pop(discard);
+				drained++;
+				align_discarded++;
+			}
+		}
+	}
+
+	// Step 3: Round-robin drain — stop when ANY healthy ring empties.
 	for (;;) {
-		size_t best_source = 4;
-		uint64_t best_ts = UINT64_MAX;
-
+		// Check all healthy sources still have data.
+		bool all_have_data = true;
 		for (size_t i = 0; i < 4; ++i) {
-			if (!source_healthy[i]) {
-				continue;
-			}
-			if (staged_index[i] >= staged_count[i]) {
-				continue;
-			}
-
-			const uint64_t ts = staged_samples[i][staged_index[i]].timestamp_us;
-			if (ts < best_ts) {
-				best_ts = ts;
-				best_source = i;
-			}
+			if (!source_healthy[i]) continue;
+			if (buffers[i]->size() == 0) { all_have_data = false; break; }
 		}
+		if (!all_have_data) break;
 
-		if (best_source >= 4) {
-			break;
-		}
-
-		uint64_t next_other_ts = UINT64_MAX;
+		// Pop one sample from each healthy source.
 		for (size_t i = 0; i < 4; ++i) {
-			if (i == best_source || !source_healthy[i]) {
-				continue;
-			}
-			if (staged_index[i] >= staged_count[i]) {
-				continue;
-			}
-			next_other_ts =
-				std::min(next_other_ts, staged_samples[i][staged_index[i]].timestamp_us);
+			if (!source_healthy[i]) continue;
+			IMUData sample;
+			buffers[i]->pop(sample);
+			kalman.ingestImuChunk(i, &sample, 1);
+			drained++;
 		}
-
-		const size_t start_idx = staged_index[best_source];
-		size_t chunk_count = 0;
-		while ((start_idx + chunk_count) < staged_count[best_source]) {
-			const uint64_t ts =
-				staged_samples[best_source][start_idx + chunk_count].timestamp_us;
-			if (chunk_count > 0u && next_other_ts != UINT64_MAX && ts > next_other_ts) {
-				break;
-			}
-			++chunk_count;
-		}
-
-		if (chunk_count == 0u) {
-			chunk_count = 1u;
-		}
-		kalman.ingestImuChunk(
-			best_source,
-			&staged_samples[best_source][start_idx],
-			chunk_count);
-		staged_index[best_source] += chunk_count;
 	}
 
 #if KALMAN_DEBUG_PRINT
@@ -947,6 +946,7 @@ int kalman_loop() {
 		kalman.last_state,
 		kalman_loop_elapsed_us,
 		static_cast<uint32_t>(drained),
+		static_cast<uint32_t>(align_discarded),
 		kalman.debug_raw_sensor_);
 #endif
 

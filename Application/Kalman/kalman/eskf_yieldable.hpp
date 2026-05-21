@@ -28,7 +28,7 @@ namespace eskf {
 // - ESKF_CHECKPOINT_INTERVAL (128 = 20ms @ 6.4kHz)
 
 #ifndef ESKF_CATCHUP_BUDGET_US
-#define ESKF_CATCHUP_BUDGET_US 2000  // 2ms default time budget
+#define ESKF_CATCHUP_BUDGET_US 5000  // 5ms budget (4 IMUs × 6400 Hz needs ~3.2ms/tick)
 #endif
 
 // ============================================================
