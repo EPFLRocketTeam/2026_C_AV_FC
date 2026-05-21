@@ -577,6 +577,16 @@ extern "C" void app_super_loop_setup(void) {
             g_superloop.baroModule.sensorInit(0), g_superloop.baroModule.sensorInit(1),
             g_superloop.baroModule.sensorInit(2), g_superloop.baroModule.sensorInit(3),
             gps_state);
+    static const buzzer::ModuleId kBuzzerIds[13] = {
+        {0, 1},                          // Buzzer Test  : ■
+        {0, 2},                          // Superloop    : ■■
+        {1, 1}, {1, 2}, {1, 3}, {1, 4}, // IMU 1-4      : ▬+N shorts
+        {2, 1}, {2, 2}, {2, 3}, {2, 4}, // BMP 1-4      : ▬▬+N shorts
+        {0, 3},                          // GPS          : ■■■
+        {0, 4},                          // Kalman       : ■■■■
+        {3, 0, true},                    // Ready        : shave and a haircut
+    };
+    g_superloop.buzzer.configure(kBuzzerIds);
     g_superloop.buzzer.tick(HAL_GetTick());
     g_superloop.buzzer.start(
         HAL_GetTick(),
@@ -585,7 +595,7 @@ extern "C" void app_super_loop_setup(void) {
         !g_superloop.imuModule.sensorFailed(2), !g_superloop.imuModule.sensorFailed(3),
         g_superloop.baroModule.sensorInit(0), g_superloop.baroModule.sensorInit(1),
         g_superloop.baroModule.sensorInit(2), g_superloop.baroModule.sensorInit(3),
-        gps_state , 1, 1 
+        gps_state , 1, 1
     );
 
 }
