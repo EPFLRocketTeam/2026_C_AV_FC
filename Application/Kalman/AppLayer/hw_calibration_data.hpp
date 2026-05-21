@@ -337,14 +337,14 @@ constexpr eskf_scalar kIdentity3x3[3][3] = {
   {0.0, 0.0, 1.0}
 };
 
-// IMU sensor-to-body rotation: sensor Z → body X (nose/up).
-// All 4 IMUs are mounted with sensor Z pointing toward the rocket nose.
+// IMU sensor-to-body rotation: sensor Z points toward tail (down when nose is up).
+// All 4 IMUs are mounted with sensor Z pointing AWAY from the rocket nose.
 // Body frame: X=forward(nose), Y=right, Z=down.
 // v_body = kImuSensorToBody * v_sensor
 constexpr eskf_scalar kImuSensorToBody[3][3] = {
-  { 0.0,  0.0,  1.0},  // body_x = +sensor_z (nose)
+  { 0.0,  0.0, -1.0},  // body_x = -sensor_z (nose)
   { 0.0,  1.0,  0.0},  // body_y = +sensor_y
-  {-1.0,  0.0,  0.0},  // body_z = -sensor_x
+  { 1.0,  0.0,  0.0},  // body_z = +sensor_x
 };
 
 } // namespace detail

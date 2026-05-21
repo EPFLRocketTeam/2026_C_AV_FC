@@ -121,6 +121,9 @@ struct RawSensorSnapshot {
     uint8_t baro_per_sensor_alive;   // Bitmask of sensors that produced data
     // Per-IMU raw accel magnitude
     float imu_per_sensor_amag[4];    // |a| per IMU source (m/s²)
+    float imu_per_sensor_ax[4];      // Raw ax per IMU (sensor frame, m/s²)
+    float imu_per_sensor_ay[4];      // Raw ay per IMU (sensor frame, m/s²)
+    float imu_per_sensor_az[4];      // Raw az per IMU (sensor frame, m/s²)
     uint8_t imu_per_sensor_alive;    // Bitmask of IMUs that produced data
     uint32_t frame_h78;  // Count of 0x78 frames (normal hires)
     uint32_t frame_h7C;  // Count of 0x7C frames (hires+FSYNC tag)
@@ -305,12 +308,14 @@ inline void printDebugLine(
     }
     printf("  alive=0x%X\r\n", raw.baro_per_sensor_alive);
 
-    // Line 5c: Per-IMU raw accel magnitudes
+    // Line 5c: Per-IMU raw accel (sensor frame, all axes)
     printf("[KAL] imuRaw:");
     for (int i = 0; i < 4; ++i) {
       if (raw.imu_per_sensor_alive & (1u << i)) {
-        printf(" [%d]|a|=%.2f", i,
-               static_cast<double>(raw.imu_per_sensor_amag[i]));
+        printf(" [%d]a=(%.2f,%.2f,%.2f)", i,
+               static_cast<double>(raw.imu_per_sensor_ax[i]),
+               static_cast<double>(raw.imu_per_sensor_ay[i]),
+               static_cast<double>(raw.imu_per_sensor_az[i]));
       } else {
         printf(" [%d]=--", i);
       }

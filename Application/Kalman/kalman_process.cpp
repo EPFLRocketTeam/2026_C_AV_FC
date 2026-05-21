@@ -511,13 +511,16 @@ struct KalmanRuntime {
 			debug_raw_sensor_.gx = last_raw.gyro_x;
 			debug_raw_sensor_.gy = last_raw.gyro_y;
 			debug_raw_sensor_.gz = last_raw.gyro_z;
-			// Per-IMU accel magnitude
+			// Per-IMU accel magnitude and raw axes
 			if (source_index < 4) {
 				const float amag = std::sqrt(
 					last_raw.accel_x * last_raw.accel_x +
 					last_raw.accel_y * last_raw.accel_y +
 					last_raw.accel_z * last_raw.accel_z);
 				debug_raw_sensor_.imu_per_sensor_amag[source_index] = amag;
+				debug_raw_sensor_.imu_per_sensor_ax[source_index] = last_raw.accel_x;
+				debug_raw_sensor_.imu_per_sensor_ay[source_index] = last_raw.accel_y;
+				debug_raw_sensor_.imu_per_sensor_az[source_index] = last_raw.accel_z;
 				debug_raw_sensor_.imu_per_sensor_alive |= (1u << source_index);
 			}
 #endif
