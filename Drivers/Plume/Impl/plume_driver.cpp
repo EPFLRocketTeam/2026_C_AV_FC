@@ -170,7 +170,7 @@ bool SDCardInterface::init_sd_card (
 
         printf("[SD] Card not formatted (block 0 blank), performing quick format...\r\n");
         /* Quick format: write settings page (block 0) + clear FAT region.
-         * This avoids the multi-hour full plume_clear_disk() on a 16GB card. */
+         * Use blocking (polling) HAL writes — no DMA complexity for one-time init. */
         constexpr uint64_t fat_size = 64;
 
         /* Write block 0: settings page */
@@ -178,32 +178,30 @@ bool SDCardInterface::init_sd_card (
             arena_buffer[i] = 0x00;
         arena_buffer[0] = PLUME_PAGE_SETTINGS;
         memcpy(arena_buffer + 1, &fat_size, sizeof(uint64_t));
-        uint8_t wr_err = plume_write_block_blocking(&context, arena_buffer, 0);
-        if (!plume_is_ok(wr_err)) {
-            printf("[SD] Quick format: failed to write settings block (%u)\r\n", wr_err);
+
+        SCB_CleanDCache_by_Addr((uint32_t*)arena_buffer, 512);
+        HAL_StatusTypeDef hal_rc = HAL_SD_WriteBlocks(hsd, arena_buffer, 0, 1, 1000);
+        if (hal_rc != HAL_OK) {
+            printf("[SD] Quick format: failed to write settings block (HAL=%d)\r\n", (int)hal_rc);
             return false;
         }
+        /* Wait for card programming */
+        while (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {}
 
         /* Clear FAT blocks (1..fat_size-1) so binary search finds them empty */
         for (size_t i = 0; i < 512; ++i)
             arena_buffer[i] = 0x00;
+        SCB_CleanDCache_by_Addr((uint32_t*)arena_buffer, 512);
         for (uint64_t blk = 1; blk < fat_size; ++blk) {
-            wr_err = plume_write_block_blocking(&context, arena_buffer, blk);
-            if (!plume_is_ok(wr_err)) {
-                printf("[SD] Quick format: failed at FAT block %u (%u)\r\n",
-                       (unsigned)blk, wr_err);
+            hal_rc = HAL_SD_WriteBlocks(hsd, arena_buffer, (uint32_t)blk, 1, 1000);
+            if (hal_rc != HAL_OK) {
+                printf("[SD] Quick format: failed at FAT block %u (HAL=%d)\r\n",
+                       (unsigned)blk, (int)hal_rc);
                 return false;
             }
+            while (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {}
         }
         printf("[SD] Quick format done (%u FAT blocks written)\r\n", (unsigned)fat_size);
-
-        /* Wait for last DMA write to finish before re-init */
-        {
-            uint32_t t0 = HAL_GetTick();
-            while (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {
-                if (HAL_GetTick() - t0 > 1000) break;
-            }
-        }
 
         /* Retry init */
         err_code = plume_init(&context, &driver);
