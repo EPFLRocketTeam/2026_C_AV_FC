@@ -48,14 +48,11 @@ uint8_t plume_stm32_disk_information (SD_HandleTypeDef* hsd, struct plume_disk* 
     return PLUME_OK;
 }
 uint8_t plume_stm32_read_block (SD_HandleTypeDef* hsd, struct plume_context* context, uint8_t* buffer, uint64_t block_id) {
-    /* Clean+invalidate D-cache before IDMA read to flush any dirty lines
-     * for this buffer (e.g., from .bss zero-init or prior writes). */
-    SCB_CleanInvalidateDCache_by_Addr((uint32_t*)buffer, 512);
-
+    /* HAL_SD_ReadBlocks() on STM32H7 reads SDMMC FIFO via CPU → data goes
+     * into D-cache naturally. No cache maintenance needed for the read path.
+     * (IDMA is only used by HAL_SD_ReadBlocks_DMA.) */
     HAL_StatusTypeDef status = HAL_SD_ReadBlocks(hsd, buffer, (uint32_t) block_id, 1, HAL_MAX_DELAY);
     if (status == HAL_OK) {
-        /* Invalidate again so CPU sees data written by IDMA. */
-        SCB_InvalidateDCache_by_Addr((uint32_t*)buffer, 512);
         return PLUME_OK;
     }
 
