@@ -129,3 +129,44 @@ void SdLogger::logImuPipeline(const eskf::ImuPipelineSnapshot& snapshot) {
 void SdLogger::logImuDynamics(const eskf::ImuDynamicsSnapshot& snapshot) {
     writeRecord(SD_LOG_IMU_DYNAMICS, &snapshot, sizeof(snapshot));
 }
+
+// ============================================================
+// Full-Rate Raw Sensor Logging
+// ============================================================
+
+void SdLogger::logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUData* samples, size_t count) {
+    if (sd_ == nullptr || count == 0) return;
+
+    SdLogImuBatchHeader batch_hdr;
+    batch_hdr.sensor_index = static_cast<uint8_t>(sensor_index);
+    batch_hdr.sample_count = static_cast<uint8_t>(count);
+    batch_hdr.reserved     = 0;
+
+    const uint16_t payload_len = static_cast<uint16_t>(
+        sizeof(batch_hdr) + count * sizeof(Drivers::InvIMU::IMUData));
+
+    SdLogHeader hdr;
+    hdr.magic        = SD_LOG_MAGIC;
+    hdr.record_type  = static_cast<uint8_t>(SD_LOG_IMU_RAW);
+    hdr.length       = payload_len;
+    hdr.timestamp_ms = HAL_GetTick();
+
+    // Write header, batch header, then samples (3 separate writes to avoid
+    // large stack copy — Plume concatenates them into the arena).
+    sd_->write(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr));
+    sd_->write(reinterpret_cast<const uint8_t*>(&batch_hdr), sizeof(batch_hdr));
+    sd_->write(reinterpret_cast<const uint8_t*>(samples), count * sizeof(Drivers::InvIMU::IMUData));
+}
+
+void SdLogger::logBaroRaw(size_t sensor_index, const Drivers::BMP390::BaroData& sample) {
+    if (sd_ == nullptr) return;
+
+    SdLogBaroSample record;
+    record.sensor_index = static_cast<uint8_t>(sensor_index);
+    record.pad[0] = record.pad[1] = record.pad[2] = 0;
+    record.pressure_pa   = sample.pressure_pa;
+    record.temperature_c = sample.temperature_c;
+    record.timestamp_us  = sample.timestamp_us;
+
+    writeRecord(SD_LOG_BARO_RAW, &record, sizeof(record));
+}

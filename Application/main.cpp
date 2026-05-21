@@ -225,6 +225,14 @@ uint8_t g_sd_arena_buffer[g_sd_arena_length];
 bool g_sd_logging_active = false;  // Set after successful init+open
 SdLogger g_sd_logger;
 
+// Full-rate raw sensor logging callbacks (forwarded to g_sd_logger)
+void imu_raw_log_callback(size_t sensor_index, const Drivers::InvIMU::IMUData* samples, size_t count) {
+    g_sd_logger.logImuRawBatch(sensor_index, samples, count);
+}
+void baro_raw_log_callback(size_t sensor_index, const Drivers::BMP390::BaroData& sample) {
+    g_sd_logger.logBaroRaw(sensor_index, sample);
+}
+
 // Logging decimation: write DataDump every N ms
 constexpr uint32_t kLogIntervalMs = 16;  // ~62.5 Hz
 uint32_t g_last_log_ms = 0;
@@ -543,6 +551,14 @@ extern "C" void app_super_loop_setup(void) {
         return;
     }
 #endif
+
+    // ── Full-rate raw sensor logging callbacks ────────────────────────────
+    if (g_sd_logging_active) {
+        g_superloop.imuModule.setRawLogCallback(imu_raw_log_callback);
+        g_superloop.baroModule.setRawLogCallback(baro_raw_log_callback);
+        printf("[APP] Full-rate raw sensor logging enabled.\r\n");
+    }
+
     g_superloop.ready = true;
 }
 

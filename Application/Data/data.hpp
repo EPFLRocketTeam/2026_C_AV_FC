@@ -96,7 +96,7 @@ struct adxl375_data {
 struct NavSensors {
   adxl375_data adxl;
   adxl375_data adxl_aux;
-  Drivers::InvIMU::IMUData imu[3];  // imu[0]=imu_1, imu[1]=imu_2, imu[2]=imu_3
+  Drivers::InvIMU::IMUData imu[4];  // imu[0]=imu_1, imu[1]=imu_2, imu[2]=imu_3, imu[3]=imu_4
   bmp3_data bmp;      // bmp_1
   bmp3_data bmp_aux;  // bmp_2, retained for telemetry compatibility
   bmp3_data bmp_3;

@@ -22,12 +22,12 @@ adxl375_data NavSensorsStore::get_adxl_aux() const { return data_.adxl_aux; }
 void NavSensorsStore::set_adxl_aux(const adxl375_data& d) { data_.adxl_aux = d; }
 
 Drivers::InvIMU::IMUData NavSensorsStore::get_imu(size_t index) const {
-    if (index >= 3) return Drivers::InvIMU::IMUData{};
+    if (index >= 4) return Drivers::InvIMU::IMUData{};
     return data_.imu[index];
 }
 
 void NavSensorsStore::set_imu(size_t index, const Drivers::InvIMU::IMUData& d) {
-    if (index >= 3) return;
+    if (index >= 4) return;
     data_.imu[index] = d;
 }
 

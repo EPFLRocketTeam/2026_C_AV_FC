@@ -61,9 +61,16 @@ public:
   using Base::drivers_;
   static constexpr size_t kNumSensors = NumSensors;
 
+  /// Callback type for full-rate raw logging.
+  /// Called with (sensor_index, samples_array, count) after each drain burst.
+  using RawLogCallback = void (*)(size_t sensor_index, const IMUData* samples, size_t count);
+
   explicit ImuModule(InvIMU_Interface *(&drivers)[NumSensors],
                      BufferT *(&buffers)[NumSensors])
       : Base(drivers, buffers) {}
+
+  /// Set a callback to receive every raw IMU sample as it's drained from hardware.
+  void setRawLogCallback(RawLogCallback cb) { raw_log_callback_ = cb; }
 
   bool init() override {
     size_t ok_count = 0;
@@ -246,13 +253,32 @@ private:
 
     IMUData frame{};
     size_t produced = 0;
+
+    // Batch raw samples for logging callback (max burst from FIFO is ~32)
+    IMUData log_batch[32];
+    size_t log_count = 0;
+
     while (drivers_[sensor_index]->getFrame(frame)) {
       buffers_[sensor_index]->append(frame);
       g.navSensorStore.set_imu(sensor_index, frame);
       sensor_state_[sensor_index].last_timestamp_us = frame.timestamp_us;
       ++produced_since_last_update_;
       ++produced;
+
+      if (raw_log_callback_) {
+        log_batch[log_count++] = frame;
+        if (log_count == 32u) {
+          raw_log_callback_(sensor_index, log_batch, log_count);
+          log_count = 0;
+        }
+      }
     }
+
+    // Flush remaining batch
+    if (raw_log_callback_ && log_count > 0) {
+      raw_log_callback_(sensor_index, log_batch, log_count);
+    }
+
     // printf("Produces %d new record\n",produced);
     sensor_state_[sensor_index].status_flags = drivers_[sensor_index]->statusFlags();
     sensor_state_[sensor_index].drop_count = drivers_[sensor_index]->dropCount();
@@ -307,5 +333,6 @@ private:
   uint32_t last_master_irq_ms_ = 0;
   uint64_t master_irq_time_us_ = 0;
   bool failover_occurred_ = false;
+  RawLogCallback raw_log_callback_ = nullptr;
   SensorRuntimeState sensor_state_[kNumSensors] = {};
 };

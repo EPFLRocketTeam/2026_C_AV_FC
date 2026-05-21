@@ -37,9 +37,16 @@ public:
   using Base::buffers_;
   static constexpr size_t kNumSensors = NumSensors;
 
+  /// Callback type for full-rate raw baro logging.
+  /// Called with (sensor_index, sample) when a conversion completes.
+  using RawLogCallback = void (*)(size_t sensor_index, const BaroData& sample);
+
   explicit BaroModule(BMP390_Interface *(&drivers)[NumSensors],
                       RingBuffer<BaroData, 100> *(&buffers)[NumSensors])
       : Base(drivers, buffers) {}
+
+  /// Set a callback to receive every raw baro sample as it's read.
+  void setRawLogCallback(RawLogCallback cb) { raw_log_callback_ = cb; }
 
   bool init() override {
     bool any_initialized = false;
@@ -186,6 +193,9 @@ private:
         state.last_data_tick_ms = tick_ms;
         state.last_sample_valid = true;
         ++produced_since_last_update_;
+        if (raw_log_callback_) {
+          raw_log_callback_(i, sample);
+        }
       } else {
         any_pending = true;
       }
@@ -275,4 +285,5 @@ private:
   uint64_t pending_started_us_ = 0;
   size_t produced_since_last_update_ = 0;
   void (*trigger_callback_)(uint64_t) = nullptr;
+  RawLogCallback raw_log_callback_ = nullptr;
 };

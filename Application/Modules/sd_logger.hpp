@@ -5,6 +5,8 @@
 #include "Application/Kalman/kalman/eskf_logger.hpp"
 #include "plume_driver.hpp"
 #include "Application/Data/fsm.hpp"
+#include "Drivers/InvIMU/InvIMU.h"
+#include "Drivers/BMP390/BMP390.h"
 #include <stdint.h>
 
 // ============================================================
@@ -24,6 +26,8 @@ enum SdLogRecordType : uint8_t {
     SD_LOG_IMU_DYNAMICS       = 0x0A,
     SD_LOG_FSM_TRANSITION     = 0x10,
     SD_LOG_CORRECTION         = 0x11,
+    SD_LOG_IMU_RAW            = 0x20,  // Full-rate raw IMU batch
+    SD_LOG_BARO_RAW           = 0x21,  // Full-rate raw baro sample
 };
 
 // ============================================================
@@ -41,6 +45,20 @@ struct SdLogHeader {
 struct SdLogFsmTransition {
     uint8_t prev_state;
     uint8_t new_state;
+};
+
+struct SdLogImuBatchHeader {
+    uint8_t  sensor_index;   // 0-3
+    uint8_t  sample_count;   // number of IMUData samples following
+    uint16_t reserved;       // alignment padding
+};
+
+struct SdLogBaroSample {
+    uint8_t  sensor_index;
+    uint8_t  pad[3];
+    float    pressure_pa;
+    float    temperature_c;
+    uint64_t timestamp_us;
 };
 
 struct SdLogEskfEvent {
@@ -76,6 +94,12 @@ public:
 
     /// Write a framed FSM transition record.
     void logFsmTransition(flight_computer::State prev, flight_computer::State next);
+
+    /// Write a batch of raw IMU samples (full-rate, called from ImuModule drain).
+    void logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUData* samples, size_t count);
+
+    /// Write a single raw baro sample (full-rate, called from BaroModule drain).
+    void logBaroRaw(size_t sensor_index, const Drivers::BMP390::BaroData& sample);
 
     // --- IEskfLogger interface ---
     void logState(const eskf::StateSnapshot& snapshot) override;
