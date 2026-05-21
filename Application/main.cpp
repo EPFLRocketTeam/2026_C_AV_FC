@@ -287,9 +287,9 @@ Drivers::BMP390::BMP390_SDK::Config makeBaroConfig(SPI_HandleTypeDef* hspi,
 
 struct SuperLoopContext {
     Config imu_cfg1 = makeImuConfig(&hspi4, ICM_CS4_GPIO_Port, ICM_CS4_Pin);
-    Config imu_cfg2 = makeImuConfig(&hspi4, ICM_CS2_GPIO_Port, ICM_CS2_Pin);
+    Config imu_cfg2 = makeImuConfig(&hspi5, ICM_CS2_GPIO_Port, ICM_CS2_Pin);
     Config imu_cfg3 = makeImuConfig(&hspi4, ICM_CS3_GPIO_Port, ICM_CS3_Pin);
-    Config imu_cfg4 = makeImuConfig(&hspi4, ICM_CS1_GPIO_Port, ICM_CS1_Pin);
+    Config imu_cfg4 = makeImuConfig(&hspi5, ICM_CS1_GPIO_Port, ICM_CS1_Pin);
 
     InvIMU_STM32 invImu1{imu_cfg1};
     InvIMU_STM32 invImu2{imu_cfg2};
