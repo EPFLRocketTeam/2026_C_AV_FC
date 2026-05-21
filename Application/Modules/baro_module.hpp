@@ -37,6 +37,15 @@ public:
   using Base::buffers_;
   static constexpr size_t kNumSensors = NumSensors;
 
+
+  bool sensorInit(size_t sensor_index) const {
+    if (sensor_index >= kNumSensors) {
+      return false;
+    }
+    return sensor_state_[sensor_index].initialized;
+  }
+
+
   /// Callback type for full-rate raw baro logging.
   /// Called with (sensor_index, sample) when a conversion completes.
   using RawLogCallback = void (*)(size_t sensor_index, const BaroData& sample);

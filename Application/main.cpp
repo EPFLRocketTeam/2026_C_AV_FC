@@ -572,19 +572,19 @@ extern "C" void app_super_loop_setup(void) {
     }
 
     g_superloop.ready = true;
-    printf("-------------------%d, %d, %d,%d,%d,%d,%d,%d,%d-------------------\r\n," , g_superloop.imuModule.sensorHealthy(0), g_superloop.imuModule.sensorHealthy(1),
-            g_superloop.imuModule.sensorHealthy(2), g_superloop.imuModule.sensorHealthy(3),
-            g_superloop.baroModule.sensorHealthy(0), g_superloop.baroModule.sensorHealthy(1),
-            g_superloop.baroModule.sensorHealthy(2), g_superloop.baroModule.sensorHealthy(3),
+    printf("-------------------%d, %d, %d,%d,%d,%d,%d,%d,%d-------------------\r\n," , g_superloop.imuModule.sensorFailed(0), g_superloop.imuModule.sensorFailed(1),
+            g_superloop.imuModule.sensorFailed(2), g_superloop.imuModule.sensorFailed(3),
+            g_superloop.baroModule.sensorInit(0), g_superloop.baroModule.sensorInit(1),
+            g_superloop.baroModule.sensorInit(2), g_superloop.baroModule.sensorInit(3),
             gps_state);
     g_superloop.buzzer.tick(HAL_GetTick());
     g_superloop.buzzer.start(
         HAL_GetTick(),
         manual_test_buzzer_set_buzzer_2,
-        1, 1, g_superloop.imuModule.sensorHealthy(0), g_superloop.imuModule.sensorHealthy(1), 
-        g_superloop.imuModule.sensorHealthy(2), g_superloop.imuModule.sensorHealthy(3), 
-        g_superloop.baroModule.sensorHealthy(0), g_superloop.baroModule.sensorHealthy(1), 
-        g_superloop.baroModule.sensorHealthy(2), g_superloop.baroModule.sensorHealthy(3),
+        1, 1, !g_superloop.imuModule.sensorFailed(0), !g_superloop.imuModule.sensorFailed(1),
+        !g_superloop.imuModule.sensorFailed(2), !g_superloop.imuModule.sensorFailed(3),
+        g_superloop.baroModule.sensorInit(0), g_superloop.baroModule.sensorInit(1),
+        g_superloop.baroModule.sensorInit(2), g_superloop.baroModule.sensorInit(3),
         gps_state , 1, 1 
     );
 
