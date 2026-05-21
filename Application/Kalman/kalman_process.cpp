@@ -512,7 +512,7 @@ struct KalmanRuntime {
 			debug_raw_sensor_.gy = last_raw.gyro_y;
 			debug_raw_sensor_.gz = last_raw.gyro_z;
 			// Per-IMU accel magnitude
-			if (source_index < 3) {
+			if (source_index < 4) {
 				const float amag = std::sqrt(
 					last_raw.accel_x * last_raw.accel_x +
 					last_raw.accel_y * last_raw.accel_y +

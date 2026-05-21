@@ -9,7 +9,7 @@ struct KalmanHealthSnapshot {
   uint32_t imu_samples_consumed = 0;
   uint32_t baro_updates = 0;
   uint32_t gps_updates = 0;
-  uint32_t imu_ring_hwm[3] = {0u, 0u, 0u};
+  uint32_t imu_ring_hwm[4] = {0u, 0u, 0u, 0u};
   uint32_t last_kalman_loop_us = 0;
   uint32_t max_kalman_loop_us = 0;
   uint32_t last_main_loop_iteration_us = 0;

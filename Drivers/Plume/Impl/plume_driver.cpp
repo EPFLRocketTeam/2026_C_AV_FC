@@ -179,7 +179,7 @@ bool SDCardInterface::init_sd_card (
         arena_buffer[0] = PLUME_PAGE_SETTINGS;
         memcpy(arena_buffer + 1, &fat_size, sizeof(uint64_t));
         uint8_t wr_err = plume_write_block_blocking(&context, arena_buffer, 0);
-        if (wr_err != PLUME_OK) {
+        if (!plume_is_ok(wr_err)) {
             printf("[SD] Quick format: failed to write settings block (%u)\r\n", wr_err);
             return false;
         }
@@ -189,13 +189,21 @@ bool SDCardInterface::init_sd_card (
             arena_buffer[i] = 0x00;
         for (uint64_t blk = 1; blk < fat_size; ++blk) {
             wr_err = plume_write_block_blocking(&context, arena_buffer, blk);
-            if (wr_err != PLUME_OK) {
+            if (!plume_is_ok(wr_err)) {
                 printf("[SD] Quick format: failed at FAT block %u (%u)\r\n",
                        (unsigned)blk, wr_err);
                 return false;
             }
         }
         printf("[SD] Quick format done (%u FAT blocks written)\r\n", (unsigned)fat_size);
+
+        /* Wait for last DMA write to finish before re-init */
+        {
+            uint32_t t0 = HAL_GetTick();
+            while (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {
+                if (HAL_GetTick() - t0 > 1000) break;
+            }
+        }
 
         /* Retry init */
         err_code = plume_init(&context, &driver);

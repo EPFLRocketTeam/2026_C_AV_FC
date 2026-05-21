@@ -775,20 +775,7 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       stats_.stale_skips++;
 #if KALMAN_DEBUG_PRINT
       static uint32_t stale_log_counter = 0;
-      static uint32_t stale_detail_counter = 0;
-      // Print first 50, then every 50th for steady-state analysis
-      if (stale_detail_counter < 50 || (stats_.stale_skips % 50 == 0)) {
-        printf("[CATCHUP] STALE-DETAIL: type=%s ts=%u:%u  kalTs=%u:%u  "
-               "gap=%u  staleSkips=%u  imuHorizon=%u:%u\r\n",
-               stale_type,
-               (unsigned)(earliest >> 32), (unsigned)earliest,
-               (unsigned)(kalman_timestamp_us_ >> 32),
-               (unsigned)kalman_timestamp_us_,
-               (unsigned)(kalman_timestamp_us_ - earliest),
-               (unsigned)stats_.stale_skips,
-               (unsigned)(imu_horizon_us >> 32), (unsigned)imu_horizon_us);
-        if (stale_detail_counter < 50) stale_detail_counter++;
-      }
+      // Only print STALE-SKIP summary every 3000 skips
       if (++stale_log_counter >= 3000) {
         stale_log_counter = 0;
         printf("[CATCHUP] STALE-SKIP: ts=%u:%u  kalTs=%u:%u  "

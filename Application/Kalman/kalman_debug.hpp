@@ -120,7 +120,7 @@ struct RawSensorSnapshot {
     float baro_per_sensor_tempC[4];  // Raw temperature per baro source (°C)
     uint8_t baro_per_sensor_alive;   // Bitmask of sensors that produced data
     // Per-IMU raw accel magnitude
-    float imu_per_sensor_amag[3];    // |a| per IMU source (m/s²)
+    float imu_per_sensor_amag[4];    // |a| per IMU source (m/s²)
     uint8_t imu_per_sensor_alive;    // Bitmask of IMUs that produced data
     uint32_t frame_h78;  // Count of 0x78 frames (normal hires)
     uint32_t frame_h7C;  // Count of 0x7C frames (hires+FSYNC tag)
@@ -249,11 +249,12 @@ inline void printDebugLine(
            static_cast<unsigned long>(drained_this_period));
 
     // Line 4: Ring HWMs
-    printf("[KAL] ring_hwm=[%lu,%lu,%lu]  imuPending=%lu  "
+    printf("[KAL] ring_hwm=[%lu,%lu,%lu,%lu]  imuPending=%lu  "
            "gate=%s  grnd=%s  hdg=%s\r\n",
            static_cast<unsigned long>(health.imu_ring_hwm[0]),
            static_cast<unsigned long>(health.imu_ring_hwm[1]),
            static_cast<unsigned long>(health.imu_ring_hwm[2]),
+           static_cast<unsigned long>(health.imu_ring_hwm[3]),
            static_cast<unsigned long>(estimator.filter().imuReadIdx()),
            rail.isGateOpen() ? "OPEN" : "SHUT",
            rail.isGroundReferenceValid() ? "OK" : "NO",
@@ -291,7 +292,7 @@ inline void printDebugLine(
 
     // Line 5c: Per-IMU raw accel magnitudes
     printf("[KAL] imuRaw:");
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
       if (raw.imu_per_sensor_alive & (1u << i)) {
         printf(" [%d]|a|=%.2f", i,
                static_cast<double>(raw.imu_per_sensor_amag[i]));
