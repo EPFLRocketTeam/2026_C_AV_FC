@@ -1,10 +1,12 @@
 
 #include "plume_driver.hpp"
 #include <stdio.h>
+#include <string.h>
 
 extern "C" {
     #include "plume/writer.h"
     #include "plume/status.h"
+    #include "plume/const.h"
 };
 
 /* ── DMA completion flags (set from IRQ context) ─────────────────────────── */
@@ -148,6 +150,57 @@ bool SDCardInterface::init_sd_card (
     context.arena_length = arena_length;
 
     uint8_t err_code = plume_init(&context, &driver);
+    if (err_code == PLUME_EBAD_DISK) {
+        /* PLUME_EBAD_DISK means block 0 doesn't have the Plume settings marker.
+         * Only auto-format if block 0 looks genuinely blank (all 0x00 or 0xFF).
+         * If block 0 has other data (corrupted Plume card or foreign FS), refuse
+         * to format so we never accidentally overwrite recoverable flight data. */
+        bool block0_blank = true;
+        for (size_t i = 0; i < 512 && i < arena_length; ++i) {
+            if (arena_buffer[i] != 0x00 && arena_buffer[i] != 0xFF) {
+                block0_blank = false;
+                break;
+            }
+        }
+        if (!block0_blank) {
+            printf("[SD] Block 0 has non-blank data (not 0x00/0xFF) — refusing auto-format.\r\n");
+            printf("[SD] If this card needs reformatting, clear it manually first.\r\n");
+            return false;
+        }
+
+        printf("[SD] Card not formatted (block 0 blank), performing quick format...\r\n");
+        /* Quick format: write settings page (block 0) + clear FAT region.
+         * This avoids the multi-hour full plume_clear_disk() on a 16GB card. */
+        constexpr uint64_t fat_size = 64;
+
+        /* Write block 0: settings page */
+        for (size_t i = 0; i < arena_length && i < 512; ++i)
+            arena_buffer[i] = 0x00;
+        arena_buffer[0] = PLUME_PAGE_SETTINGS;
+        memcpy(arena_buffer + 1, &fat_size, sizeof(uint64_t));
+        uint8_t wr_err = plume_write_block_blocking(&context, arena_buffer, 0);
+        if (wr_err != PLUME_OK) {
+            printf("[SD] Quick format: failed to write settings block (%u)\r\n", wr_err);
+            return false;
+        }
+
+        /* Clear FAT blocks (1..fat_size-1) so binary search finds them empty */
+        for (size_t i = 0; i < 512; ++i)
+            arena_buffer[i] = 0x00;
+        for (uint64_t blk = 1; blk < fat_size; ++blk) {
+            wr_err = plume_write_block_blocking(&context, arena_buffer, blk);
+            if (wr_err != PLUME_OK) {
+                printf("[SD] Quick format: failed at FAT block %u (%u)\r\n",
+                       (unsigned)blk, wr_err);
+                return false;
+            }
+        }
+        printf("[SD] Quick format done (%u FAT blocks written)\r\n", (unsigned)fat_size);
+
+        /* Retry init */
+        err_code = plume_init(&context, &driver);
+    }
+
     if (err_code != PLUME_OK) {
     	printf("Failure of init: %u\r\n", err_code);
     }

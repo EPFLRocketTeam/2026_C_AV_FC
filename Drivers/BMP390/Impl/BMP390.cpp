@@ -145,7 +145,11 @@ void BMP390_SDK::configure(OsrPressure osr_p, OsrTemp osr_t, IIRFilter filter) {
 // ── BMP390_Interface: triggerMeasurement / getFrame ───────────────────────────
 
 void BMP390_SDK::triggerMeasurement() {
-    triggerConversion(); // ignores rate-limit return value — matches raw driver behaviour
+    // Force-clear pending so a new trigger always succeeds.
+    // The BaroModule calls this only after its own timeout has elapsed,
+    // meaning the previous conversion result is stale/abandoned.
+    pending_ = false;
+    triggerConversion();
 }
 
 bool BMP390_SDK::getFrame(BaroData& out) {
@@ -196,11 +200,16 @@ bool BMP390_SDK::triggerConversion() {
 bool BMP390_SDK::isConversionReady() {
     if (!pending_) return false;
 
-    bmp3_status status{};
-    int8_t rs = bmp3_get_status(&status, &dev_);
+    // Use SENS_STATUS.drdy_press (register 0x03, bit 5) instead of
+    // INT_STATUS.drdy (register 0x11, bit 3).  The latter requires
+    // drdy_en to be set in INT_CTRL (0x19), which we don't configure.
+    // SENS_STATUS bits are set by hardware when data is stored,
+    // independent of interrupt configuration.
+    uint8_t reg_data = 0;
+    int8_t rs = bmp3_get_regs(BMP3_REG_SENS_STATUS, &reg_data, 1, &dev_);
     if (rs != BMP3_OK) return false;
 
-    return status.intr.drdy == BMP3_ENABLE;
+    return (reg_data & BMP3_STATUS_DRDY_PRESS_MSK) != 0;
 }
 
 bool BMP390_SDK::readConversion(BaroData& out) {
