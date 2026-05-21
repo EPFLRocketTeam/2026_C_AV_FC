@@ -57,3 +57,12 @@ Release
 # cmake build directory
 build
 .vscode
+
+# Firmware binaries
+*.bin
+*.elf
+*.hex
+
+# Log files
+logs/
+*.log

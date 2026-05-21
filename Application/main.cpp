@@ -196,7 +196,9 @@ void fake_gnss_inject(uint64_t now_us) {
 void manual_test_buzzer_set_buzzer_2 (bool status) {
     HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, status ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
+#ifdef DEBUG
     printf("[BUZZER] Set at time %d: %d\r\n", HAL_GetTick(), status);
+#endif
 }
 
 RingBuffer<BaroData, 100> baroData1;
@@ -572,11 +574,13 @@ extern "C" void app_super_loop_setup(void) {
     }
 
     g_superloop.ready = true;
+#ifdef DEBUG
     printf("-------------------%d, %d, %d,%d,%d,%d,%d,%d,%d-------------------\r\n," , g_superloop.imuModule.sensorFailed(0), g_superloop.imuModule.sensorFailed(1),
             g_superloop.imuModule.sensorFailed(2), g_superloop.imuModule.sensorFailed(3),
             g_superloop.baroModule.sensorInit(0), g_superloop.baroModule.sensorInit(1),
             g_superloop.baroModule.sensorInit(2), g_superloop.baroModule.sensorInit(3),
             gps_state);
+#endif
     static const buzzer::ModuleId kBuzzerIds[13] = {
         {0, 1},                          // Buzzer Test  : ■
         {0, 2},                          // Superloop    : ■■

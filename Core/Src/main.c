@@ -39,6 +39,12 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+/**
+ * OUTPUT_LOG: Enables printf output via USB Virtual COM Port (CDC).
+ * Comment out this define to disable ALL UART/USB printf output for flight.
+ * When disabled, _write() is not defined and printf calls become no-ops
+ * (or link to the default stub that discards output).
+ */
 #define OUTPUT_LOG
 /* USER CODE END PD */
 
