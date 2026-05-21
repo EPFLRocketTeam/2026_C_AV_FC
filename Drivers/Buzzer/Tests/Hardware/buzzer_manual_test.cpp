@@ -18,7 +18,6 @@ void manual_test_buzzer () {
     buzzer::Buzzer<4> buzzer;
     while (HAL_GetTick() < 100 * 1000) {
         buzzer.tick(HAL_GetTick());
-
         if (!started && HAL_GetTick() > 10 * 1000) {
             buzzer.start(
                 HAL_GetTick(),

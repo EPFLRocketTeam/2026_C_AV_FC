@@ -128,11 +128,11 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="ThirdParty"/>
-						<entry excluding="Plume/2026_C_AV_PLUME/src/plume/cli|Plume/2026_C_AV_PLUME/src/plume/drivers/unix.c|Plume/2026_C_AV_PLUME/tests|STM32HAL/Simulations|STM32HAL/Tests|UBX_GPS/Tests/test_gps.cpp|BMP390/Tests/Mock|InvIMU/Impl/InvIMU_mock.cpp|InvIMU/Tests/Mock" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry excluding="Tests" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="Application"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
+						<entry excluding="STM32HAL/Interfaces|Plume/2026_C_AV_PLUME/src/plume/cli|Plume/2026_C_AV_PLUME/src/plume/drivers/unix.c|Plume/2026_C_AV_PLUME/tests|STM32HAL/Simulations|STM32HAL/Tests|UBX_GPS/Tests/test_gps.cpp|BMP390/Tests/Mock|InvIMU/Impl/InvIMU_mock.cpp|InvIMU/Tests/Mock" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="ThirdParty"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="USB_DEVICE"/>
 					</sourceEntries>
 				</configuration>
@@ -232,8 +232,8 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="Plume/2026_C_AV_PLUME/src/plume/cli|Plume/2026_C_AV_PLUME/src/plume/drivers/unix.c|Plume/2026_C_AV_PLUME/tests|STM32HAL/Simulations|STM32HAL/Tests|UBX_GPS/Tests/test_gps.cpp|BMP390/Tests/Mock|InvIMU/Impl/InvIMU_mock.cpp|InvIMU/Tests/Mock" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
+						<entry excluding="STM32HAL/Interfaces|Plume/2026_C_AV_PLUME/src/plume/cli|Plume/2026_C_AV_PLUME/src/plume/drivers/unix.c|Plume/2026_C_AV_PLUME/tests|STM32HAL/Simulations|STM32HAL/Tests|UBX_GPS/Tests/test_gps.cpp|BMP390/Tests/Mock|InvIMU/Impl/InvIMU_mock.cpp|InvIMU/Tests/Mock" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="USB_DEVICE"/>
 					</sourceEntries>

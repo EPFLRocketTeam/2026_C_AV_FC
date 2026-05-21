@@ -39,7 +39,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define OUTPUT_LOG
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -75,11 +75,13 @@ static void MX_SDMMC1_SD_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+#ifdef OUTPUT_LOG
 int _write(int file, char *ptr, int len) {
     // Wait until USB is ready
     while (CDC_Transmit_HS((uint8_t*)ptr, len) == USBD_BUSY);
     return len;
 }
+#endif
 
 void app_on_imu_exti(uint16_t gpio_pin);
 void app_on_imu_spi_rx_complete(SPI_HandleTypeDef *hspi);

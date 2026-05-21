@@ -1,10 +1,10 @@
-
+#pragma once
 #include <cstdint>
 #include <stdio.h>
 
 namespace buzzer {
 
-void push_buzzer (size_t* durations, bool* is_on, int& offset, size_t duration, bool status) {
+inline void push_buzzer (size_t* durations, bool* is_on, int& offset, size_t duration, bool status) {
     durations[offset] = duration;
     is_on[offset] = status;
 
@@ -18,7 +18,7 @@ void push_buzzer (size_t* durations, bool* is_on, int& offset, size_t duration, 
  *  - 10 seconds off
  */
 const size_t NB_BLOCKS_PREAMBULE = 3 * 2 + 1;
-void setup_preambule (size_t* durations, bool* is_on, int& offset) {
+inline void setup_preambule (size_t* durations, bool* is_on, int& offset) {
     for (int i = 0; i < 3; i ++) {
         push_buzzer(durations, is_on, offset, 100, true);
         push_buzzer(durations, is_on, offset, 100, false);
@@ -36,7 +36,7 @@ void setup_preambule (size_t* durations, bool* is_on, int& offset) {
  *  - 1s off
  */
 const size_t NB_BLOCKS_PER_MODULE = 2 + 5 * 2 + 1;
-void setup_module (size_t* durations, bool* is_on, int& offset, bool module_ok) {
+inline void setup_module (size_t* durations, bool* is_on, int& offset, bool module_ok) {
     push_buzzer(durations, is_on, offset, 250, true);
     push_buzzer(durations, is_on, offset, 750, false);
 

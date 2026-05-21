@@ -7,6 +7,9 @@
 #include "Modules/gps_module.hpp"
 #include "plume_driver.hpp"
 #include "Modules/sd_logger.hpp"
+#include "Drivers/Buzzer/buzzer.hpp"
+
+
 // Forward-declared — defined in av_state.cpp to avoid BMP390 header clash.
 void fsm_tick(void);
 
@@ -190,6 +193,12 @@ void fake_gnss_inject(uint64_t now_us) {
 
 } // namespace
 #endif // FAKE_GNSS_ENABLE
+void manual_test_buzzer_set_buzzer_2 (bool status) {
+    HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, status ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+    printf("[BUZZER] Set at time %d: %d\r\n", HAL_GetTick(), status);
+}
+
 RingBuffer<BaroData, 100> baroData1;
 RingBuffer<BaroData, 100> baroData2;
 RingBuffer<BaroData, 100> baroData3;
@@ -286,6 +295,7 @@ Drivers::BMP390::BMP390_SDK::Config makeBaroConfig(SPI_HandleTypeDef* hspi,
 #endif
 
 struct SuperLoopContext {
+
     Config imu_cfg1 = makeImuConfig(&hspi4, ICM_CS4_GPIO_Port, ICM_CS4_Pin);
     Config imu_cfg2 = makeImuConfig(&hspi5, ICM_CS2_GPIO_Port, ICM_CS2_Pin);
     Config imu_cfg3 = makeImuConfig(&hspi4, ICM_CS3_GPIO_Port, ICM_CS3_Pin);
@@ -299,6 +309,7 @@ struct SuperLoopContext {
     InvIMU_Interface* invArr[4] = {&invImu1, &invImu2, &invImu3, &invImu4};
     AppImuRingBuffer* ringArr[4] = {&imuData1, &imuData2, &imuData3, &imuData4};
     ImuModule<4> imuModule{invArr, ringArr};
+    buzzer::Buzzer<13> buzzer;
 
 #ifdef UNIT_TEST_ENV
     Drivers::BMP390::BMP390_Mock baro1{};
@@ -542,11 +553,12 @@ extern "C" void app_super_loop_setup(void) {
         printf("WARNING: No barometers initialized\r\n");
     }
 
+    bool gps_state = g_superloop.gpsModule.init();
 #if FAKE_GNSS_ENABLE
     printf("[APP] FAKE_GNSS_ENABLE=1: skipping real GPS init, using synthetic 16Hz GNSS\r\n");
     // Don't init real GPS — no hardware attached.
 #else
-    if (!g_superloop.gpsModule.init()) {
+    if (!gps_state) {
         g_superloop.ready = false;
         return;
     }
@@ -560,9 +572,27 @@ extern "C" void app_super_loop_setup(void) {
     }
 
     g_superloop.ready = true;
+    printf("-------------------%d, %d, %d,%d,%d,%d,%d,%d,%d-------------------\r\n," , g_superloop.imuModule.sensorHealthy(0), g_superloop.imuModule.sensorHealthy(1),
+            g_superloop.imuModule.sensorHealthy(2), g_superloop.imuModule.sensorHealthy(3),
+            g_superloop.baroModule.sensorHealthy(0), g_superloop.baroModule.sensorHealthy(1),
+            g_superloop.baroModule.sensorHealthy(2), g_superloop.baroModule.sensorHealthy(3),
+            gps_state);
+    g_superloop.buzzer.tick(HAL_GetTick());
+    g_superloop.buzzer.start(
+        HAL_GetTick(),
+        manual_test_buzzer_set_buzzer_2,
+        1, 1, g_superloop.imuModule.sensorHealthy(0), g_superloop.imuModule.sensorHealthy(1), 
+        g_superloop.imuModule.sensorHealthy(2), g_superloop.imuModule.sensorHealthy(3), 
+        g_superloop.baroModule.sensorHealthy(0), g_superloop.baroModule.sensorHealthy(1), 
+        g_superloop.baroModule.sensorHealthy(2), g_superloop.baroModule.sensorHealthy(3),
+        gps_state , 1, 1 
+    );
+
 }
 
 extern "C" void app_super_loop_iterate(void) {
+	//printf("Buzzer advancing ---------------------------------------------\r\n");
+	g_superloop.buzzer.tick(HAL_GetTick());
     if (!g_superloop.ready) {
         return;
     }
