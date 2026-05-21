@@ -33,4 +33,9 @@ public:
 
     uint8_t write (const uint8_t* buffer, int length);
     uint8_t tick ();
+
+    /// Ring buffer bytes currently occupied
+    size_t arena_used_bytes() const { return (size_t)context.rb_number_bytes_used; }
+    /// Total ring buffer capacity
+    size_t arena_total_bytes() const { return (size_t)context.rb_number_bytes_total; }
 };

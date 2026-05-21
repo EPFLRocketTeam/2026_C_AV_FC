@@ -8,6 +8,7 @@
 #include "plume_driver.hpp"
 #include "Modules/sd_logger.hpp"
 #include "Drivers/Buzzer/buzzer.hpp"
+#include "Application/Kalman/kalman_health.hpp"
 
 
 // Forward-declared — defined in av_state.cpp to avoid BMP390 header clash.
@@ -243,11 +244,55 @@ void imu_raw_log_callback(size_t sensor_index, const Drivers::InvIMU::IMUData* s
 void baro_raw_log_callback(size_t sensor_index, const Drivers::BMP390::BaroData& sample) {
     g_sd_logger.logBaroRaw(sensor_index, sample);
 }
+void ubx_raw_log_callback(const uint8_t* frame, uint16_t frame_len) {
+    g_sd_logger.logUbxRaw(frame, frame_len);
+}
 
 // Logging decimation: write DataDump every N ms
 constexpr uint32_t kLogIntervalMs = 16;  // ~62.5 Hz
+constexpr uint32_t kMetricsIntervalMs = 1000;  // Health+metrics every 1s
 uint32_t g_last_log_ms = 0;
+uint32_t g_last_metrics_ms = 0;
 flight_computer::State g_last_fsm_state = flight_computer::INIT;
+
+// App metrics tracking
+struct AppMetricsTracker {
+    uint32_t loop_sum_us = 0;
+    uint32_t loop_min_us = UINT32_MAX;
+    uint32_t loop_max_us = 0;
+    uint32_t loop_count = 0;
+    uint32_t imu_batches = 0;
+    uint32_t kalman_last_us = 0;
+    uint32_t kalman_sum_us = 0;
+    uint32_t kalman_max_us = 0;
+    uint32_t kalman_count = 0;
+    uint32_t sd_tick_last_us = 0;
+    uint32_t sd_tick_max_us = 0;
+
+    void recordLoop(uint32_t us) {
+        loop_sum_us += us;
+        if (us < loop_min_us) loop_min_us = us;
+        if (us > loop_max_us) loop_max_us = us;
+        loop_count++;
+    }
+    void recordKalman(uint32_t us) {
+        kalman_last_us = us;
+        kalman_sum_us += us;
+        if (us > kalman_max_us) kalman_max_us = us;
+        kalman_count++;
+    }
+    void recordSdTick(uint32_t us) {
+        sd_tick_last_us = us;
+        if (us > sd_tick_max_us) sd_tick_max_us = us;
+    }
+    void reset() {
+        loop_sum_us = 0; loop_min_us = UINT32_MAX; loop_max_us = 0; loop_count = 0;
+        imu_batches = 0;
+        kalman_last_us = 0; kalman_sum_us = 0; kalman_max_us = 0; kalman_count = 0;
+        sd_tick_last_us = 0; sd_tick_max_us = 0;
+    }
+};
+AppMetricsTracker g_metrics_tracker;
 
 ImuModule<4>* g_imu_module = nullptr;
 uint8_t g_imu_healthy[4] = {0u, 0u, 0u, 0u};
@@ -570,7 +615,20 @@ extern "C" void app_super_loop_setup(void) {
     if (g_sd_logging_active) {
         g_superloop.imuModule.setRawLogCallback(imu_raw_log_callback);
         g_superloop.baroModule.setRawLogCallback(baro_raw_log_callback);
+        g_superloop.gps.setRawUbxCallback(ubx_raw_log_callback);
         printf("[APP] Full-rate raw sensor logging enabled.\r\n");
+
+        // Log boot marker to delimit this session on SD
+        uint8_t imu_ok = 0;
+        for (size_t i = 0; i < 4; ++i) {
+            if (!g_superloop.imuModule.sensorFailed(i)) imu_ok++;
+        }
+        uint8_t baro_ok = 0;
+        for (size_t i = 0; i < 4; ++i) {
+            if (g_superloop.baroModule.sensorInit(i)) baro_ok++;
+        }
+        g_sd_logger.logBootMarker(imu_ok, baro_ok, gps_state);
+        printf("[APP] Boot marker logged to SD.\r\n");
     }
 
     g_superloop.ready = true;
@@ -630,12 +688,55 @@ extern "C" void app_super_loop_iterate(void) {
             g_sd_logger.logDataDump(&dump, sizeof(dump));
             g_last_log_ms = now_ms;
         }
+
+        // Periodic health + app metrics (1 Hz)
+        if (now_ms - g_last_metrics_ms >= kMetricsIntervalMs) {
+            g_last_metrics_ms = now_ms;
+
+            // SD health record
+            g_sd_logger.logSdHealth();
+
+            // App metrics record
+            const KalmanHealthSnapshot kh = KalmanHealthStore::instance().get();
+            uint32_t fire_count, solo_flush, stale_flush;
+            kalman_get_group_stats(&fire_count, &solo_flush, &stale_flush);
+
+            SdLogAppMetrics m{};
+            m.publish_ms      = now_ms;
+            m.loop_avg_us     = g_metrics_tracker.loop_count > 0
+                                    ? g_metrics_tracker.loop_sum_us / g_metrics_tracker.loop_count
+                                    : 0;
+            m.loop_min_us     = (g_metrics_tracker.loop_min_us == UINT32_MAX) ? 0 : g_metrics_tracker.loop_min_us;
+            m.loop_max_us     = g_metrics_tracker.loop_max_us;
+            m.loop_count      = g_metrics_tracker.loop_count;
+            m.imu_batches     = kh.imu_samples_consumed;
+            m.imu_drops       = kh.yieldable_imu_drops;
+            m.kalman_time_us  = kh.last_kalman_loop_us;
+            m.kalman_avg_us   = g_metrics_tracker.kalman_count > 0
+                                    ? g_metrics_tracker.kalman_sum_us / g_metrics_tracker.kalman_count
+                                    : 0;
+            m.kalman_max_us   = kh.max_kalman_loop_us;
+            m.sd_tick_time_us = g_metrics_tracker.sd_tick_last_us;
+            m.sd_tick_max_us  = g_metrics_tracker.sd_tick_max_us;
+            m.catchup_events  = 0;  // placeholder
+            m.stale_skip_count = stale_flush;
+            m.group_fire_count = fire_count;
+            m.solo_flush_count = solo_flush;
+
+            g_sd_logger.logAppMetrics(m);
+            g_metrics_tracker.reset();
+        }
     }
-    g_sd_interface.tick();
+    {
+        const uint64_t t0 = app_timebase_now_us();
+        g_sd_interface.tick();
+        const uint32_t sd_us = static_cast<uint32_t>(app_timebase_now_us() - t0);
+        g_metrics_tracker.recordSdTick(sd_us);
+    }
 
     const uint64_t iteration_start_us = app_timebase_now_us();
-    const uint32_t now_ms = HAL_GetTick();
-    g_superloop.imuModule.update(now_ms);
+    const uint32_t iter_now_ms = HAL_GetTick();
+    g_superloop.imuModule.update(iter_now_ms);
 
     for (size_t i = 0; i < 4; ++i) {
         g_imu_healthy[i] = g_superloop.imuModule.sensorHealthy(i) ? 1u : 0u;
@@ -643,14 +744,14 @@ extern "C" void app_super_loop_iterate(void) {
     }
 
     (void)g_superloop.imuModule.takeProducedCount();
-    g_superloop.baroModule.update(now_ms);
+    g_superloop.baroModule.update(iter_now_ms);
     for (size_t i = 0; i < 4; ++i) {
         g_baro_healthy[i] = g_superloop.baroModule.sensorHealthy(i) ? 1u : 0u;
         g_baro_status_flags[i] = g_superloop.baroModule.sensorStatusFlags(i);
     }
     (void)g_superloop.baroModule.takeProducedCount();
 #if !FAKE_GNSS_ENABLE
-    g_superloop.gpsModule.update(now_ms);
+    g_superloop.gpsModule.update(iter_now_ms);
 #endif
 
 #if FAKE_GNSS_ENABLE
@@ -666,4 +767,5 @@ extern "C" void app_super_loop_iterate(void) {
     const uint64_t iteration_end_us = app_timebase_now_us();
     const uint64_t elapsed_us = iteration_end_us - iteration_start_us;
     kalman_note_main_loop_iteration_us(static_cast<uint32_t>(elapsed_us));
+    g_metrics_tracker.recordLoop(static_cast<uint32_t>(elapsed_us));
 }

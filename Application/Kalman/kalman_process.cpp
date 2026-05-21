@@ -984,3 +984,11 @@ void kalman_note_baro_trigger(uint64_t trigger_us) {
 	g_pending_baro_trigger_us = trigger_us;
 	if ((primask & 0x1u) == 0u) __enable_irq();
 }
+
+void kalman_get_group_stats(uint32_t* fire_count, uint32_t* solo_flush,
+                            uint32_t* stale_flush) {
+	auto& rt = runtime();
+	*fire_count  = rt.estimator.imu_group_fire_count_;
+	*solo_flush  = rt.estimator.imu_solo_flush_count_;
+	*stale_flush = rt.estimator.imu_stale_flush_count_;
+}

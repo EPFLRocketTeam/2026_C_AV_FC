@@ -275,12 +275,19 @@ struct GpsBasicFixData {
 
 class UbxGpsInterface {
 public:
+  /// Callback type for raw UBX packet logging.
+  /// Called with the complete UBX frame (sync+class+id+len+payload+cksum).
+  using RawUbxCallback = void (*)(const uint8_t* frame, uint16_t frame_len);
+
   /**
    * @brief Construct a new GPS Interface
    * @param huart UART handle for GPS communication
    * @param rate_ms Measurement rate in milliseconds (default: 1000ms = 1Hz)
    */
   UbxGpsInterface(UART_HandleTypeDef *huart, uint16_t rate_ms = 1000);
+
+  /// Set callback for raw UBX packet capture (for SD logging).
+  void setRawUbxCallback(RawUbxCallback cb) { raw_ubx_callback_ = cb; }
 
   /**
    * @brief Initialize the GPS and configure it to output PVT messages
@@ -365,6 +372,7 @@ private:
   // Member variables
   UART_HandleTypeDef *uart_handle_;
   uint16_t rate_ms_;
+  RawUbxCallback raw_ubx_callback_ = nullptr;
 
   // Helper methods
   void calcChecksum(const uint8_t *buffer, uint16_t size, uint8_t *ck_a,

@@ -3,6 +3,7 @@
 
 extern "C" {
 #include "stm32hal.h"
+#include "app_timebase.h"
 }
 
 // ============================================================
@@ -18,19 +19,32 @@ void SdLogger::writeRecord(SdLogRecordType type, const void* payload, uint16_t p
     hdr.length       = payload_len;
     hdr.timestamp_ms = HAL_GetTick();
 
+    const uint32_t t0 = (uint32_t)app_timebase_now_us();
+
     // Write header + payload as a single contiguous write.
     // Plume's ring buffer handles the byte-level copy.
     uint8_t buf[sizeof(SdLogHeader) + 1024];  // stack buffer for small records
+    uint8_t result;
     if (sizeof(SdLogHeader) + payload_len <= sizeof(buf)) {
         memcpy(buf, &hdr, sizeof(hdr));
         memcpy(buf + sizeof(hdr), payload, payload_len);
-        sd_->write(buf, sizeof(hdr) + payload_len);
+        result = sd_->write(buf, sizeof(hdr) + payload_len);
     } else {
         // Large record: write header then payload separately
         sd_->beginTransaction();
         sd_->write(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr));
-        sd_->write(reinterpret_cast<const uint8_t*>(payload), payload_len);
+        result = sd_->write(reinterpret_cast<const uint8_t*>(payload), payload_len);
         sd_->endTransaction();
+    }
+
+    const uint32_t elapsed_us = (uint32_t)app_timebase_now_us() - t0;
+    if (elapsed_us > max_write_time_us_) max_write_time_us_ = elapsed_us;
+
+    write_count_++;
+    if (result != 0) {
+        write_fail_count_++;
+    } else {
+        bytes_written_ += sizeof(hdr) + payload_len;
     }
 }
 
@@ -173,4 +187,49 @@ void SdLogger::logBaroRaw(size_t sensor_index, const Drivers::BMP390::BaroData& 
     record.timestamp_us  = sample.timestamp_us;
 
     writeRecord(SD_LOG_BARO_RAW, &record, sizeof(record));
+}
+
+// ============================================================
+// Boot Marker, Health, Metrics, UBX Raw
+// ============================================================
+
+void SdLogger::logBootMarker(uint8_t imu_count, uint8_t baro_count, bool gps_ok) {
+    if (sd_ == nullptr) return;
+
+    SdLogBootMarker marker;
+    marker.firmware_crc = 0;  // placeholder
+    marker.imu_count    = imu_count;
+    marker.baro_count   = baro_count;
+    marker.gps_ok       = gps_ok ? 1 : 0;
+    marker.sd_ok        = 1;  // if we're logging, SD is OK
+    marker.boot_time_ms = HAL_GetTick();
+    marker.reset_reason = RCC->RSR;
+
+    writeRecord(SD_LOG_BOOT_MARKER, &marker, sizeof(marker));
+}
+
+void SdLogger::logSdHealth() {
+    if (sd_ == nullptr) return;
+
+    SdLogSdHealth health;
+    health.bytes_written     = bytes_written_;
+    health.write_count       = write_count_;
+    health.write_fail_count  = write_fail_count_;
+    health.arena_used_bytes  = static_cast<uint32_t>(sd_->arena_used_bytes());
+    health.arena_total_bytes = static_cast<uint32_t>(sd_->arena_total_bytes());
+    health.max_write_time_us = max_write_time_us_;
+    health.tick_count        = tick_count_;
+    health.disk_remaining_kb = static_cast<uint32_t>(sd_->disk_size_remaining() / 1024);
+
+    writeRecord(SD_LOG_SD_HEALTH, &health, sizeof(health));
+}
+
+void SdLogger::logAppMetrics(const SdLogAppMetrics& metrics) {
+    if (sd_ == nullptr) return;
+    writeRecord(SD_LOG_APP_METRICS, &metrics, sizeof(metrics));
+}
+
+void SdLogger::logUbxRaw(const uint8_t* ubx_packet, uint16_t length) {
+    if (sd_ == nullptr || ubx_packet == nullptr || length == 0) return;
+    writeRecord(SD_LOG_UBX_RAW, ubx_packet, length);
 }

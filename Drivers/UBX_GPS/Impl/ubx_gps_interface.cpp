@@ -175,6 +175,23 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
 
     case STATE_CK_B:
       if (byte == parser_ck_b_calc_) {
+        // Emit raw UBX frame via callback before parsing
+        if (raw_ubx_callback_) {
+            // Reconstruct full frame: sync(2) + class(1) + id(1) + len(2) + payload + cksum(2)
+            static constexpr uint16_t kFrameOverhead = 8; // 2+1+1+2+2
+            const uint16_t frame_len = kFrameOverhead + UBX_NAV_PVT_PAYLOAD_LEN;
+            uint8_t frame[kFrameOverhead + UBX_NAV_PVT_PAYLOAD_LEN];
+            frame[0] = UBX_SYNC_CHAR_1;
+            frame[1] = UBX_SYNC_CHAR_2;
+            frame[2] = UBX_CLASS_NAV;
+            frame[3] = UBX_ID_NAV_PVT;
+            frame[4] = static_cast<uint8_t>(UBX_NAV_PVT_PAYLOAD_LEN & 0xFF);
+            frame[5] = static_cast<uint8_t>(UBX_NAV_PVT_PAYLOAD_LEN >> 8);
+            memcpy(&frame[6], parser_payload_buf_, UBX_NAV_PVT_PAYLOAD_LEN);
+            frame[6 + UBX_NAV_PVT_PAYLOAD_LEN] = parser_ck_a_calc_;
+            frame[7 + UBX_NAV_PVT_PAYLOAD_LEN] = byte; // ck_b
+            raw_ubx_callback_(frame, frame_len);
+        }
         parseBasicFix(parser_payload_buf_, pvt_data);
         pvt_data->timestamp_us = app_timebase_now_us();
         pvt_data->pps_timestamp_us = 0ULL;
