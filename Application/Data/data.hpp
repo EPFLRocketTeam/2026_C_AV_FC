@@ -489,7 +489,7 @@ struct Event {
   /// Liftoff acceleration-hold evaluation result.
   /// Written by the Kalman subsystem once the FSM enters IGNITION.
   /// @see AccHoldStatus
-  AccHoldStatus vertical_acc_hold;
+  uint8_t vertical_acc_hold;
 
   /// IMU-based dual-window liftoff detection (set by LiftoffDetector).
   bool imu_liftoff_detected;

@@ -47,7 +47,7 @@ struct Event:
     cut_off_detected
     apogee_detected
     touchdown_detected
-    vertical_acc_hold
+    AccHoldStatus vertical_acc_hold
     imu_liftoff_detected
 
 struct NavSensors:
@@ -75,6 +75,7 @@ struct NavigationData:
 
 struct DataDump:
     av_state
+    int av_state
     av_timestamp
     navSensors
     navigationData
@@ -104,3 +105,239 @@ struct eskf::StateSnapshot:
 struct eskf::CovarianceSnapshot:
   P_diag[%16]
   timestamp_us
+
+enum eskf::EskfEventType:
+  FilterReset
+  FilterInitialized
+  ModeChanged
+  HeadingAligned
+  HeadingSnapped
+  HeadingInitialized
+  GpsPosCorrection
+  GpsVelCorrection
+  BaroCorrection
+  MagCorrection
+  SideslipCorrection
+  ZuptApplied
+  ZaruApplied
+  GpsHeadingCorrection
+  GpsVelRejected
+  GpsPosRejected
+  GpsCovarianceReset
+  GpsRejectedByWindow
+  RewindStarted
+  RewindCompleted
+  RewindNoCheckpoint
+  RewindDataGap
+  RewindGapCovInflated
+  LiftoffSnapInjected
+  RejectionWindowStart
+  RejectionWindowEnd
+  NisDivergenceWarning
+  FilterDiverged
+  QuaternionRenormalized
+  PredictDtClamped
+  ImuBufferOverflow
+  BaroBufferOverflow
+  EventBufferOverflow
+  BaroTransonicBlind
+  BaroInnovationClamped
+  BaroSnapshotDropped
+  GroundRefCalibrated
+  AeroBlindEntered
+  AeroBlindExited
+  RailShadowHeadingConverged
+  ImuHealthTransition
+  BaroHealthTransition
+  GnssHealthTransition
+  MagHealthTransition
+  ImuContinuitySalvage
+  BaroContinuitySalvage
+  GroundRefFallbackUsed
+  TurnOnAccelBiasLatched
+  GnssFixDropped
+  BaroQueueFlushed
+  RewindStateSnapshotPre
+  RewindStateSnapshotPost
+  HeadingStateSnapshotPre
+  HeadingStateSnapshotPost
+
+struct SdLogEskfEvent:
+    eskf::EskfEventType event_type
+    value
+    timestamp_us
+
+enum eskf::GpsRejectReason:
+  Unknown
+  VelocityChi2
+  PositionChi2
+  CovarianceResetThreshold
+  RejectionWindow
+  HistoryUnavailable
+  RewindCheckpointUnavailable
+
+struct eskf::GpsRejectionInfo:
+  chi2_vel
+  chi2_pos
+  threshold
+  consecutive
+  reason
+
+struct SdLogGpsRejection:
+    eskf::EskfEventType event_type
+    eskf::GpsRejectionInfo info
+    uint64_t timestamp_us
+
+struct eskf::RewindInfo:
+  target_timestamp_us
+  rewind_origin_timestamp_us
+  checkpoint_timestamp_us
+  imu_replayed
+  baro_replayed
+  events_replayed
+  catchup_duration_us
+  pending_gap_dt_us
+  had_data_gap
+
+struct SdLogRewind:
+    eskf::EskfEventType event_type
+    eskf::RewindInfo info
+    timestamp_us
+
+struct eskf::RailShadowSnapshot:
+  q[%4]
+  heading_rad
+  heading_variance
+  gyro_bias[%3]
+  ground_pressure_pa
+  window_count
+  timestamp_us
+  int flags
+
+struct SdLogAppMetrics:
+    publish_ms
+    loop_avg_us
+    loop_min_us
+    loop_max_us
+    loop_count
+    imu_batches
+    imu_drops
+    kalman_time_us
+    kalman_avg_us
+    kalman_max_us
+    sd_tick_time_us
+    sd_tick_max_us
+    catchup_events
+    stale_skip_count
+    group_fire_count
+    solo_flush_count
+
+struct SdLogSdHealth:
+    bytes_written
+    write_count
+    write_fail_count
+    arena_used_bytes
+    arena_total_bytes
+    max_write_time_us
+    tick_count
+    disk_remaining_kb
+
+struct SdLogBootMarker:
+    firmware_crc
+    int imu_count
+    int baro_count
+    int gps_ok
+    int sd_ok
+    boot_time_ms
+    reset_reason
+
+struct SdLogBaroSample:
+    int sensor_index
+    pressure_pa
+    temperature_c
+    timestamp_us
+
+struct SdLogCorrection:
+    eskf::EskfEventType event_type
+    innovation
+    nis
+    timestamp_us
+
+struct SdLogFsmTransition:
+    State prev_state
+    State new_state
+    int prev_state
+    int new_state
+
+struct eskf::FlightShadowSnapshot:
+    altitude_m
+    velocity_mps
+    q[%4]
+    aero_blind_enter_accum_s
+    aero_blind_exit_accum_s
+    last_reengage_snap_delta_m
+    timestamp_us
+    flags
+
+enum eskf::SensorStatus:
+    OK
+    SOFT_FAIL
+    HARD_FAIL
+    INHIBITED
+    RECOVERING
+
+struct eskf::ImuPipelineSnapshot:
+    accel_body[%3]
+    gyro_body[%3]
+    omega_dot[%3]
+    accel_cg[%3]
+    gyro_cg[%3]
+    centroid[%3]
+    cg[%3]
+    lever_arm[%3]
+    nav_gyro_unbiased[%3]
+    gyro_bias_body[%3]
+    lever_arm_correction[%3]
+    omega_dot_unclamped[%3]
+    tangential_correction[%3]
+    centripetal_correction[%3]
+    lever_arm_correction_unclamped[%3]
+    omega_dot_norm
+    omega_dot_unclamped_norm
+    lever_arm_correction_norm
+    lever_arm_correction_unclamped_norm
+    omega_dot_clipped
+    lever_arm_correction_clipped
+    rail_q_gravity[%4]
+    rail_q_combined[%4]
+    rail_expected_accel[%3]
+    rail_error[%3]
+    rail_integral[%3]
+    rail_correction[%3]
+    imu0_accel_body[%3]
+    imu0_gyro_body[%3]
+    imu1_accel_body[%3]
+    imu1_gyro_body[%3]
+    accel_norm
+    dt_s
+    int imu0_present
+    int imu1_present
+    int valid_imu_count
+    int gate_open
+    int imu_status[%4]
+    eskf::SensorStatus imu_status[%4]
+    timestamp_us
+
+struct eskf::ImuDynamicsSnapshot:
+  accel_body[%3]
+  gyro_body[%3]
+  accel_ned[%3]
+  gravity_ned[%3]
+  vel_inc_ned[%3]
+  q[%4]
+  dt_s
+  timestamp_us
+
+struct IMUDataAndSensor:
+    int sensor_index
+    Drivers::InvIMU::IMUData sensor_data

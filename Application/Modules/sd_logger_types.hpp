@@ -1,4 +1,5 @@
 
+#include "Application/Kalman/kalman/eskf_logger.hpp"
 #include <stdint.h>
 
 // ============================================================
@@ -69,6 +70,20 @@ struct SdLogCorrection {
     uint8_t pad[3];
     float innovation;
     float nis;
+    uint64_t timestamp_us;
+};
+
+struct SdLogGpsRejection {
+    uint8_t event_type;
+    uint8_t pad[3];
+    eskf::GpsRejectionInfo info;
+    uint64_t timestamp_us;
+};
+
+struct SdLogRewind {
+    uint8_t event_type;
+    uint8_t pad[3];
+    eskf::RewindInfo info;
     uint64_t timestamp_us;
 };
 
