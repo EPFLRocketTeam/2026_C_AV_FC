@@ -2,6 +2,7 @@
 #include "Application/Data/data.hpp"
 #include "Application/FlightControl/threshold.h"
 #include "Application/Kalman/kalman_lifecycle.h"
+#include "Drivers/STM32HAL/stm32hal.h"
 
 extern "C" {
 #include "Application/FlightControl/uart_cmd.h"
@@ -148,16 +149,15 @@ State AvState::fromBurn(DataDump const &dump) {
   if (dump.uplinkCmd.id == 1) // TODO: replace this with proper cmd id from the
                               // protocol and add the condition p_tanks > p_prvs
   {
-    // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::ABORT_IN_FLIGHT;
   }
-  // If all the sensors are calibrated and ready for use we go to the MANUAL
-  // state
-  else if (dump.propSensors.timer_burn > BURN_MAX_DURATION ||
-           dump.event.cut_off_detected) {
-    // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
+
+  // Hardcoded 2-second burn duration timer
+  const uint32_t burn_elapsed_ms = HAL_GetTick() - burn_entry_ms_;
+  if (burn_elapsed_ms >= 2000u) {
     return State::ASCENT;
   }
+
   return currentState;
 }
 
@@ -306,6 +306,7 @@ void AvState::update(const DataDump &dump) {
 
     // Liftoff contract: first in-flight state reached by this FSM is BURN.
     if (currentState == State::BURN) {
+      burn_entry_ms_ = HAL_GetTick();
       kalman_on_liftoff(dump.av_timestamp);
     }
   }

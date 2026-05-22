@@ -64,6 +64,7 @@ private:
 
 
     State currentState;
+    uint32_t burn_entry_ms_ = 0;  // HAL_GetTick() when entering BURN
 };
 
 #endif
