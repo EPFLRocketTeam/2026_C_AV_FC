@@ -163,6 +163,13 @@ public:
     /// Notify that one SD tick (plume_tick) was executed.
     void notifyTick() { ++tick_count_; }
 
+    // --- Health metric accessors (for debug prints) ---
+    uint32_t bytesWritten()    const { return bytes_written_; }
+    uint32_t writeCount()      const { return write_count_; }
+    uint32_t writeFailCount()  const { return write_fail_count_; }
+    uint32_t maxWriteTimeUs()  const { return max_write_time_us_; }
+    uint32_t tickCount()       const { return tick_count_; }
+
     // --- IEskfLogger interface ---
     void logState(const eskf::StateSnapshot& snapshot) override;
     void logStateCritical(const eskf::StateSnapshot& snapshot) override;

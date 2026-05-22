@@ -736,6 +736,28 @@ extern "C" void app_super_loop_iterate(void) {
 
             g_sd_logger.logAppMetrics(m);
             g_metrics_tracker.reset();
+
+            // Debug print SD health + app metrics (1 Hz)
+            printf("[SD] wr=%lu fail=%lu arena=%lu/%lu maxWr=%luus ticks=%lu disk=%luKB\r\n",
+                   (unsigned long)g_sd_logger.writeCount(),
+                   (unsigned long)g_sd_logger.writeFailCount(),
+                   (unsigned long)g_sd_interface.arena_used_bytes(),
+                   (unsigned long)g_sd_interface.arena_total_bytes(),
+                   (unsigned long)g_sd_logger.maxWriteTimeUs(),
+                   (unsigned long)g_sd_logger.tickCount(),
+                   (unsigned long)(g_sd_interface.disk_size_remaining() / 1024));
+            printf("[APP] loop=%lu/%lu/%luus(%lu) kal=%lu/%luus sd=%luus "
+                   "grp=%lu solo=%lu stale=%lu\r\n",
+                   (unsigned long)m.loop_min_us,
+                   (unsigned long)m.loop_avg_us,
+                   (unsigned long)m.loop_max_us,
+                   (unsigned long)m.loop_count,
+                   (unsigned long)m.kalman_avg_us,
+                   (unsigned long)m.kalman_max_us,
+                   (unsigned long)m.sd_tick_max_us,
+                   (unsigned long)delta_fire,
+                   (unsigned long)delta_solo,
+                   (unsigned long)delta_stale);
         }
     }
     {

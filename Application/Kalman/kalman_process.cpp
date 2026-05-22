@@ -272,7 +272,7 @@ struct KalmanRuntime {
 			KalmanHealthStore::instance().reset();
 		}
 
-		// DONE: Start liftoff acceleration-hold evaluation on IGNITION entry.
+		// Start liftoff acceleration-hold evaluation on IGNITION entry.
 		if (state == flight_computer::State::IGNITION) {
 			acc_hold.onIgnitionEnter(app_timebase_now_us());
 		}
@@ -586,6 +586,9 @@ struct KalmanRuntime {
 			if (decision.triggered) {
 				apogee_detected = true;
 				set_apogee_detected = true;
+				printf("[APOGEE] Detected at t=%lu ms (liftoff+%lu ms)\r\n",
+				       (unsigned long)now_ms,
+				       (unsigned long)(now_ms - liftoff_ms));
 			}
 		}
 
