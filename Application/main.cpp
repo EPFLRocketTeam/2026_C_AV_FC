@@ -249,7 +249,7 @@ void ubx_raw_log_callback(const uint8_t* frame, uint16_t frame_len) {
 }
 
 // Logging decimation: write DataDump every N ms
-constexpr uint32_t kLogIntervalMs = 16;  // ~62.5 Hz
+constexpr uint32_t kLogIntervalMs = 10;  // ~100 Hz
 constexpr uint32_t kMetricsIntervalMs = 1000;  // Health+metrics every 1s
 uint32_t g_last_log_ms = 0;
 uint32_t g_last_metrics_ms = 0;

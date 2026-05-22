@@ -118,6 +118,7 @@ void app_timebase_init_locked() {
     return;
   }
 
+#if !defined(UNIT_TEST_ENV)
   g_timebase_init_hal_ms = HAL_GetTick();
   g_timebase_init_dwt_pre = DWT->CYCCNT;
   g_timebase_init_dwt_ctrl_pre = DWT->CTRL;
@@ -126,6 +127,7 @@ void app_timebase_init_locked() {
   g_app_timebase.acc_us = static_cast<uint64_t>(g_app_timebase.last_tick_ms) * 1000ULL;
   g_app_timebase.last_cycle = 0u;
   g_app_timebase.cycle_remainder = 0u;
+#endif
 
 #if !defined(UNIT_TEST_ENV)
   app_timebase_enable_dwt();
@@ -236,6 +238,7 @@ extern "C" uint32_t app_timebase_now_ms(void) {
 }
 
 extern "C" void app_timebase_print_init_diag(void) {
+#if !defined(UNIT_TEST_ENV)
   printf("[TIMEBASE-INIT] pre: HAL=%lu DWT=0x%08lX CTRL=0x%08lX  "
          "post: last_cycle=0x%08lX acc_us=%lu\r\n",
          static_cast<unsigned long>(g_timebase_init_hal_ms),
@@ -249,6 +252,7 @@ extern "C" void app_timebase_print_init_diag(void) {
          static_cast<unsigned long>(g_timebase_first_call_now_cycle),
          static_cast<unsigned long>(g_timebase_first_call_last_cycle),
          static_cast<unsigned long>(g_timebase_first_call_count));
+#endif
 }
 
 using namespace flight_computer;

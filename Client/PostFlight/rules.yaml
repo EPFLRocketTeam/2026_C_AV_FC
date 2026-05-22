@@ -1,0 +1,106 @@
+
+enum State: 
+    INIT
+    CALIBRATION
+    FILLING
+    ARMED
+    PRESSURIZATION
+    IGNITION
+    BURN
+    ASCENT
+    DESCENT
+    LANDED
+    ABORT_ON_GROUND
+    ABORT_IN_FLIGHT
+enum AccHoldStatus:
+  ACC_HOLD_NOT_ELAPSED
+  ACC_HOLD_DID_HOLD
+  ACC_HOLD_DID_NOT_HOLD
+
+struct bmp3_data:
+    temperature
+    pressure
+struct Drivers::InvIMU::IMUData:
+    accel_x
+    accel_y
+    accel_z
+    gyro_x
+    gyro_y
+    gyro_z
+    temperature
+    timestamp_us
+struct Event:
+    command_updated
+    calibrated
+    dpr_eth_ready
+    dpr_eth_pressure_ok
+    dpr_lox_ready
+    dpr_lox_pressure_ok
+    prb_ready
+    trb_ready
+    ignited
+    seperated
+    chute_unreefed
+    ignition_failed
+    catastrophic_failure
+    timer_launch_delay
+    cut_off_detected
+    apogee_detected
+    touchdown_detected
+    vertical_acc_hold
+    imu_liftoff_detected
+
+struct NavSensors:
+    Drivers::InvIMU::IMUData imu[0]
+    Drivers::InvIMU::IMUData imu[1]
+    Drivers::InvIMU::IMUData imu[2]
+    Drivers::InvIMU::IMUData imu[3]
+    bmp
+    bmp_aux
+    bmp_3
+    bmp_4
+
+struct Vector3:
+    x
+    y
+    z
+struct NavigationData:
+    position_kalman
+    speed
+    accel
+    attitude
+    course
+    altitude
+    baro
+
+struct DataDump:
+    av_state
+    av_timestamp
+    navSensors
+    navigationData
+    flight_computer::Event event
+
+
+
+struct eskf::StateSnapshot:
+  p[%3]
+  v[%3]
+  q[%4]
+  b_acc[%3]
+  b_gyro[%3]
+  b_baro
+  yaw_rad
+  heading_meas_rad
+  heading_innovation_rad
+  heading_gate_threshold
+  gps_vel_chi2
+  gps_vel_chi2_threshold
+  timestamp_us
+  int mode
+  int flags
+  int heading_update_result
+  int gps_vel_accepted
+
+struct eskf::CovarianceSnapshot:
+  P_diag[%16]
+  timestamp_us

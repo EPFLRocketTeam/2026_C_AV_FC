@@ -489,7 +489,7 @@ struct Event {
   /// Liftoff acceleration-hold evaluation result.
   /// Written by the Kalman subsystem once the FSM enters IGNITION.
   /// @see AccHoldStatus
-  uint8_t vertical_acc_hold;
+  AccHoldStatus vertical_acc_hold;
 
   /// IMU-based dual-window liftoff detection (set by LiftoffDetector).
   bool imu_liftoff_detected;
@@ -553,23 +553,23 @@ public:
 };
 
 struct DataDump {
-  State av_state;
+  State av_state; // Y
   // Timestamp contract: GOATStore::get() stamps this field from the shared
   // AV monotonic timebase in milliseconds before AvState::update consumes it.
-  uint32_t av_timestamp;
-  float av_fc_temp;
-  GpsBasicFixData gps_state;
-  SensStatus sensStatus;
-  VehiculeOverview vehiculeOverview;
-  FlightEventTimers flightEventTimers;
-  NavSensors navSensors;
-  PropSensors propSensors;
-  Valves valves;
-  NavigationData navigationData;
-  Event event;
-  Batteries batteries;
-  CamsRecording camsRecording;
-  UplinkCmd uplinkCmd;
+  uint32_t av_timestamp; // Y
+  float av_fc_temp; // X
+  GpsBasicFixData gps_state; // X
+  SensStatus sensStatus; // X
+  VehiculeOverview vehiculeOverview; // X
+  FlightEventTimers flightEventTimers; // X
+  NavSensors navSensors; // Y
+  PropSensors propSensors; // X
+  Valves valves; // X
+  NavigationData navigationData; // Y
+  Event event; // Y
+  Batteries batteries; // X
+  CamsRecording camsRecording; // X
+  UplinkCmd uplinkCmd; // X
 };
 
 class GpsStore : public IStore<GpsBasicFixData> {
