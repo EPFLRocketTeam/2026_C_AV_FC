@@ -36,7 +36,7 @@ struct SdLogHeader {
     uint8_t  magic;         // 0xAE
     uint8_t  record_type;   // SdLogRecordType
     uint16_t length;        // payload length (bytes after this header)
-    uint32_t timestamp_ms;  // HAL_GetTick() at log time
+    uint32_t timestamp_us;  // app_timebase_now_us() at log time (wraps at ~71 min)
 };
 
 struct SdLogFsmTransition {
@@ -94,7 +94,7 @@ struct SdLogBootMarker {
     uint8_t  baro_count;         // Number of healthy baros (0-4)
     uint8_t  gps_ok;             // 1 if GPS init succeeded
     uint8_t  sd_ok;              // 1 if SD init succeeded
-    uint32_t boot_time_ms;       // HAL_GetTick() at marker write
+    uint32_t boot_time_us;       // app_timebase_now_us() at marker write
     uint32_t reset_reason;       // RCC reset flags (RCC->RSR)
 };
 
@@ -112,7 +112,7 @@ struct SdLogSdHealth {
 
 // Application performance metrics: logged periodically.
 struct SdLogAppMetrics {
-    uint32_t publish_ms;         // Timestamp (ms since boot)
+    uint32_t publish_us;         // Timestamp (us since boot)
     uint32_t loop_avg_us;        // Average main loop duration
     uint32_t loop_min_us;        // Min loop duration this interval
     uint32_t loop_max_us;        // Max loop duration this interval

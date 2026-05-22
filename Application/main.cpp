@@ -229,6 +229,8 @@ RingBuffer<BaroData, 100> baroData4;
 #define APP_IMU4_INT_PIN ICM_INT1_Pin
 #endif
 
+bool g_liftoff_detection_allowed = false;
+
 namespace {
 
 SDCardInterface g_sd_interface;
@@ -241,6 +243,8 @@ const size_t g_sd_arena_length = 256 * 1024;
 uint8_t g_sd_arena_buffer[g_sd_arena_length] __attribute__((section(".ram_d2_bss"), aligned(32)));
 bool g_sd_logging_active = false;  // Set after successful init+open
 bool g_buzzer_finished   = false;
+static uint32_t g_buzzer_finished_ms = 0;
+static constexpr uint32_t kLiftoffArmDelayMs = 3000; // 3s margin after buzzer
 SdLogger g_sd_logger;
 
 // Full-rate raw sensor logging callbacks (forwarded to g_sd_logger)
@@ -671,7 +675,15 @@ extern "C" void app_super_loop_iterate(void) {
 	g_superloop.buzzer.tick(HAL_GetTick());
     if (g_superloop.buzzer.is_finished() && !g_buzzer_finished) {
         g_buzzer_finished = true;
-        // TODO register to kalman that it can now detect liftoff
+        g_buzzer_finished_ms = HAL_GetTick();
+    }
+
+    // Allow liftoff detection only after buzzer vibrations have settled
+    if (g_buzzer_finished && !g_liftoff_detection_allowed &&
+        (HAL_GetTick() - g_buzzer_finished_ms >= kLiftoffArmDelayMs)) {
+        g_liftoff_detection_allowed = true;
+        printf("[LIFTOFF] Detection enabled (%lums after buzzer)\r\n",
+               (unsigned long)kLiftoffArmDelayMs);
     }
 
     if (!g_superloop.ready) {
@@ -722,7 +734,7 @@ extern "C" void app_super_loop_iterate(void) {
             prev_stale_flush = stale_flush;
 
             SdLogAppMetrics m{};
-            m.publish_ms      = now_ms;
+            m.publish_us      = (uint32_t)app_timebase_now_us();
             m.loop_avg_us     = g_metrics_tracker.loop_count > 0
                                     ? g_metrics_tracker.loop_sum_us / g_metrics_tracker.loop_count
                                     : 0;

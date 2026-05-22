@@ -17,9 +17,9 @@ void SdLogger::writeRecord(SdLogRecordType type, const void* payload, uint16_t p
     hdr.magic        = SD_LOG_MAGIC;
     hdr.record_type  = static_cast<uint8_t>(type);
     hdr.length       = payload_len;
-    hdr.timestamp_ms = HAL_GetTick();
+    hdr.timestamp_us = (uint32_t)app_timebase_now_us();
 
-    const uint32_t t0 = (uint32_t)app_timebase_now_us();
+    const uint32_t t0 = hdr.timestamp_us;
 
     // Write header + payload as a single contiguous write.
     // Plume's ring buffer handles the byte-level copy.
@@ -155,7 +155,7 @@ void SdLogger::logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUDat
     hdr.magic        = SD_LOG_MAGIC;
     hdr.record_type  = static_cast<uint8_t>(SD_LOG_IMU_RAW);
     hdr.length       = payload_len;
-    hdr.timestamp_ms = HAL_GetTick();
+    hdr.timestamp_us = (uint32_t)app_timebase_now_us();
 
     // Write header, batch header, then samples (3 separate writes to avoid
     // large stack copy — Plume concatenates them into the arena).
@@ -206,7 +206,7 @@ void SdLogger::logBootMarker(uint8_t imu_count, uint8_t baro_count, bool gps_ok)
     marker.baro_count   = baro_count;
     marker.gps_ok       = gps_ok ? 1 : 0;
     marker.sd_ok        = 1;  // if we're logging, SD is OK
-    marker.boot_time_ms = HAL_GetTick();
+    marker.boot_time_us = (uint32_t)app_timebase_now_us();
     marker.reset_reason = RCC->RSR;
 
     writeRecord(SD_LOG_BOOT_MARKER, &marker, sizeof(marker));
