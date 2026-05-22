@@ -162,6 +162,20 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM_D1
 
+  /* RAM_D2 BSS — DMA-accessible SRAM for large buffers (SDMMC arena).
+   * SDMMC1 IDMA can access RAM_D2 via AXI-to-AHB bridge.
+   * Non-cacheable by default (no MPU region) — no cache maintenance needed.
+   * Startup code must zero this section (see _sram_d2_bss / _eram_d2_bss). */
+  .ram_d2_bss (NOLOAD) :
+  {
+    . = ALIGN(32);
+    _sram_d2_bss = .;
+    *(.ram_d2_bss)
+    *(.ram_d2_bss*)
+    . = ALIGN(32);
+    _eram_d2_bss = .;
+  } >RAM_D2
+
   /* DTCM BSS — zero-wait-state, non-cacheable RAM for timing-critical globals.
    * Placed before the stack (stack grows down from end of DTCM).
    * Startup code must zero this section (see _sdtcm_bss / _edtcm_bss). */

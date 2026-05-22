@@ -92,6 +92,13 @@ uint8_t plume_stm32_write_blocks (SD_HandleTypeDef* hsd, struct plume_context* c
         }
     }
 
+    /* CMD23 (SET_BLOCK_COUNT): Pre-erase optimization.
+     * Tells the card how many blocks will be written, allowing it to
+     * pre-erase flash pages before programming. Reduces internal GC pauses. */
+    if (num_blocks > 1) {
+        (void)SDMMC_CmdBlockCount(hsd->Instance, num_blocks);
+    }
+
     /* Flush D-cache for the entire batch so IDMA sees committed data. */
     SCB_CleanDCache_by_Addr((uint32_t*)buffer, num_blocks * 512);
 

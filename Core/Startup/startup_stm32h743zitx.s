@@ -109,6 +109,20 @@ LoopFillZeroDtcm:
   cmp r2, r4
   bcc FillZeroDtcm
 
+/* Zero fill the ram_d2_bss segment (SRAM1/2/3 in D2 domain). */
+  ldr r2, =_sram_d2_bss
+  ldr r4, =_eram_d2_bss
+  movs r3, #0
+  b LoopFillZeroD2
+
+FillZeroD2:
+  str  r3, [r2]
+  adds r2, r2, #4
+
+LoopFillZeroD2:
+  cmp r2, r4
+  bcc FillZeroD2
+
 /* Call static constructors */
     bl __libc_init_array
 /* Call the application's entry point.*/

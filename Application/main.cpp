@@ -232,8 +232,11 @@ RingBuffer<BaroData, 100> baroData4;
 namespace {
 
 SDCardInterface g_sd_interface;
-const size_t g_sd_arena_length = 64 * 1024;
-uint8_t g_sd_arena_buffer[g_sd_arena_length];
+const size_t g_sd_arena_length = 256 * 1024;
+/* Arena in RAM_D2 (SRAM1/2/3): DMA-accessible, non-cacheable, 288KB available.
+ * Moved from RAM_D1 (AXI SRAM, nearly full) to absorb SD card GC pauses
+ * of up to 250ms at 1 MB/s write rate without dropping records. */
+uint8_t g_sd_arena_buffer[g_sd_arena_length] __attribute__((section(".ram_d2_bss"), aligned(32)));
 bool g_sd_logging_active = false;  // Set after successful init+open
 SdLogger g_sd_logger;
 
@@ -639,7 +642,7 @@ extern "C" void app_super_loop_setup(void) {
             g_superloop.baroModule.sensorInit(2), g_superloop.baroModule.sensorInit(3),
             gps_state);
 #endif
-    g_superloop.buzzer.tick(HAL_GetTick());
+    /* g_superloop.buzzer.tick(HAL_GetTick());
     g_superloop.buzzer.start(
         HAL_GetTick(),
         manual_test_buzzer_set_buzzer_2,
@@ -648,7 +651,7 @@ extern "C" void app_super_loop_setup(void) {
         g_superloop.baroModule.sensorInit(0), g_superloop.baroModule.sensorInit(1),
         g_superloop.baroModule.sensorInit(2), g_superloop.baroModule.sensorInit(3),
         gps_state , 1, 1
-    );
+    );*/
 
 }
 

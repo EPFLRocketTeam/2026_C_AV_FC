@@ -371,7 +371,6 @@ void fsm_tick(void) {
   const auto& dump = goat.get();
   AvState& fsm = fsm_instance();
   fsm.update(dump);
-  // Publish the new FSM state so everyone else sees it.
-  auto* live = goat.get_ref();
-  live->av_state = fsm.getCurrentState();
+  // Publish the new FSM state via stateStore so get() returns the correct value.
+  goat.stateStore.set(fsm.getCurrentState());
 }
