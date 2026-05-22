@@ -164,6 +164,20 @@ void SdLogger::logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUDat
     sd_->write(reinterpret_cast<const uint8_t*>(&batch_hdr), sizeof(batch_hdr));
     sd_->write(reinterpret_cast<const uint8_t*>(samples), count * sizeof(Drivers::InvIMU::IMUData));
     sd_->endTransaction();
+
+    imu_batch_count_++;
+    // Check if the transaction was rolled back by inspecting write results.
+    // endTransaction() handles rollback internally — we detect failure by checking
+    // whether the arena bytes changed.  Simpler: check the last write result.
+    // Actually: SDCardInterface::write returns non-zero on failure and marks the
+    // transaction failed.  The most reliable indicator is that write() returned OK
+    // for the third (largest) call.  But SDCardInterface::endTransaction() already
+    // rolled back if any write failed.  We piggy-back on the transactionFailed flag.
+    if (sd_->lastTransactionFailed()) {
+        imu_batch_fail_++;
+    } else {
+        imu_bytes_ok_ += sizeof(hdr) + sizeof(batch_hdr) + count * sizeof(Drivers::InvIMU::IMUData);
+    }
 }
 
 void SdLogger::logBaroRaw(size_t sensor_index, const Drivers::BMP390::BaroData& sample) {

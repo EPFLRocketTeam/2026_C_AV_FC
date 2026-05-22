@@ -233,8 +233,10 @@ namespace {
 
 SDCardInterface g_sd_interface;
 const size_t g_sd_arena_length = 256 * 1024;
-/* Arena in RAM_D2 (SRAM1/2/3): DMA-accessible, non-cacheable, 288KB available.
- * Moved from RAM_D1 (AXI SRAM, nearly full) to absorb SD card GC pauses
+/* Arena in RAM_D2 (SRAM1/2/3): non-cacheable, 288KB available.
+ * NOTE: SDMMC1 IDMA cannot access RAM_D2 directly.  The Plume driver
+ * uses a 32KB bounce buffer in AXI SRAM (RAM_D1) for each DMA write.
+ * Moved from RAM_D1 (nearly full) to absorb SD card GC pauses
  * of up to 250ms at 1 MB/s write rate without dropping records. */
 uint8_t g_sd_arena_buffer[g_sd_arena_length] __attribute__((section(".ram_d2_bss"), aligned(32)));
 bool g_sd_logging_active = false;  // Set after successful init+open
@@ -578,6 +580,14 @@ extern "C" void app_super_loop_setup(void) {
             g_sd_logger.init(&g_sd_interface);
             eskf::setEskfLogger(&g_sd_logger);
             printf("[APP] SD logger active, ESKF logger connected.\n");
+
+            /* Dump SDMMC bus config for diagnostics */
+            uint32_t clkcr = hsd1.Instance->CLKCR;
+            printf("[SD-CFG] CLKCR=0x%08lX  ClkDiv=%lu  BusWide=%lu  HwFlow=%lu\r\n",
+                   (unsigned long)clkcr,
+                   (unsigned long)(clkcr & 0x3FF),            /* CLKDIV bits[9:0] */
+                   (unsigned long)((clkcr >> 14) & 0x3),      /* WIDBUS bits[15:14] */
+                   (unsigned long)((clkcr >> 17) & 0x1));      /* HWFC_EN bit[17]   */
         }
     }
 
@@ -737,14 +747,32 @@ extern "C" void app_super_loop_iterate(void) {
             g_metrics_tracker.reset();
 
             // Debug print SD health + app metrics (1 Hz)
-            printf("[SD] wr=%lu fail=%lu arena=%lu/%lu maxWr=%luus ticks=%lu disk=%luKB\r\n",
+            printf("[SD] wr=%lu fail=%lu arena=%lu/%lu maxWr=%luus ticks=%lu disk=%luKB imu=%lu/%lu(%luKB)\r\n",
                    (unsigned long)g_sd_logger.writeCount(),
                    (unsigned long)g_sd_logger.writeFailCount(),
                    (unsigned long)g_sd_interface.arena_used_bytes(),
                    (unsigned long)g_sd_interface.arena_total_bytes(),
                    (unsigned long)g_sd_logger.maxWriteTimeUs(),
                    (unsigned long)g_sd_logger.tickCount(),
-                   (unsigned long)(g_sd_interface.disk_size_remaining() / 1024));
+                   (unsigned long)(g_sd_interface.disk_size_remaining() / 1024),
+                   (unsigned long)g_sd_logger.imuBatchCount(),
+                   (unsigned long)g_sd_logger.imuBatchFail(),
+                   (unsigned long)(g_sd_logger.imuBytesOk() / 1024));
+            {
+                SdTimingStats st = sd_timing_snapshot();
+                uint32_t avg_cycle = (st.dma_count > 0) ? (uint32_t)(st.sum_cycle_us / st.dma_count) : 0;
+                printf("[SD-T] dma=%lu err=%lu(0x%lX) blk=%lu batch=%lu-%lu xfer=%luus prog=%luus cyc=%lu/%luus\r\n",
+                       (unsigned long)st.dma_count,
+                       (unsigned long)st.dma_error_count,
+                       (unsigned long)st.last_error_code,
+                       (unsigned long)st.total_blocks,
+                       (unsigned long)st.min_batch,
+                       (unsigned long)st.max_batch,
+                       (unsigned long)st.max_xfer_us,
+                       (unsigned long)st.max_prog_us,
+                       (unsigned long)avg_cycle,
+                       (unsigned long)st.max_cycle_us);
+            }
             printf("[APP] loop=%lu/%lu/%luus(%lu) kal=%lu/%luus sd=%luus "
                    "grp=%lu solo=%lu stale=%lu\r\n",
                    (unsigned long)m.loop_min_us,
@@ -795,6 +823,10 @@ extern "C" void app_super_loop_iterate(void) {
     (void)kalman_loop();
     const uint64_t kal_end_us = app_timebase_now_us();
     g_metrics_tracker.recordKalman(static_cast<uint32_t>(kal_end_us - kal_start_us));
+
+    /* Second SD drain point: halves the max latency between DMA completion
+     * checks (from one full loop iteration ~3-5ms down to ~1-2ms). */
+    g_sd_interface.tick();
 
     // ── FSM tick ────────────────────────────────────────────────────────
     // Runs after kalman_loop so that imu_liftoff_detected is fresh.

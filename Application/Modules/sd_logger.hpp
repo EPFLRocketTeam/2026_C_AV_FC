@@ -53,6 +53,9 @@ public:
     uint32_t writeFailCount()  const { return write_fail_count_; }
     uint32_t maxWriteTimeUs()  const { return max_write_time_us_; }
     uint32_t tickCount()       const { return tick_count_; }
+    uint32_t imuBatchCount()   const { return imu_batch_count_; }
+    uint32_t imuBatchFail()    const { return imu_batch_fail_; }
+    uint32_t imuBytesOk()      const { return imu_bytes_ok_; }
 
     // --- IEskfLogger interface ---
     void logState(const eskf::StateSnapshot& snapshot) override;
@@ -79,6 +82,9 @@ private:
     uint32_t write_fail_count_ = 0;
     uint32_t max_write_time_us_ = 0;
     uint32_t tick_count_ = 0;
+    uint32_t imu_batch_count_ = 0;
+    uint32_t imu_batch_fail_ = 0;
+    uint32_t imu_bytes_ok_ = 0;
 
     /// Write header + payload to Plume ring buffer.
     void writeRecord(SdLogRecordType type, const void* payload, uint16_t payload_len);
