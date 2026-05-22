@@ -91,12 +91,7 @@ void SdLogger::logEvent(eskf::EskfEventType event, uint64_t timestamp_us, float 
 void SdLogger::logGpsRejection(eskf::EskfEventType event, uint64_t timestamp_us,
                                const eskf::GpsRejectionInfo& info) {
     // Pack event type + info together
-    struct __attribute__((packed)) {
-        uint8_t event_type;
-        uint8_t pad[3];
-        eskf::GpsRejectionInfo info;
-        uint64_t timestamp_us;
-    } record;
+    SdLogGpsRejection record;
     record.event_type   = static_cast<uint8_t>(event);
     record.pad[0] = record.pad[1] = record.pad[2] = 0;
     record.info         = info;
@@ -106,12 +101,7 @@ void SdLogger::logGpsRejection(eskf::EskfEventType event, uint64_t timestamp_us,
 
 void SdLogger::logRewind(eskf::EskfEventType event, uint64_t timestamp_us,
                          const eskf::RewindInfo& info) {
-    struct __attribute__((packed)) {
-        uint8_t event_type;
-        uint8_t pad[3];
-        eskf::RewindInfo info;
-        uint64_t timestamp_us;
-    } record;
+    SdLogRewind record;
     record.event_type   = static_cast<uint8_t>(event);
     record.pad[0] = record.pad[1] = record.pad[2] = 0;
     record.info         = info;
