@@ -238,6 +238,7 @@ const size_t g_sd_arena_length = 256 * 1024;
  * of up to 250ms at 1 MB/s write rate without dropping records. */
 uint8_t g_sd_arena_buffer[g_sd_arena_length] __attribute__((section(".ram_d2_bss"), aligned(32)));
 bool g_sd_logging_active = false;  // Set after successful init+open
+bool g_buzzer_finished   = false;
 SdLogger g_sd_logger;
 
 // Full-rate raw sensor logging callbacks (forwarded to g_sd_logger)
@@ -658,6 +659,11 @@ extern "C" void app_super_loop_setup(void) {
 extern "C" void app_super_loop_iterate(void) {
 	//printf("Buzzer advancing ---------------------------------------------\r\n");
 	g_superloop.buzzer.tick(HAL_GetTick());
+    if (g_superloop.buzzer.is_finished() && !g_buzzer_finished) {
+        g_buzzer_finished = true;
+        // TODO register to kalman that it can now detect liftoff
+    }
+
     if (!g_superloop.ready) {
         return;
     }

@@ -49,13 +49,22 @@ inline void setup_module (size_t* durations, bool* is_on, int& offset, bool modu
 }
 
 /**
+ * Post
+ *  - 10 seconds off
+ */
+const size_t NB_BLOCKS_POST = 1;
+inline void setup_post (size_t* durations, bool* is_on, int& offset) {
+    push_buzzer(durations, is_on, offset, 10 * 1000, false);
+}
+
+/**
  * Compute the number of steps inside the buzzer.
  * 
  * @param N_els number of modules to show
  * @return the number of steps
  */
 constexpr size_t number_steps (size_t N_els) {
-    return NB_BLOCKS_PREAMBULE + N_els * NB_BLOCKS_PER_MODULE;
+    return NB_BLOCKS_PREAMBULE + N_els * NB_BLOCKS_PER_MODULE + NB_BLOCKS_POST;
 }
 
 template<size_t N_els>
@@ -93,6 +102,10 @@ public:
         }
     }
 
+    bool is_finished () {
+        return offset == number_steps(N_els);
+    }
+
     template<typename... Args>
     void start(ssize_t current_time, void (*enable_buzzer)(bool), Args... args) {
         static_assert(sizeof...(Args) == N_els, "Wrong number of args");
@@ -108,6 +121,8 @@ public:
         for (int i_el = 0; i_el < N_els; i_el ++) {
             setup_module(block_duration, block_on, offset, temp[i_el]);
         }
+
+        setup_post(block_duration, block_on, offset);
 
         /*printf("Number elements: %d\r\n", number_steps(N_els));
         for (int i = 0; i < number_steps(N_els); i ++) {
