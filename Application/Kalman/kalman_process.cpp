@@ -570,7 +570,8 @@ struct KalmanRuntime {
 				(acc_hold_result != flight_computer::ACC_HOLD_NOT_ELAPSED);
 		}
 
-		const bool set_catastrophic_failure = eskf_diverged;
+		const bool set_catastrophic_failure = false;  // ESKF divergence is NOT catastrophic;
+		                                               // apogee detector gracefully falls back to shadow filter.
 		bool set_apogee_detected = false;
 
 		if (!apogee_detected && liftoff_ms > 0) {
