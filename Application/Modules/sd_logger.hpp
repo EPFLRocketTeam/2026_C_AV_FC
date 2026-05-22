@@ -160,6 +160,9 @@ public:
     /// Log a raw UBX GPS packet (before decoding).
     void logUbxRaw(const uint8_t* ubx_packet, uint16_t length);
 
+    /// Notify that one SD tick (plume_tick) was executed.
+    void notifyTick() { ++tick_count_; }
+
     // --- IEskfLogger interface ---
     void logState(const eskf::StateSnapshot& snapshot) override;
     void logStateCritical(const eskf::StateSnapshot& snapshot) override;

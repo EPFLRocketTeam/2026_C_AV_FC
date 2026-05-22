@@ -190,6 +190,10 @@
     // dense multiplies, so N>1 is currently SLOWER. Needs sparse rewrite.
 #endif
 
+#ifndef ESKF_IMU_DYNAMICS_LOG_DECIMATION
+#define ESKF_IMU_DYNAMICS_LOG_DECIMATION 8  // Log IMU_DYNAMICS every Nth predict (~320 Hz)
+#endif
+
 #ifndef ESKF_PREDICT_MAX_DT_S
 #define ESKF_PREDICT_MAX_DT_S 0.1f // Clamp single predict step to 100ms
 #endif

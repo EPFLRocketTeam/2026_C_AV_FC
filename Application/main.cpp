@@ -701,6 +701,17 @@ extern "C" void app_super_loop_iterate(void) {
             uint32_t fire_count, solo_flush, stale_flush;
             kalman_get_group_stats(&fire_count, &solo_flush, &stale_flush);
 
+            // Compute per-interval deltas for cumulative counters
+            static uint32_t prev_fire_count = 0;
+            static uint32_t prev_solo_flush = 0;
+            static uint32_t prev_stale_flush = 0;
+            const uint32_t delta_fire  = fire_count  - prev_fire_count;
+            const uint32_t delta_solo  = solo_flush  - prev_solo_flush;
+            const uint32_t delta_stale = stale_flush - prev_stale_flush;
+            prev_fire_count  = fire_count;
+            prev_solo_flush  = solo_flush;
+            prev_stale_flush = stale_flush;
+
             SdLogAppMetrics m{};
             m.publish_ms      = now_ms;
             m.loop_avg_us     = g_metrics_tracker.loop_count > 0
@@ -719,9 +730,9 @@ extern "C" void app_super_loop_iterate(void) {
             m.sd_tick_time_us = g_metrics_tracker.sd_tick_last_us;
             m.sd_tick_max_us  = g_metrics_tracker.sd_tick_max_us;
             m.catchup_events  = 0;  // placeholder
-            m.stale_skip_count = stale_flush;
-            m.group_fire_count = fire_count;
-            m.solo_flush_count = solo_flush;
+            m.stale_skip_count = delta_stale;
+            m.group_fire_count = delta_fire;
+            m.solo_flush_count = delta_solo;
 
             g_sd_logger.logAppMetrics(m);
             g_metrics_tracker.reset();
@@ -732,6 +743,7 @@ extern "C" void app_super_loop_iterate(void) {
         g_sd_interface.tick();
         const uint32_t sd_us = static_cast<uint32_t>(app_timebase_now_us() - t0);
         g_metrics_tracker.recordSdTick(sd_us);
+        g_sd_logger.notifyTick();
     }
 
     const uint64_t iteration_start_us = app_timebase_now_us();
@@ -758,7 +770,10 @@ extern "C" void app_super_loop_iterate(void) {
     fake_gnss_inject(iteration_start_us);
 #endif
 
+    const uint64_t kal_start_us = app_timebase_now_us();
     (void)kalman_loop();
+    const uint64_t kal_end_us = app_timebase_now_us();
+    g_metrics_tracker.recordKalman(static_cast<uint32_t>(kal_end_us - kal_start_us));
 
     // ── FSM tick ────────────────────────────────────────────────────────
     // Runs after kalman_loop so that imu_liftoff_detected is fresh.

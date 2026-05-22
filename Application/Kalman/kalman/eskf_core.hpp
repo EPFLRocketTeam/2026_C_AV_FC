@@ -391,6 +391,7 @@ class EskfCore {
 
   // Sparse Updates
   uint32_t cov_decimation_counter_ = 0;      // Counter for P update
+  uint16_t imu_dynamics_log_counter_ = 0;    // Decimation for IMU_DYNAMICS logging
 #if ESKF_COVARIANCE_DECIMATION > 1
   eskf_scalar cov_decimation_dt_acc_s_ = 0;  // Accumulated dt for deferred covariance propagation
   eskf_scalar cov_decimation_F_acc_[kDimError][kDimError] = {{0}};

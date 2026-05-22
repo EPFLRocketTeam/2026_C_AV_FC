@@ -36,6 +36,7 @@ void EskfCore::reset() {
   prev_vel_.setZero();
   first_run_ = true;
   cov_decimation_counter_ = 0;
+  imu_dynamics_log_counter_ = 0;
 #if ESKF_COVARIANCE_DECIMATION > 1
   cov_decimation_dt_acc_s_ = 0;
   for (int i = 0; i < kDimError; ++i) {
@@ -75,6 +76,7 @@ void EskfCore::initialize(const State &initial_state,
   // Reset integration state
   resetIntegrationState();
   cov_decimation_counter_ = 0;
+  imu_dynamics_log_counter_ = 0;
 #if ESKF_COVARIANCE_DECIMATION > 1
   cov_decimation_dt_acc_s_ = 0;
   for (int i = 0; i < kDimError; ++i) {
@@ -420,21 +422,24 @@ void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
   // Update timestamp
   state_.timestamp_us = imu.timestamp_us;
 
-  // Log IMU integration debug snapshot (rate-limited by logger)
-  ImuDynamicsSnapshot imu_snap{};
-  for (int i = 0; i < 3; ++i) {
-    imu_snap.accel_body[i] = static_cast<float>(accel_body[i]);
-    imu_snap.gyro_body[i] = static_cast<float>(gyro_body[i]);
-    imu_snap.accel_ned[i] = static_cast<float>(accel_ned[i]);
-    imu_snap.gravity_ned[i] = static_cast<float>(g_ned[i]);
-    imu_snap.vel_inc_ned[i] = static_cast<float>(vel_inc_ned[i]);
+  // Log IMU integration debug snapshot (decimated)
+  if (++imu_dynamics_log_counter_ >= ESKF_IMU_DYNAMICS_LOG_DECIMATION) {
+    imu_dynamics_log_counter_ = 0;
+    ImuDynamicsSnapshot imu_snap{};
+    for (int i = 0; i < 3; ++i) {
+      imu_snap.accel_body[i] = static_cast<float>(accel_body[i]);
+      imu_snap.gyro_body[i] = static_cast<float>(gyro_body[i]);
+      imu_snap.accel_ned[i] = static_cast<float>(accel_ned[i]);
+      imu_snap.gravity_ned[i] = static_cast<float>(g_ned[i]);
+      imu_snap.vel_inc_ned[i] = static_cast<float>(vel_inc_ned[i]);
+    }
+    for (int i = 0; i < 4; ++i) {
+      imu_snap.q[i] = static_cast<float>(state_.q[i]);
+    }
+    imu_snap.dt_s = static_cast<float>(dt_used);
+    imu_snap.timestamp_us = state_.timestamp_us;
+    getEskfLogger().logImuDynamics(imu_snap);
   }
-  for (int i = 0; i < 4; ++i) {
-    imu_snap.q[i] = static_cast<float>(state_.q[i]);
-  }
-  imu_snap.dt_s = static_cast<float>(dt_used);
-  imu_snap.timestamp_us = state_.timestamp_us;
-  getEskfLogger().logImuDynamics(imu_snap);
 
   // Check for numerical issues
   checkNumericalHealth();
