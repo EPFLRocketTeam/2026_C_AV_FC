@@ -16,6 +16,8 @@
 #include "Application/Modules/baro_module.hpp"
 #include "Application/Modules/imu_modlue.hpp"
 
+extern bool g_liftoff_detection_allowed;
+
 extern "C" {
 #include <Application/Kalman/kalman_process.h>
 #include "Application/app_timebase.h"
@@ -479,7 +481,7 @@ struct KalmanRuntime {
 			estimator.processImuBatch(batch);
 
 			// ── Feed liftoff detector with each sample in the slice ─────
-			if (!liftoff_detector.isDetected()) {
+			if (!liftoff_detector.isDetected() && g_liftoff_detection_allowed) {
 				const bool gate = estimator.railShadow().isGateOpen();
 				const bool was_armed = liftoff_detector.isArmed();
 				for (size_t i = 0; i < slice_count; ++i) {

@@ -215,7 +215,7 @@ struct eskf::RailShadowSnapshot:
   int flags
 
 struct SdLogAppMetrics:
-    publish_ms
+    publish_us
     loop_avg_us
     loop_min_us
     loop_max_us
@@ -248,7 +248,7 @@ struct SdLogBootMarker:
     int baro_count
     int gps_ok
     int sd_ok
-    boot_time_ms
+    boot_time_us
     reset_reason
 
 struct SdLogBaroSample:

@@ -68,7 +68,9 @@ void sd_pre_init(void)
     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
     /* ---- NVIC for DMA / interrupt-driven writes ---- */
-    HAL_NVIC_SetPriority(SDMMC1_IRQn, 2, 0);
+    /* Priority 1 (was 2): reduce ISR preemption that causes 100ms+ DMA
+     * transfer outliers.  Must remain below SPI DMA priority (0). */
+    HAL_NVIC_SetPriority(SDMMC1_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(SDMMC1_IRQn);
 }
 

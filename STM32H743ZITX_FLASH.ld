@@ -162,9 +162,11 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM_D1
 
-  /* RAM_D2 BSS — DMA-accessible SRAM for large buffers (SDMMC arena).
-   * SDMMC1 IDMA can access RAM_D2 via AXI-to-AHB bridge.
-   * Non-cacheable by default (no MPU region) — no cache maintenance needed.
+  /* RAM_D2 BSS — large ring-buffer storage for the Plume SD arena.
+   * NOTE: SDMMC1 IDMA *cannot* directly access RAM_D2 — it can only
+   * reach AXI SRAM (RAM_D1).  The Plume driver uses a bounce buffer
+   * in .bss (RAM_D1) and memcpy's data here before each DMA write.
+   * Non-cacheable by default (no MPU region).
    * Startup code must zero this section (see _sram_d2_bss / _eram_d2_bss). */
   .ram_d2_bss (NOLOAD) :
   {

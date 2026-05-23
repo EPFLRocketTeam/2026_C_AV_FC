@@ -2,6 +2,7 @@
 #include "plume_driver.hpp"
 #include <stdio.h>
 #include <string.h>
+#include "app_timebase.h"
 
 extern "C" {
     #include "plume/writer.h"
@@ -9,17 +10,48 @@ extern "C" {
     #include "plume/const.h"
 };
 
+/* ── DMA bounce buffer ──────────────────────────────────────────────────── */
+/* SDMMC1 IDMA can only access AXI SRAM (RAM_D1, 0x24000000).
+ * The Plume arena lives in RAM_D2 (0x30000000) which IDMA cannot reach.
+ * We memcpy into this bounce buffer before every DMA write.
+ * Size = PLUME_MAX_BATCH_SIZE blocks × 512 B = 32 KB.                     */
+static uint8_t s_dma_bounce[PLUME_MAX_BATCH_SIZE * 512]
+    __attribute__((aligned(32)));
+
 /* ── DMA completion flags (set from IRQ context) ─────────────────────────── */
 volatile uint8_t g_sd_dma_complete = 1;   /* 1 = idle/done */
 volatile uint8_t g_sd_dma_error    = 0;
 
+/* ── SD timing instrumentation ──────────────────────────────────────────── */
+static SdTimingStats s_sd_timing = {};
+
+/* Public accessor for printing from main.cpp */
+SdTimingStats sd_timing_snapshot() {
+    SdTimingStats snap = s_sd_timing;
+    /* Reset for next window */
+    s_sd_timing.dma_count = 0;
+    s_sd_timing.dma_error_count = 0;
+    s_sd_timing.max_xfer_us = 0;
+    s_sd_timing.max_prog_us = 0;
+    s_sd_timing.max_cycle_us = 0;
+    s_sd_timing.sum_cycle_us = 0;
+    s_sd_timing.total_blocks = 0;
+    s_sd_timing.min_batch = 0xFFFFFFFF;
+    s_sd_timing.max_batch = 0;
+    s_sd_timing.last_error_code = 0;
+    return snap;
+}
+
 extern "C" void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd) {
     (void)hsd;
+    s_sd_timing.dma_cb_us = app_timebase_now_us();
     g_sd_dma_complete = 1;
 }
 
 extern "C" void HAL_SD_ErrorCallback(SD_HandleTypeDef *hsd) {
-    (void)hsd;
+    s_sd_timing.dma_cb_us = app_timebase_now_us();
+    s_sd_timing.dma_error_count++;
+    s_sd_timing.last_error_code = hsd->ErrorCode;
     g_sd_dma_error    = 1;
     g_sd_dma_complete = 1;       /* unblock the ready check */
 }
@@ -68,15 +100,25 @@ uint8_t plume_stm32_write_block (SD_HandleTypeDef* hsd, struct plume_context* co
         }
     }
 
+    /* Copy arena data (RAM_D2) into AXI SRAM bounce buffer for IDMA. */
+    memcpy(s_dma_bounce, buffer, 512);
+
     /* Flush D-cache so IDMA reads committed data from AXI SRAM. */
-    SCB_CleanDCache_by_Addr((uint32_t*)buffer, 512);
+    SCB_CleanDCache_by_Addr((uint32_t*)s_dma_bounce, 512);
+
+    s_sd_timing.last_batch_size = 1;
+    s_sd_timing.total_blocks += 1;
+    if (1 < s_sd_timing.min_batch) s_sd_timing.min_batch = 1;
+    if (1 > s_sd_timing.max_batch) s_sd_timing.max_batch = 1;
 
     g_sd_dma_complete = 0;
     g_sd_dma_error    = 0;
+    s_sd_timing.dma_start_us = app_timebase_now_us();
 
-    HAL_StatusTypeDef status = HAL_SD_WriteBlocks_DMA(hsd, (uint8_t*)buffer, (uint32_t)block_id, 1);
+    HAL_StatusTypeDef status = HAL_SD_WriteBlocks_DMA(hsd, s_dma_bounce, (uint32_t)block_id, 1);
     if (status != HAL_OK) {
         g_sd_dma_complete = 1;
+        s_sd_timing.dma_start_us = 0;
         return PLUME_OK_RETRY;
     }
     return PLUME_OK_SENT_DMA;
@@ -92,22 +134,37 @@ uint8_t plume_stm32_write_blocks (SD_HandleTypeDef* hsd, struct plume_context* c
         }
     }
 
-    /* CMD23 (SET_BLOCK_COUNT): Pre-erase optimization.
-     * Tells the card how many blocks will be written, allowing it to
-     * pre-erase flash pages before programming. Reduces internal GC pauses. */
-    if (num_blocks > 1) {
-        (void)SDMMC_CmdBlockCount(hsd->Instance, num_blocks);
+    /* NOTE: CMD23 (SET_BLOCK_COUNT) removed intentionally.
+     * The HAL uses open-ended CMD25 + CMD12 (STOP_TRANSMISSION) to end
+     * multi-block writes.  Sending CMD23 before HAL_SD_WriteBlocks_DMA()
+     * causes the card to auto-stop, so the HAL's subsequent CMD12 gets
+     * CCRCFAIL/CTIMEOUT → false ErrorCallback on every single write. */
+
+    /* Clamp to bounce buffer capacity. */
+    if (num_blocks > PLUME_MAX_BATCH_SIZE) {
+        num_blocks = PLUME_MAX_BATCH_SIZE;
     }
 
+    /* Copy arena data (RAM_D2) into AXI SRAM bounce buffer for IDMA. */
+    memcpy(s_dma_bounce, buffer, num_blocks * 512);
+
     /* Flush D-cache for the entire batch so IDMA sees committed data. */
-    SCB_CleanDCache_by_Addr((uint32_t*)buffer, num_blocks * 512);
+    SCB_CleanDCache_by_Addr((uint32_t*)s_dma_bounce, num_blocks * 512);
+
+    /* ── Record batch size and DMA start timestamp ── */
+    s_sd_timing.last_batch_size = num_blocks;
+    s_sd_timing.total_blocks += num_blocks;
+    if (num_blocks < s_sd_timing.min_batch) s_sd_timing.min_batch = num_blocks;
+    if (num_blocks > s_sd_timing.max_batch) s_sd_timing.max_batch = num_blocks;
 
     g_sd_dma_complete = 0;
     g_sd_dma_error    = 0;
+    s_sd_timing.dma_start_us = app_timebase_now_us();
 
-    HAL_StatusTypeDef status = HAL_SD_WriteBlocks_DMA(hsd, (uint8_t*)buffer, (uint32_t)block_id, num_blocks);
+    HAL_StatusTypeDef status = HAL_SD_WriteBlocks_DMA(hsd, s_dma_bounce, (uint32_t)block_id, num_blocks);
     if (status != HAL_OK) {
         g_sd_dma_complete = 1;
+        s_sd_timing.dma_start_us = 0;   /* don't record broken DMA */
         return PLUME_OK_RETRY;
     }
     return PLUME_OK_SENT_DMA;
@@ -121,6 +178,24 @@ uint8_t plume_stm32_write_block_ready (SD_HandleTypeDef* hsd, struct plume_conte
     if (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {
         return 0;
     }
+
+    /* ── Record timing stats ── */
+    uint64_t now = app_timebase_now_us();
+    if (s_sd_timing.dma_start_us > 0) {
+        uint32_t xfer = (uint32_t)(s_sd_timing.dma_cb_us - s_sd_timing.dma_start_us);
+        uint32_t prog = (uint32_t)(now - s_sd_timing.dma_cb_us);
+        uint32_t cycle = (uint32_t)(now - s_sd_timing.dma_start_us);
+        if (xfer > s_sd_timing.max_xfer_us) s_sd_timing.max_xfer_us = xfer;
+        if (prog > s_sd_timing.max_prog_us) s_sd_timing.max_prog_us = prog;
+        if (cycle > s_sd_timing.max_cycle_us) s_sd_timing.max_cycle_us = cycle;
+        s_sd_timing.sum_cycle_us += cycle;
+        s_sd_timing.dma_count++;
+    }
+
+    if (g_sd_dma_error) {
+        g_sd_dma_error = 0;   /* consume the error — caller will see data not written */
+    }
+
     return 1;
 }
 
@@ -248,6 +323,7 @@ void SDCardInterface::endTransaction () {
     }
 
     inTransaction = false;
+    lastTxFailed_ = transactionFailed;
 
     if (transactionFailed) {
         plume_rollback(&context, &snapshot);
