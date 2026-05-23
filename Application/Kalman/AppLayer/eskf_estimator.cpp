@@ -841,7 +841,7 @@ void EskfEstimator::onLiftoff(uint32_t liftoff_ms) {
 #if KALMAN_DEBUG_PRINT
   {
     // Detailed liftoff/rewind diagnostic
-    const auto& f = filter_;
+    auto& f = filter_;
     const uint64_t pushSeq = f.imuPushSeq();
     const uint64_t readSeq = f.imuReadSeq();
     const size_t pending = static_cast<size_t>(pushSeq - readSeq);

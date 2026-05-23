@@ -1149,12 +1149,16 @@ size_t EskfYieldable::binarySearchBuffer(const T* buffer, size_t count,
 // Peek Next Timestamp
 // ============================================================
 
-uint64_t EskfYieldable::peekNextImuTimestamp() const {
+uint64_t EskfYieldable::peekNextImuTimestamp() {
   if (imu_read_seq_ >= imu_push_seq_) return UINT64_MAX;
   
-  // Check for overwrite: entry may have been overwritten since we recorded read_seq
+  // Check for overwrite: entry may have been overwritten since we recorded read_seq.
+  // Advance read pointer past lost entries so catchUp can continue processing.
   if (imu_push_seq_ - imu_read_seq_ > ESKF_IMU_BUFFER_SIZE) {
-    return UINT64_MAX;  // Will be fixed up in catchUp via drop detection
+    const uint64_t lost = (imu_push_seq_ - imu_read_seq_) - ESKF_IMU_BUFFER_SIZE;
+    stats_.imu_drops += static_cast<uint32_t>(lost);
+    imu_read_seq_ = imu_push_seq_ - ESKF_IMU_BUFFER_SIZE;
+    if (imu_read_seq_ >= imu_push_seq_) return UINT64_MAX;
   }
   
   const size_t slot = imu_read_seq_ % ESKF_IMU_BUFFER_SIZE;
