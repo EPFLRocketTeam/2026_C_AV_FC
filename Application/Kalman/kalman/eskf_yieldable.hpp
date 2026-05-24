@@ -179,6 +179,9 @@ struct RewindStats {
   // Stale-entry protection
   uint32_t stale_skips = 0;           ///< Stale ring-buffer entries skipped by catchUp
   
+  // Processing counters
+  uint32_t baro_corrections = 0;      ///< Total baro corrections applied
+  
   void reset() { *this = RewindStats{}; }
 };
 

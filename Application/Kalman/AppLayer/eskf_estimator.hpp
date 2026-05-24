@@ -114,6 +114,9 @@ public:
   /// Total number of catchUp budget yields since last reset.
   uint32_t catchupYieldCount() const { return catchup_yield_count_; }
 
+  /// ESKF internal timestamp (how far the filter has processed).
+  uint64_t kalmanTimestamp() const { return filter_.kalmanTimestamp(); }
+
   /// Last catchUp execution duration (us).
   uint32_t lastCatchupDurationUs() const { return filter_.lastCatchUpDurationUs(); }
 

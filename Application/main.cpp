@@ -726,12 +726,21 @@ extern "C" void app_super_loop_iterate(void) {
             static uint32_t prev_fire_count = 0;
             static uint32_t prev_solo_flush = 0;
             static uint32_t prev_stale_flush = 0;
+            static uint32_t prev_total_events = 0;
+            static uint32_t prev_catchup_yields = 0;
+            static uint32_t prev_baro_corrections = 0;
             const uint32_t delta_fire  = fire_count  - prev_fire_count;
             const uint32_t delta_solo  = solo_flush  - prev_solo_flush;
             const uint32_t delta_stale = stale_flush - prev_stale_flush;
+            const uint32_t delta_events = kh.total_events_processed - prev_total_events;
+            const uint32_t delta_budget_yields = kh.catchup_budget_yields - prev_catchup_yields;
+            const uint32_t delta_baro = kh.baro_corrections - prev_baro_corrections;
             prev_fire_count  = fire_count;
             prev_solo_flush  = solo_flush;
             prev_stale_flush = stale_flush;
+            prev_total_events = kh.total_events_processed;
+            prev_catchup_yields = kh.catchup_budget_yields;
+            prev_baro_corrections = kh.baro_corrections;
 
             SdLogAppMetrics m{};
             m.publish_us      = (uint32_t)app_timebase_now_us();
@@ -747,13 +756,22 @@ extern "C" void app_super_loop_iterate(void) {
             m.kalman_avg_us   = g_metrics_tracker.kalman_count > 0
                                     ? g_metrics_tracker.kalman_sum_us / g_metrics_tracker.kalman_count
                                     : 0;
-            m.kalman_max_us   = kh.max_kalman_loop_us;
+            m.kalman_max_us   = g_metrics_tracker.kalman_max_us;
             m.sd_tick_time_us = g_metrics_tracker.sd_tick_last_us;
             m.sd_tick_max_us  = g_metrics_tracker.sd_tick_max_us;
-            m.catchup_events  = 0;  // placeholder
+            m.catchup_events  = delta_events;
             m.stale_skip_count = delta_stale;
             m.group_fire_count = delta_fire;
             m.solo_flush_count = delta_solo;
+            // New diagnostic fields
+            m.catchup_budget_yields = delta_budget_yields;
+            m.kalman_behind_us      = kh.kalman_behind_us;
+            m.baro_corrections      = delta_baro;
+            m.imu_fifo_max_samples  = 0;  // TODO: track from IMU driver
+            for (size_t i = 0; i < 4; ++i) {
+                if (kh.imu_ring_hwm[i] > m.imu_fifo_max_samples)
+                    m.imu_fifo_max_samples = kh.imu_ring_hwm[i];
+            }
 
             g_sd_logger.logAppMetrics(m);
             g_metrics_tracker.reset();

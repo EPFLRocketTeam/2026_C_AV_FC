@@ -117,17 +117,22 @@ struct SdLogAppMetrics {
     uint32_t loop_min_us;        // Min loop duration this interval
     uint32_t loop_max_us;        // Max loop duration this interval
     uint32_t loop_count;         // Loop iterations this interval
-    uint32_t imu_batches;        // IMU batches processed (all sources)
-    uint32_t imu_drops;          // IMU ring overflows
+    uint32_t imu_batches;        // IMU batches processed (all sources, cumulative)
+    uint32_t imu_drops;          // IMU ring overflows (cumulative)
     uint32_t kalman_time_us;     // Last Kalman tick wall time
-    uint32_t kalman_avg_us;      // Average Kalman tick time
-    uint32_t kalman_max_us;      // Max Kalman tick time
+    uint32_t kalman_avg_us;      // Average Kalman tick time this interval
+    uint32_t kalman_max_us;      // Max Kalman tick time this interval
     uint32_t sd_tick_time_us;    // Last SD tick wall time
-    uint32_t sd_tick_max_us;     // Max SD tick time
-    uint32_t catchup_events;     // ESKF catchup events processed
-    uint32_t stale_skip_count;   // ESKF stale-skips
-    uint32_t group_fire_count;   // IMU group fires
-    uint32_t solo_flush_count;   // IMU solo flushes
+    uint32_t sd_tick_max_us;     // Max SD tick time this interval
+    uint32_t catchup_events;     // ESKF events processed this interval
+    uint32_t stale_skip_count;   // ESKF stale-skips this interval
+    uint32_t group_fire_count;   // IMU group fires this interval
+    uint32_t solo_flush_count;   // IMU solo flushes this interval
+    // --- New diagnostic fields ---
+    uint32_t catchup_budget_yields; // Times catchUp hit time budget this interval
+    uint32_t kalman_behind_us;     // ESKF internal time behind wall clock (us)
+    uint32_t baro_corrections;     // Baro corrections applied this interval
+    uint32_t imu_fifo_max_samples; // Max IMU FIFO depth seen this interval (any sensor)
 };
 #pragma pack(pop)
 

@@ -638,6 +638,14 @@ struct KalmanRuntime {
 		health.altitude_valid = output.altitude_valid;
 		health.velocity_valid = output.velocity_valid;
 		health.yieldable_imu_drops = estimator.rewindStats().imu_drops;
+		health.catchup_yield_count = estimator.catchupYieldCount();
+		health.catchup_budget_yields = estimator.rewindStats().catchup_budget_yields;
+		health.total_events_processed = static_cast<uint32_t>(estimator.totalCatchupEventsProcessed());
+		health.baro_corrections = estimator.rewindStats().baro_corrections;
+		// Compute ESKF lag: wall clock minus ESKF internal timestamp
+		const uint64_t now = app_timebase_now_us();
+		const uint64_t kal_ts = estimator.kalmanTimestamp();
+		health.kalman_behind_us = (now > kal_ts) ? static_cast<uint32_t>(now - kal_ts) : 0;
 	}
 
 	void ingestAidingFromStore() {

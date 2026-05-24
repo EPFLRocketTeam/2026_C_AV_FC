@@ -1407,6 +1407,7 @@ void EskfYieldable::processNextBaro() {
     if (in_rewind_) {
       rewind_baro_replayed_++;
     }
+    stats_.baro_corrections++;
   }
   
   baro_read_idx_++;
