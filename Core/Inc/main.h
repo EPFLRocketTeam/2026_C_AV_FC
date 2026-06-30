@@ -59,6 +59,12 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define BMP_CS2_Pin GPIO_PIN_4
 #define BMP_CS2_GPIO_Port GPIOC
+#define GPIO_RFM_RX_RST_Pin GPIO_PIN_0
+#define GPIO_RFM_RX_RST_GPIO_Port GPIOB
+#define GPIO_RFM_RX_INT0_Pin GPIO_PIN_1
+#define GPIO_RFM_RX_INT0_GPIO_Port GPIOB
+#define SPI_RFM_RX_CS_Pin GPIO_PIN_2
+#define SPI_RFM_RX_CS_GPIO_Port GPIOB
 #define BMP_CS1_Pin GPIO_PIN_11
 #define BMP_CS1_GPIO_Port GPIOF
 #define BMP_CS4_Pin GPIO_PIN_1
