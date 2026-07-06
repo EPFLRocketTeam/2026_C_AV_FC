@@ -30,6 +30,7 @@
 #include "../../Application/Tests/sd_benchmark.h"
 #include "../../Drivers/Buzzer/Tests/Hardware/buzzer_manual_test.h"
 #include "../../Drivers/SX127X/Tests/Hardware/sx127x_manual_test.h"
+#include "../../Drivers/SX127X/Tests/Hardware/sx127x_capsule_manual_test.h"
 #include "../../Application/Modules/sd_hardware_init.h"
 #include "SX127X.h"
 /* USER CODE END Includes */
@@ -90,8 +91,15 @@ static void MX_SPI1_Init(void);
 
 #ifdef OUTPUT_LOG
 int _write(int file, char *ptr, int len) {
-    // Wait until USB is ready
-    while (CDC_Transmit_HS((uint8_t*)ptr, len) == USBD_BUSY);
+    // Wait until USB is ready, but never wedge: if the CDC endpoint stays
+    // busy (host not draining, missed completion), drop the output instead
+    // of spinning forever.
+    uint32_t start = HAL_GetTick();
+    while (CDC_Transmit_HS((uint8_t*)ptr, len) == USBD_BUSY) {
+        if (HAL_GetTick() - start > 100) {
+            break;
+        }
+    }
     return len;
 }
 #endif
@@ -158,7 +166,8 @@ int main(void)
    * with the PC2 analog switch closed. Force it closed so reads aren't dead. */
   __HAL_RCC_SYSCFG_CLK_ENABLE();
   HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC2, SYSCFG_SWITCH_PC2_CLOSE);
-  sx127x_manual_test();
+  // sx127x_manual_test();
+  sx127x_capsule_manual_test();
   // app_super_loop_setup();
 
   /* USER CODE END 2 */

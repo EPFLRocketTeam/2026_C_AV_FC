@@ -87,6 +87,7 @@
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.option.includepaths.1889995618" name="Include paths (-I)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.option.includepaths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="../Core/Inc"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/Capsule/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/SX127X}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/Plume/2026_C_AV_PLUME/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/STM32HAL}&quot;"/>
@@ -130,11 +131,11 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="ThirdParty"/>
 						<entry excluding="Tests" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="Application"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
-						<entry excluding="STM32HAL/Interfaces|Plume/2026_C_AV_PLUME/src/plume/cli|Plume/2026_C_AV_PLUME/src/plume/drivers/unix.c|Plume/2026_C_AV_PLUME/tests|STM32HAL/Simulations|STM32HAL/Tests|UBX_GPS/Tests/test_gps.cpp|BMP390/Tests/Mock|InvIMU/Impl/InvIMU_mock.cpp|InvIMU/Tests/Mock" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="Drivers"/>
+						<entry excluding="Capsule/src/basicExample.cpp|STM32HAL/Interfaces|Plume/2026_C_AV_PLUME/src/plume/cli|Plume/2026_C_AV_PLUME/src/plume/drivers/unix.c|Plume/2026_C_AV_PLUME/tests|STM32HAL/Simulations|STM32HAL/Tests|UBX_GPS/Tests/test_gps.cpp|BMP390/Tests/Mock|InvIMU/Impl/InvIMU_mock.cpp|InvIMU/Tests/Mock" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="Drivers"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="ThirdParty"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="USB_DEVICE"/>
 					</sourceEntries>
 				</configuration>
@@ -203,6 +204,7 @@
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.option.includepaths.1259698417" name="Include paths (-I)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.option.includepaths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="../Core/Inc"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/Capsule/src}&quot;"/>
 									<listOptionValue builtIn="false" value="../Drivers/STM32H7xx_HAL_Driver/Inc"/>
 									<listOptionValue builtIn="false" value="../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy"/>
 									<listOptionValue builtIn="false" value="../Drivers/CMSIS/Device/ST/STM32H7xx/Include"/>
@@ -235,7 +237,7 @@
 					</folderInfo>
 					<sourceEntries>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
-						<entry excluding="STM32HAL/Interfaces|Plume/2026_C_AV_PLUME/src/plume/cli|Plume/2026_C_AV_PLUME/src/plume/drivers/unix.c|Plume/2026_C_AV_PLUME/tests|STM32HAL/Simulations|STM32HAL/Tests|UBX_GPS/Tests/test_gps.cpp|BMP390/Tests/Mock|InvIMU/Impl/InvIMU_mock.cpp|InvIMU/Tests/Mock" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
+						<entry excluding="Capsule/src/basicExample.cpp|STM32HAL/Interfaces|Plume/2026_C_AV_PLUME/src/plume/cli|Plume/2026_C_AV_PLUME/src/plume/drivers/unix.c|Plume/2026_C_AV_PLUME/tests|STM32HAL/Simulations|STM32HAL/Tests|UBX_GPS/Tests/test_gps.cpp|BMP390/Tests/Mock|InvIMU/Impl/InvIMU_mock.cpp|InvIMU/Tests/Mock" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="USB_DEVICE"/>
 					</sourceEntries>
