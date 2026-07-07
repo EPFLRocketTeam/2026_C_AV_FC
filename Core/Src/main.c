@@ -31,6 +31,8 @@
 #include "../../Drivers/Buzzer/Tests/Hardware/buzzer_manual_test.h"
 #include "../../Drivers/SX127X/Tests/Hardware/sx127x_manual_test.h"
 #include "../../Drivers/SX127X/Tests/Hardware/sx127x_capsule_manual_test.h"
+#include "../../Drivers/TMP1075/Tests/tmp1075_manual_test.h"
+#include "../../Drivers/ADXL375/Tests/adxl375_manual_test.h"
 #include "../../Application/Modules/sd_hardware_init.h"
 #include "SX127X.h"
 /* USER CODE END Includes */
@@ -58,6 +60,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 
+I2C_HandleTypeDef hi2c4;
+
 SD_HandleTypeDef hsd1;
 
 SPI_HandleTypeDef hspi1;
@@ -82,6 +86,7 @@ static void MX_USART6_UART_Init(void);
 static void MX_SDMMC1_SD_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_I2C4_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -158,6 +163,7 @@ int main(void)
   // MX_SDMMC1_SD_Init();
   MX_SPI2_Init();
   MX_SPI1_Init();
+  MX_I2C4_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_Delay(5000); // Small delay to let USB enumerate
@@ -167,7 +173,9 @@ int main(void)
   __HAL_RCC_SYSCFG_CLK_ENABLE();
   HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC2, SYSCFG_SWITCH_PC2_CLOSE);
   // sx127x_manual_test();
-  sx127x_capsule_manual_test();
+  // sx127x_capsule_manual_test();
+  TMP1075_ManualTest_Run();
+  ADXL375_ManualTest_Run();
   // app_super_loop_setup();
 
   /* USER CODE END 2 */
@@ -292,6 +300,54 @@ static void MX_SDMMC1_SD_Init(void)
   /* USER CODE BEGIN SDMMC1_Init 2 */
 
   /* USER CODE END SDMMC1_Init 2 */
+
+}
+
+/**
+  * @brief I2C4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C4_Init(void)
+{
+
+  /* USER CODE BEGIN I2C4_Init 0 */
+
+  /* USER CODE END I2C4_Init 0 */
+
+  /* USER CODE BEGIN I2C4_Init 1 */
+
+  /* USER CODE END I2C4_Init 1 */
+  hi2c4.Instance = I2C4;
+  hi2c4.Init.Timing = 0x00B03FDB;
+  hi2c4.Init.OwnAddress1 = 0;
+  hi2c4.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c4.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c4.Init.OwnAddress2 = 0;
+  hi2c4.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c4.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c4.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c4, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c4, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C4_Init 2 */
+
+  /* USER CODE END I2C4_Init 2 */
 
 }
 
