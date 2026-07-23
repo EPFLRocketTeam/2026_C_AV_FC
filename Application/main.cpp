@@ -498,6 +498,7 @@ extern "C" uint32_t app_baro_sensor_status_flags(uint8_t sensor_index) {
     return g_baro_status_flags[sensor_index];
 }
 
+
 // ── Standalone raw SPI baro test ──────────────────────────────────────────────
 // Bypasses the Bosch SDK and baro module entirely. Just does a raw SPI chip ID
 // read (reg 0x00) for each of the 4 BMP390 sensors.

@@ -34,6 +34,7 @@
 #include "../../Drivers/TMP1075/Tests/tmp1075_manual_test.h"
 #include "../../Drivers/ADXL375/Tests/adxl375_manual_test.h"
 #include "../../Application/Modules/sd_hardware_init.h"
+#include "../../Application/FlightControl/prc_can.hpp"
 #include "SX127X.h"
 /* USER CODE END Includes */
 
@@ -51,6 +52,10 @@
  * (or link to the default stub that discards output).
  */
 #define OUTPUT_LOG
+
+/*  CAN bus test between 2026_C_AV_PRC and 2026_C_AV_FC (PD0=RX, PD1=TX on both boards).  */
+#define CANBUS_TEST_TX_ID   0x101u   /*  FC -> PRC  */
+#define CANBUS_TEST_RX_ID   0x100u   /*  PRC -> FC  */
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,6 +65,9 @@
 
 /* Private variables ---------------------------------------------------------*/
 
+FDCAN_HandleTypeDef hfdcan1;
+
+I2C_HandleTypeDef hi2c2;
 I2C_HandleTypeDef hi2c4;
 
 SD_HandleTypeDef hsd1;
@@ -72,7 +80,10 @@ SPI_HandleTypeDef hspi5;
 UART_HandleTypeDef huart6;
 
 /* USER CODE BEGIN PV */
-
+static uint8_t flag = 0;
+volatile static uint32_t status = 0;
+static uint8_t tab[255];
+static uint8_t addr = 0x08;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -87,6 +98,8 @@ static void MX_SDMMC1_SD_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_I2C4_Init(void);
+static void MX_I2C2_Init(void);
+static void MX_FDCAN1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -160,23 +173,27 @@ int main(void)
   MX_SPI4_Init();
   MX_SPI5_Init();
   MX_USART6_UART_Init();
-  // MX_SDMMC1_SD_Init();
+  //MX_SDMMC1_SD_Init();
   MX_SPI2_Init();
   MX_SPI1_Init();
   MX_I2C4_Init();
+  MX_I2C2_Init();
+  MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_Delay(5000); // Small delay to let USB enumerate
   printf("USB on\r\n");
   /* SPI2_MISO is on PC2_C (analog-direct dual pad). The digital path only works
    * with the PC2 analog switch closed. Force it closed so reads aren't dead. */
-  __HAL_RCC_SYSCFG_CLK_ENABLE();
-  HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC2, SYSCFG_SWITCH_PC2_CLOSE);
+  //__HAL_RCC_SYSCFG_CLK_ENABLE();
+  //HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC2, SYSCFG_SWITCH_PC2_CLOSE);
   // sx127x_manual_test();
   // sx127x_capsule_manual_test();
-  TMP1075_ManualTest_Run();
-  ADXL375_ManualTest_Run();
-  // app_super_loop_setup();
+  //TMP1075_ManualTest_Run();
+  //ADXL375_ManualTest_Run();
+
+
+  //app_super_loop_setup();
 
   /* USER CODE END 2 */
 
@@ -187,9 +204,98 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HAL_Delay(1500);
-	  printf("In loop \r\n");
-	  // app_super_loop_iterate();
+	  //HAL_Delay(1000);
+
+	  /*
+	  	  printf("flag: %i\r\n", flag);
+	  	  if (!flag) {
+	  		  printf("Scanning the i2c: \r\n");
+	  		  for (addr = 0x39; addr < 0x78; ++addr) {
+	  			 status = HAL_I2C_IsDeviceReady(&hi2c2, addr << 1, 1, 10);
+	  			  if ( status == HAL_OK) {
+	  				  printf("Found device at 0x%02X\r\n", addr);
+	  			  }
+	  		  }
+	  		  flag = 1;
+	  		  printf("flag: %i\r\n", flag);
+	  	  }
+	  	  printf("loop\r\n");*/
+	  //printf("In loop \r\n");
+	  //app_super_loop_iterate();
+
+	  {
+	    /*  Valve command test: ID=0x211, DLC=2, byte0 selects valve+action,
+	     *  byte1 is a fixed magic byte. Cycles open Sol1 -> open Sol2 ->
+	     *  close Sol1 -> close Sol2 -> repeat, one step every 5 s. Left here
+	     *  (disabled) for manual bench testing; superseded by real telemetry
+	     *  decode below -- TX to PRC isn't wired up for real commands yet,
+	     *  see Application/FlightControl/prc_can.hpp.
+	    static const uint8_t kValveCmdSequence[] = { 0xA1, 0xB1, 0xA0, 0xB0 };
+	    static uint8_t step = 0;
+	    static uint32_t lastSendTick = 0;
+	    const uint32_t kSendPeriodMs = 5000;
+
+	    if (HAL_GetTick() - lastSendTick >= kSendPeriodMs)
+	    {
+	      lastSendTick = HAL_GetTick();
+
+	      FDCAN_TxHeaderTypeDef txHeader;
+	      txHeader.Identifier          = 0x211;
+	      txHeader.IdType              = FDCAN_STANDARD_ID;
+	      txHeader.TxFrameType         = FDCAN_DATA_FRAME;
+	      txHeader.DataLength          = FDCAN_DLC_BYTES_2;
+	      txHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+	      txHeader.BitRateSwitch       = FDCAN_BRS_OFF;
+	      txHeader.FDFormat            = FDCAN_CLASSIC_CAN;
+	      txHeader.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
+	      txHeader.MessageMarker       = 0;
+
+	      const uint8_t cmdByte = kValveCmdSequence[step];
+	      const uint8_t magicByte = 0xF1;
+
+	      //  HAL_FDCAN_AddMessageToTxFifoQ always word-copies 4 bytes regardless
+	      //  of DataLength, so the buffer must be padded to a 4-byte boundary
+	      //  even though only 2 bytes are actually put on the wire (per DLC).
+	      uint8_t txData[4] = { cmdByte, magicByte, 0, 0 };
+	      if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &txHeader, txData) == HAL_OK)
+	      {
+	        printf("[CAN] TX id=0x211 data=[0x%02X,0x%02X]\r\n", cmdByte, magicByte);
+	        step = (step + 1) % (sizeof(kValveCmdSequence) / sizeof(kValveCmdSequence[0]));
+	      }
+	      else
+	      {
+	        printf("[CAN] TX failed\r\n");
+	      }
+	    }
+	    */
+
+	    /*  Drain the whole FIFO each iteration -- popping only one message
+	     *  per loop let the queue back up (self-reception + peer traffic
+	     *  arriving faster than we drained it), so we kept reading stale
+	     *  entries instead of the newest one. Each frame is decoded via
+	     *  prc_intranet (see Application/FlightControl/prc_can.cpp); ids it
+	     *  doesn't recognize are silently ignored. */
+	    while (HAL_FDCAN_GetRxFifoFillLevel(&hfdcan1, FDCAN_RX_FIFO0) > 0)
+	    {
+	      FDCAN_RxHeaderTypeDef rxHeader;
+	      uint8_t rxData[8] = {0};
+	      if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &rxHeader, rxData) == HAL_OK)
+	      {
+	        Fc_Can_ProcessRxMessage(rxHeader.Identifier, rxData, rxHeader.DataLength);
+	      }
+	      else
+	      {
+	        break;
+	      }
+	    }
+	  }
+
+	  //printf("Pyros Test \r\n");
+	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_14);
+	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_15);
+	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_0);
+	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_1);
+	  printf("End\r\n");
   }
   /* USER CODE END 3 */
 }
@@ -264,12 +370,203 @@ void PeriphCommonClock_Config(void)
 
   /** Initializes the peripherals clock
   */
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_CKPER;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SDMMC|RCC_PERIPHCLK_FDCAN
+                              |RCC_PERIPHCLK_CKPER;
+  PeriphClkInitStruct.PLL2.PLL2M = 32;
+  PeriphClkInitStruct.PLL2.PLL2N = 128;
+  PeriphClkInitStruct.PLL2.PLL2P = 2;
+  PeriphClkInitStruct.PLL2.PLL2Q = 16;
+  PeriphClkInitStruct.PLL2.PLL2R = 2;
+  PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_1;
+  PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
+  PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
+  PeriphClkInitStruct.SdmmcClockSelection = RCC_SDMMCCLKSOURCE_PLL2;
   PeriphClkInitStruct.CkperClockSelection = RCC_CLKPSOURCE_HSI;
+  PeriphClkInitStruct.FdcanClockSelection = RCC_FDCANCLKSOURCE_PLL2;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief FDCAN1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_FDCAN1_Init(void)
+{
+
+  /* USER CODE BEGIN FDCAN1_Init 0 */
+
+  /* USER CODE END FDCAN1_Init 0 */
+
+  /* USER CODE BEGIN FDCAN1_Init 1 */
+
+  /* USER CODE END FDCAN1_Init 1 */
+  hfdcan1.Instance = FDCAN1;
+  hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
+  hfdcan1.Init.AutoRetransmission = DISABLE;
+  hfdcan1.Init.TransmitPause = DISABLE;
+  hfdcan1.Init.ProtocolException = DISABLE;
+  hfdcan1.Init.NominalPrescaler = 1;
+  hfdcan1.Init.NominalSyncJumpWidth = 1;
+  hfdcan1.Init.NominalTimeSeg1 = 23;
+  hfdcan1.Init.NominalTimeSeg2 = 8;
+  hfdcan1.Init.DataPrescaler = 1;
+  hfdcan1.Init.DataSyncJumpWidth = 1;
+  hfdcan1.Init.DataTimeSeg1 = 1;
+  hfdcan1.Init.DataTimeSeg2 = 1;
+  hfdcan1.Init.MessageRAMOffset = 0;
+  hfdcan1.Init.StdFiltersNbr = 1;
+  hfdcan1.Init.ExtFiltersNbr = 0;
+  hfdcan1.Init.RxFifo0ElmtsNbr = 4;
+  hfdcan1.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan1.Init.RxFifo1ElmtsNbr = 0;
+  hfdcan1.Init.RxFifo1ElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan1.Init.RxBuffersNbr = 0;
+  hfdcan1.Init.RxBufferSize = FDCAN_DATA_BYTES_8;
+  hfdcan1.Init.TxEventsNbr = 0;
+  hfdcan1.Init.TxBuffersNbr = 0;
+  hfdcan1.Init.TxFifoQueueElmtsNbr = 32;
+  hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
+  hfdcan1.Init.TxElmtSize = FDCAN_DATA_BYTES_8;
+  if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN FDCAN1_Init 2 */
+
+  FDCAN_FilterTypeDef canFilter;
+  canFilter.IdType       = FDCAN_STANDARD_ID;
+  canFilter.FilterIndex  = 0;
+  canFilter.FilterType   = FDCAN_FILTER_MASK;
+  canFilter.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+  /* Was an exact-match filter for the CANBUS_TEST_RX_ID loopback test.
+   * Widened to accept every standard id: FC needs to hear from all PRC
+   * nodes (DPR_ETH, DPR_LOX, engine PRC), whose ids don't share a common
+   * prefix a single mask filter could select. prc_intranet's
+   * dispatch_frame() (see Application/FlightControl/prc_can.cpp) already
+   * silently ignores any id it doesn't recognize, same as PRC's own
+   * per-node filter relies on software to sort out message identity. */
+  canFilter.FilterID1    = 0x000;
+  canFilter.FilterID2    = 0x000;  /* mask: 0 = accept every standard id */
+  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &canFilter) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_REJECT, FDCAN_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_FDCAN_ConfigRxFifoOverwrite(&hfdcan1, FDCAN_RX_FIFO0, FDCAN_RX_FIFO_OVERWRITE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /* USER CODE END FDCAN1_Init 2 */
+
+}
+
+/**
+  * @brief I2C2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C2_Init(void)
+{
+
+  /* USER CODE BEGIN I2C2_Init 0 */
+
+  /* USER CODE END I2C2_Init 0 */
+
+  /* USER CODE BEGIN I2C2_Init 1 */
+
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.Timing = 0x307075B1;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C2_Init 2 */
+
+  /* USER CODE END I2C2_Init 2 */
+
+}
+
+/**
+  * @brief I2C4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C4_Init(void)
+{
+
+  /* USER CODE BEGIN I2C4_Init 0 */
+
+  /* USER CODE END I2C4_Init 0 */
+
+  /* USER CODE BEGIN I2C4_Init 1 */
+
+  /* USER CODE END I2C4_Init 1 */
+  hi2c4.Instance = I2C4;
+  hi2c4.Init.Timing = 0x307075B1;
+  hi2c4.Init.OwnAddress1 = 0;
+  hi2c4.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c4.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c4.Init.OwnAddress2 = 0;
+  hi2c4.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c4.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c4.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c4, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c4, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C4_Init 2 */
+
+  /* USER CODE END I2C4_Init 2 */
+
 }
 
 /**
@@ -300,54 +597,6 @@ static void MX_SDMMC1_SD_Init(void)
   /* USER CODE BEGIN SDMMC1_Init 2 */
 
   /* USER CODE END SDMMC1_Init 2 */
-
-}
-
-/**
-  * @brief I2C4 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C4_Init(void)
-{
-
-  /* USER CODE BEGIN I2C4_Init 0 */
-
-  /* USER CODE END I2C4_Init 0 */
-
-  /* USER CODE BEGIN I2C4_Init 1 */
-
-  /* USER CODE END I2C4_Init 1 */
-  hi2c4.Instance = I2C4;
-  hi2c4.Init.Timing = 0x00B03FDB;
-  hi2c4.Init.OwnAddress1 = 0;
-  hi2c4.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c4.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c4.Init.OwnAddress2 = 0;
-  hi2c4.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c4.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c4.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Analogue filter
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c4, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Digital filter
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c4, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C4_Init 2 */
-
-  /* USER CODE END I2C4_Init 2 */
 
 }
 
@@ -605,21 +854,21 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOE_CLK_ENABLE();
-  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, PYROS_2_Pin|PYROS_1_Pin|BMP_CS2_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIO_RFM_TX_RST_GPIO_Port, GPIO_RFM_TX_RST_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SPI_RFM_TX_CS_GPIO_Port, SPI_RFM_TX_CS_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(BMP_CS2_GPIO_Port, BMP_CS2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIO_RFM_RX_RST_GPIO_Port, GPIO_RFM_RX_RST_Pin, GPIO_PIN_SET);
@@ -643,6 +892,13 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GNSS_RST_GPIO_Port, GNSS_RST_Pin, GPIO_PIN_SET);
 
+  /*Configure GPIO pins : PYROS_2_Pin PYROS_1_Pin BMP_CS2_Pin */
+  GPIO_InitStruct.Pin = PYROS_2_Pin|PYROS_1_Pin|BMP_CS2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
   /*Configure GPIO pins : GPIO_RFM_TX_RST_Pin SPI_RFM_TX_CS_Pin */
   GPIO_InitStruct.Pin = GPIO_RFM_TX_RST_Pin|SPI_RFM_TX_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -655,13 +911,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIO_RFM_TX_INT0_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : BMP_CS2_Pin */
-  GPIO_InitStruct.Pin = BMP_CS2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(BMP_CS2_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : GPIO_RFM_RX_RST_Pin SPI_RFM_RX_CS_Pin BUZZER_Pin */
   GPIO_InitStruct.Pin = GPIO_RFM_RX_RST_Pin|SPI_RFM_RX_CS_Pin|BUZZER_Pin;

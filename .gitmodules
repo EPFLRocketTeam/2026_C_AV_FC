@@ -4,3 +4,6 @@
 [submodule "Drivers/Capsule"]
 	path = Drivers/Capsule
 	url = git@github.com:EPFLRocketTeam/2024_C_AV-GS_CAPSULE.git
+[submodule "Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET"]
+	path = Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET
+	url = https://github.com/EPFLRocketTeam/2026_C_AV_FC_PRC_INTRANET.git

@@ -57,6 +57,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define PYROS_2_Pin GPIO_PIN_14
+#define PYROS_2_GPIO_Port GPIOC
+#define PYROS_1_Pin GPIO_PIN_15
+#define PYROS_1_GPIO_Port GPIOC
 #define GPIO_RFM_TX_RST_Pin GPIO_PIN_2
 #define GPIO_RFM_TX_RST_GPIO_Port GPIOA
 #define GPIO_RFM_TX_INT0_Pin GPIO_PIN_3
