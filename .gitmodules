@@ -7,3 +7,6 @@
 [submodule "Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET"]
 	path = Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET
 	url = https://github.com/EPFLRocketTeam/2026_C_AV_FC_PRC_INTRANET.git
+[submodule "Drivers/LOG_AGGREGATOR/2026_C_AV_LOG_AGGREGATOR"]
+	path = Drivers/LOG_AGGREGATOR/2026_C_AV_LOG_AGGREGATOR
+	url = https://github.com/EPFLRocketTeam/2026_C_AV_LOG_AGGREGATOR.git

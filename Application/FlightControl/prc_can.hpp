@@ -18,17 +18,20 @@ extern "C" {
 // valid bytes in data (from FDCAN_RxHeaderTypeDef::DataLength, numerically
 // equal to the byte count for classic frames).
 //
-// Only DPR_ETH_PRESSURES/TEMPS_1 and DPR_LOX_PRESSURES/TEMPS_1 are handled
-// right now, feeding PropSensorsStore's fuel_*/LOX_* fields (the
-// unambiguous per-board fields). N2_pressure/N2_temperature are NOT
-// written here: DPR_ETH and DPR_LOX each have their own COPV, but
-// PropSensors has only one shared N2_pressure/N2_temperature field, so
-// writing both boards' readings into it would have one silently clobber
-// the other. Left as a TODO until that's resolved. Engine PRC telemetry
-// (PRC_STATE/P_CHAMBER/P_INJECTOR/T_CHAMBER/T_INJECTOR) and DPR_STATE
-// (valve_mask has no defined bit layout) are also not decoded yet. Ids
-// this function doesn't recognize are silently ignored, same as the CAN
-// bus carrying traffic for other nodes.
+// Handles: DPR_ETH_PRESSURES/TEMPS_1 and DPR_LOX_PRESSURES/TEMPS_1, feeding
+// PropSensorsStore's fuel_*/LOX_* fields (the unambiguous per-board
+// fields; N2_pressure/N2_temperature are NOT written here -- DPR_ETH and
+// DPR_LOX each have their own COPV, but PropSensors has only one shared
+// N2_pressure/N2_temperature field, so writing both boards' readings into
+// it would have one silently clobber the other, left as a TODO until
+// that's resolved). Also LOG_CHUNK_PRC_ENGINE/DPR_ETH/DPR_LOX, reassembled
+// via log_aggregator and printed out FC's own local VCP tagged
+// [PRC-ENGINE]/[PRC-ETH]/[PRC-LOX] (see prc_can.cpp).
+//
+// Engine PRC telemetry (PRC_STATE/P_CHAMBER/P_INJECTOR/T_CHAMBER/
+// T_INJECTOR) and DPR_STATE (valve_mask has no defined bit layout) are
+// not decoded yet. Ids this function doesn't recognize are silently
+// ignored, same as the CAN bus carrying traffic for other nodes.
 void Fc_Can_ProcessRxMessage(uint32_t can_id, const uint8_t *data, uint32_t dlc);
 
 #ifdef __cplusplus
