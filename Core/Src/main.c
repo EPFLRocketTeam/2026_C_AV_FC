@@ -295,7 +295,7 @@ int main(void)
 	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_15);
 	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_0);
 	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_1);
-	  printf("End\r\n");
+	  //printf("End\r\n");
   }
   /* USER CODE END 3 */
 }

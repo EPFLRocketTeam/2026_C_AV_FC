@@ -37,34 +37,22 @@ void OnLogChunkDprLox(void*, pi::payload::log_chunk chunk) noexcept {
   g_log_dpr_lox.feed(chunk.bytes, const_cast<char*>("[PRC-LOX]"), PrintTaggedLine);
 }
 
-void OnDprEthPressures(void*, pi::payload::dpr_pressures p) noexcept {
+void OnDprEthPressures(void*, pi::payload::dpr_eth_pressures p) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
-  sensors.set_fuel_pressure(p.p_xta);
-  // p.p_nco (COPV) intentionally not written, see prc_can.hpp.
+  sensors.set_fuel_pressure(p.p_eta);
+  printf("[FC CAN] RX dpr_eth_pressures: tank=%.2f copv=%.2f\r\n", p.p_eta, p.p_hpe);
 }
-void OnDprEthTemps1(void*, pi::payload::dpr_temps_1 t) noexcept {
+void OnDprLoxPressures(void*, pi::payload::dpr_lox_pressures p) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
-  sensors.set_fuel_temperature(t.t_xta);
-  // t.t_nco (COPV) intentionally not written, see prc_can.hpp.
-}
-void OnDprLoxPressures(void*, pi::payload::dpr_pressures p) noexcept {
-  auto& sensors = GOATStore::get_instance().propSensorsStore;
-  sensors.set_LOX_pressure(p.p_xta);
-  // p.p_nco (COPV) intentionally not written, see prc_can.hpp.
-}
-void OnDprLoxTemps1(void*, pi::payload::dpr_temps_1 t) noexcept {
-  auto& sensors = GOATStore::get_instance().propSensorsStore;
-  sensors.set_LOX_temperature(t.t_xta);
-  // t.t_nco (COPV) intentionally not written, see prc_can.hpp.
+  sensors.set_LOX_pressure(p.p_ota);
+  printf("[FC CAN] RX dpr_lox_pressures: tank=%.2f copv=%.2f\r\n", p.p_ota, p.p_hpo);
 }
 
 pi::context& Ctx() {
   static pi::context ctx = [] {
     pi::prc_driver driver{};
     driver.on_dpr_eth_pressures = OnDprEthPressures;
-    driver.on_dpr_eth_temps_1   = OnDprEthTemps1;
     driver.on_dpr_lox_pressures = OnDprLoxPressures;
-    driver.on_dpr_lox_temps_1   = OnDprLoxTemps1;
     driver.on_log_chunk_prc_engine = OnLogChunkPrcEngine;
     driver.on_log_chunk_dpr_eth    = OnLogChunkDprEth;
     driver.on_log_chunk_dpr_lox    = OnLogChunkDprLox;
