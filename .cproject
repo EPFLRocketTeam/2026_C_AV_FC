@@ -90,6 +90,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/Capsule/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/LOG_AGGREGATOR/2026_C_AV_LOG_AGGREGATOR/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/CLI/2026_C_AV_CLI}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/SX127X}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/Plume/2026_C_AV_PLUME/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/STM32HAL}&quot;"/>
@@ -209,6 +210,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/Capsule/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/LOG_AGGREGATOR/2026_C_AV_LOG_AGGREGATOR/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/CLI/2026_C_AV_CLI}&quot;"/>
 									<listOptionValue builtIn="false" value="../Drivers/STM32H7xx_HAL_Driver/Inc"/>
 									<listOptionValue builtIn="false" value="../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy"/>
 									<listOptionValue builtIn="false" value="../Drivers/CMSIS/Device/ST/STM32H7xx/Include"/>

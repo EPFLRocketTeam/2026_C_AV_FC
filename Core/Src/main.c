@@ -181,6 +181,8 @@ int main(void)
   MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
 
+  Fc_Can_Init(&hfdcan1); /* latch hfdcan1 for Fc_Can_SendMainValveCmd, see Application/FlightControl/prc_can.hpp */
+
   HAL_Delay(5000); // Small delay to let USB enumerate
   printf("USB on\r\n");
   /* SPI2_MISO is on PC2_C (analog-direct dual pad). The digital path only works

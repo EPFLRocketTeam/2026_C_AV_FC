@@ -1,15 +1,45 @@
 #include "Application/FlightControl/prc_can.hpp"
 
 #include <cstdio>
+#include <cstring>
 
 #include "Application/Data/data.hpp"
 #include "log_aggregator/reassembler.hpp"
+#include "prc_intranet/const.hpp"
 #include "prc_intranet/dispatch.hpp"
+#include "prc_intranet/transmit.hpp"
 
 using namespace flight_computer;
 namespace pi = prc_intranet;
 
 namespace {
+
+FDCAN_HandleTypeDef* g_hfdcan = nullptr;
+
+// HAL_FDCAN_AddMessageToTxFifoQ word-copies from this buffer regardless of
+// dlc, so pad to the full word-aligned MAX_PAYLOAD_SIZE rather than passing
+// `buffer` (only guaranteed readable for `dlc` bytes) straight through.
+void CbSend(void* driver_ptr, uint16_t can_id, const uint8_t* buffer, uint32_t dlc) noexcept {
+  auto* hfdcan = static_cast<FDCAN_HandleTypeDef*>(driver_ptr);
+
+  FDCAN_TxHeaderTypeDef txHeader;
+  txHeader.Identifier          = can_id;
+  txHeader.IdType              = FDCAN_STANDARD_ID;
+  txHeader.TxFrameType         = FDCAN_DATA_FRAME;
+  txHeader.DataLength          = dlc;
+  txHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+  txHeader.BitRateSwitch       = FDCAN_BRS_OFF;
+  txHeader.FDFormat            = FDCAN_CLASSIC_CAN;
+  txHeader.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
+  txHeader.MessageMarker       = 0;
+
+  uint8_t txData[pi::constants::MAX_PAYLOAD_SIZE] = {0};
+  memcpy(txData, buffer, dlc);
+
+  if (HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &txHeader, txData) != HAL_OK) {
+    printf("[FC CAN] TX failed, id=0x%X\r\n", can_id);
+  }
+}
 
 // One reassembler per source board -- each owns its own 128-byte buffer,
 // see log_aggregator/reassembler.hpp's warning against sharing one
@@ -51,6 +81,7 @@ void OnDprLoxPressures(void*, pi::payload::dpr_lox_pressures p) noexcept {
 pi::context& Ctx() {
   static pi::context ctx = [] {
     pi::prc_driver driver{};
+    driver.send                 = CbSend;
     driver.on_dpr_eth_pressures = OnDprEthPressures;
     driver.on_dpr_lox_pressures = OnDprLoxPressures;
     driver.on_log_chunk_prc_engine = OnLogChunkPrcEngine;
@@ -65,4 +96,20 @@ pi::context& Ctx() {
 
 void Fc_Can_ProcessRxMessage(uint32_t can_id, const uint8_t *data, uint32_t dlc) {
   pi::dispatch_frame(&Ctx(), static_cast<uint16_t>(can_id), data, dlc);
+}
+
+void Fc_Can_Init(FDCAN_HandleTypeDef *hfdcan) {
+  g_hfdcan = hfdcan;
+}
+
+void Fc_Can_SendMainValveCmd(uint8_t is_ethanol, uint8_t open) {
+  if (g_hfdcan == nullptr) return;
+
+  pi::payload::cmd_valves cmd{};
+  cmd.valve_id = is_ethanol ? pi::constants::VALVE_SOL4 : pi::constants::VALVE_SOL3;
+  cmd.state    = open ? pi::constants::VALVE_STATE_OPEN : pi::constants::VALVE_STATE_CLOSED;
+
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_lox_cmd_valves(&ctx, cmd);
 }
