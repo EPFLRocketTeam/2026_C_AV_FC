@@ -183,7 +183,36 @@ int main(void)
 
   Fc_Can_Init(&hfdcan1); /* latch hfdcan1 for Fc_Can_SendMainValveCmd, see Application/FlightControl/prc_can.hpp */
 
-  HAL_Delay(5000); // Small delay to let USB enumerate
+  /* Small delay to let USB enumerate -- but drain (and discard) FIFO0 while
+   * waiting instead of a blind HAL_Delay(5000). Just removing the delay
+   * wasn't enough on its own: printf()/_write() blocks up to 100 ms
+   * retrying CDC_Transmit_HS while USB isn't ready yet, and every
+   * reassembled CAN log line triggers a printf -- each one of those early
+   * blocked calls freezes this same loop's CAN drain for up to 100 ms,
+   * during which frames from all 3 boards keep piling up. Draining and
+   * discarding FIFO0 here (no printf involved) keeps the FIFO empty
+   * through the whole USB enumeration window regardless of how long any
+   * individual printf would have blocked. */
+  {
+    uint32_t usb_wait_start = HAL_GetTick();
+    while (HAL_GetTick() - usb_wait_start < 5000)
+    {
+      FDCAN_RxHeaderTypeDef rxHeader;
+      uint8_t rxData[8] = {0};
+      while (HAL_FDCAN_GetRxFifoFillLevel(&hfdcan1, FDCAN_RX_FIFO0) > 0)
+      {
+        if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &rxHeader, rxData) != HAL_OK)
+        {
+          break;
+        }
+      }
+    }
+    /* Clear any overflow flagged while deliberately discarding above --
+     * nothing was being reassembled/printed yet, so it isn't meaningful,
+     * and would otherwise show up as a spurious warning on the first real
+     * loop iteration below. */
+    __HAL_FDCAN_CLEAR_FLAG(&hfdcan1, FDCAN_FLAG_RX_FIFO0_MESSAGE_LOST);
+  }
   printf("USB on\r\n");
   /* SPI2_MISO is on PC2_C (analog-direct dual pad). The digital path only works
    * with the PC2 analog switch closed. Force it closed so reads aren't dead. */
@@ -193,6 +222,9 @@ int main(void)
   // sx127x_capsule_manual_test();
   //TMP1075_ManualTest_Run();
   //ADXL375_ManualTest_Run();
+  //manual_test_imu();
+  //manual_test_buzzer();
+
 
 
   //app_super_loop_setup();
@@ -290,11 +322,26 @@ int main(void)
 	        break;
 	      }
 	    }
+
+	    /*  RF0L (Rx FIFO 0 Message Lost) latches in hardware whenever FIFO0
+	     *  was full and a frame got rejected (blocking mode) instead of
+	     *  silently overwriting an unread one. This is the only way to know
+	     *  the 16-element FIFO is still not enough margin for the current
+	     *  bus load -- without it, an overflow would go completely unnoticed
+	     *  again, same as the original overwrite-mode bug. */
+	    if (__HAL_FDCAN_GET_FLAG(&hfdcan1, FDCAN_FLAG_RX_FIFO0_MESSAGE_LOST))
+	    {
+	      __HAL_FDCAN_CLEAR_FLAG(&hfdcan1, FDCAN_FLAG_RX_FIFO0_MESSAGE_LOST);
+	      static uint32_t rf0l_count = 0;
+	      rf0l_count++;
+	      printf("[CAN] WARNING: RX FIFO0 overflow, frame(s) rejected (count=%lu)\r\n",
+	             (unsigned long)rf0l_count);
+	    }
 	  }
 
 	  //printf("Pyros Test \r\n");
-	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_14);
-	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_15);
+	  //HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_14);
+	  //HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_15);
 	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_0);
 	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_1);
 	  //printf("End\r\n");
@@ -409,7 +456,7 @@ static void MX_FDCAN1_Init(void)
   hfdcan1.Instance = FDCAN1;
   hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
   hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
-  hfdcan1.Init.AutoRetransmission = DISABLE;
+  hfdcan1.Init.AutoRetransmission = ENABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
   hfdcan1.Init.ProtocolException = DISABLE;
   hfdcan1.Init.NominalPrescaler = 1;
@@ -423,7 +470,7 @@ static void MX_FDCAN1_Init(void)
   hfdcan1.Init.MessageRAMOffset = 0;
   hfdcan1.Init.StdFiltersNbr = 1;
   hfdcan1.Init.ExtFiltersNbr = 0;
-  hfdcan1.Init.RxFifo0ElmtsNbr = 4;
+  hfdcan1.Init.RxFifo0ElmtsNbr = 16;
   hfdcan1.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
   hfdcan1.Init.RxFifo1ElmtsNbr = 0;
   hfdcan1.Init.RxFifo1ElmtSize = FDCAN_DATA_BYTES_8;
@@ -462,7 +509,10 @@ static void MX_FDCAN1_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_FDCAN_ConfigRxFifoOverwrite(&hfdcan1, FDCAN_RX_FIFO0, FDCAN_RX_FIFO_OVERWRITE) != HAL_OK)
+  /* Reject new frames once FIFO0 is full instead of silently overwriting
+   * unread ones. Blocking mode makes overflow visible (GetRxMessage/AddMessage
+   * failures) instead of silently corrupting reassembled log lines. */
+  if (HAL_FDCAN_ConfigRxFifoOverwrite(&hfdcan1, FDCAN_RX_FIFO0, FDCAN_RX_FIFO_BLOCKING) != HAL_OK)
   {
     Error_Handler();
   }
