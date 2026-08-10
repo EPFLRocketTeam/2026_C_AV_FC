@@ -37,6 +37,67 @@ void OnVentFuel(void*, bool value) noexcept { printf("[SHELL] vent fuel %s\r\n",
 void OnPressureLox(void*, bool value)  noexcept { printf("[SHELL] pressure lox %s\r\n", value ? "open" : "close"); }
 void OnPressureFuel(void*, bool value) noexcept { printf("[SHELL] pressure fuel %s\r\n", value ? "open" : "close"); }
 
+// Engine bay (PRC-P) ignition sequence -- manual/bench-test triggers for
+// 2026_C_AV_PRC's PrcEngineState (engine_state.cpp). See prc_can.hpp's
+// comment on the Fc_Can_SendPrc* functions -- not yet tied to AvState's
+// own IGNITION state.
+void OnPrcClearToIgnite(void*) noexcept {
+  printf("[SHELL] prc clear_to_ignite\r\n");
+  Fc_Can_SendPrcClearToIgnite();
+}
+void OnPrcIgnite(void*) noexcept {
+  printf("[SHELL] prc ignite\r\n");
+  Fc_Can_SendPrcIgnite();
+}
+void OnPrcPassivate(void*) noexcept {
+  printf("[SHELL] prc passivate\r\n");
+  Fc_Can_SendPrcPassivate();
+}
+void OnPrcReset(void*) noexcept {
+  printf("[SHELL] prc reset\r\n");
+  Fc_Can_SendPrcReset();
+}
+
+// DPR (LOX/ETH) bench-test triggers -- see prc_can.hpp's comment on the
+// Fc_Can_SendDpr* functions. Exercises 2026_C_AV_PRC's prc_state.cpp
+// PrcState FSM, role-gated on the receiving board.
+void OnDprLoxPressurize(void*, bool value) noexcept {
+  printf("[SHELL] dpr lox pressurize %s\r\n", value ? "on" : "off");
+  Fc_Can_SendDprLoxPressurize(value ? 1 : 0);
+}
+void OnDprLoxAbort(void*) noexcept {
+  printf("[SHELL] dpr lox abort\r\n");
+  Fc_Can_SendDprLoxAbort();
+}
+void OnDprLoxPassivate(void*) noexcept {
+  printf("[SHELL] dpr lox passivate\r\n");
+  Fc_Can_SendDprLoxPassivate();
+}
+void OnDprLoxReset(void*) noexcept {
+  printf("[SHELL] dpr lox reset\r\n");
+  Fc_Can_SendDprLoxReset();
+}
+void OnDprEthPressurize(void*, bool value) noexcept {
+  printf("[SHELL] dpr eth pressurize %s\r\n", value ? "on" : "off");
+  Fc_Can_SendDprEthPressurize(value ? 1 : 0);
+}
+void OnDprEthAbort(void*) noexcept {
+  printf("[SHELL] dpr eth abort\r\n");
+  Fc_Can_SendDprEthAbort();
+}
+void OnDprEthPassivate(void*) noexcept {
+  printf("[SHELL] dpr eth passivate\r\n");
+  Fc_Can_SendDprEthPassivate();
+}
+void OnDprEthReset(void*) noexcept {
+  printf("[SHELL] dpr eth reset\r\n");
+  Fc_Can_SendDprEthReset();
+}
+void OnDprBroadcastAbort(void*) noexcept {
+  printf("[SHELL] dpr broadcast_abort\r\n");
+  Fc_Can_SendBroadcastAbort();
+}
+
 bool g_initialized = false;
 
 void EnsureInit() {
@@ -52,6 +113,19 @@ void EnsureInit() {
     g_driver.vent_fuel = OnVentFuel;
     g_driver.pressure_lox = OnPressureLox;
     g_driver.pressure_fuel = OnPressureFuel;
+    g_driver.prc_clear_to_ignite = OnPrcClearToIgnite;
+    g_driver.prc_ignite = OnPrcIgnite;
+    g_driver.prc_passivate = OnPrcPassivate;
+    g_driver.prc_reset = OnPrcReset;
+    g_driver.dpr_lox_pressurize = OnDprLoxPressurize;
+    g_driver.dpr_lox_abort = OnDprLoxAbort;
+    g_driver.dpr_lox_passivate = OnDprLoxPassivate;
+    g_driver.dpr_lox_reset = OnDprLoxReset;
+    g_driver.dpr_eth_pressurize = OnDprEthPressurize;
+    g_driver.dpr_eth_abort = OnDprEthAbort;
+    g_driver.dpr_eth_passivate = OnDprEthPassivate;
+    g_driver.dpr_eth_reset = OnDprEthReset;
+    g_driver.dpr_broadcast_abort = OnDprBroadcastAbort;
 }
 
 };

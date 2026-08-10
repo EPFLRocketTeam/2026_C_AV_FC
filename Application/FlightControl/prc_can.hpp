@@ -43,6 +43,32 @@ void Fc_Can_ProcessRxMessage(uint32_t can_id, const uint8_t *data, uint32_t dlc)
 // Sol3 (LOX main); open selects VALVE_STATE_OPEN vs _CLOSED.
 void Fc_Can_SendMainValveCmd(uint8_t is_ethanol, uint8_t open);
 
+// Engine bay (PRC-P) ignition sequence commands -- see 2026_C_AV_PRC's
+// engine_state.cpp/"Propulsion Computer FSM" diagram for what each one
+// does on the receiving end. Manual/bench-test hookups for now (driven
+// from fc_shell.cpp's "prc clear_to_ignite"/"prc ignite"/"prc
+// passivate"/"prc reset" commands), not yet tied to AvState's own
+// IGNITION state -- see av_state.cpp's fromIgnition().
+void Fc_Can_SendPrcClearToIgnite(void);
+void Fc_Can_SendPrcIgnite(void);
+void Fc_Can_SendPrcPassivate(void);
+void Fc_Can_SendPrcReset(void);
+
+// DPR (LOX/ETH) bench-test commands -- exercises 2026_C_AV_PRC's
+// prc_state.cpp PrcState FSM (dpr_lox_*/dpr_eth_* fromXxx() transitions),
+// role-gated on the receiving board's own BoardIdentity. Manual/bench-test
+// hookups driven from fc_shell.cpp's "dpr lox/eth ..." commands, not yet
+// tied to any real ground-station sequence.
+void Fc_Can_SendDprLoxPressurize(uint8_t open);
+void Fc_Can_SendDprLoxAbort(void);
+void Fc_Can_SendDprLoxPassivate(void);
+void Fc_Can_SendDprLoxReset(void);
+void Fc_Can_SendDprEthPressurize(uint8_t open);
+void Fc_Can_SendDprEthAbort(void);
+void Fc_Can_SendDprEthPassivate(void);
+void Fc_Can_SendDprEthReset(void);
+void Fc_Can_SendBroadcastAbort(void);
+
 #ifdef __cplusplus
 }
 #endif

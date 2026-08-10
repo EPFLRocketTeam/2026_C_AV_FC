@@ -70,12 +70,20 @@ void OnLogChunkDprLox(void*, pi::payload::log_chunk chunk) noexcept {
 void OnDprEthPressures(void*, pi::payload::dpr_eth_pressures p) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
   sensors.set_fuel_pressure(p.p_eta);
-  printf("[FC CAN] RX dpr_eth_pressures: tank=%.2f copv=%.2f\r\n", p.p_eta, p.p_hpe);
 }
 void OnDprLoxPressures(void*, pi::payload::dpr_lox_pressures p) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
   sensors.set_LOX_pressure(p.p_ota);
-  printf("[FC CAN] RX dpr_lox_pressures: tank=%.2f copv=%.2f\r\n", p.p_ota, p.p_hpo);
+}
+
+// Engine cut-off (ECO) detection: the engine board's prc_state.valve_mask
+// carries MO/ME open/closed state (see prc_intranet's const.hpp,
+// VALVE_MASK_BIT_MO/ME). Both closed means the engine has cut off --
+// AvState::fromBurn() reads this back via event.cut_off_detected.
+void OnPrcState(void*, pi::payload::prc_state state) noexcept {
+  const bool mo_open = (state.valve_mask & pi::constants::VALVE_MASK_BIT_MO) != 0;
+  const bool me_open = (state.valve_mask & pi::constants::VALVE_MASK_BIT_ME) != 0;
+  GOATStore::get_instance().eventStore.set_cut_off_detected(!mo_open && !me_open);
 }
 
 pi::context& Ctx() {
@@ -84,6 +92,7 @@ pi::context& Ctx() {
     driver.send                 = CbSend;
     driver.on_dpr_eth_pressures = OnDprEthPressures;
     driver.on_dpr_lox_pressures = OnDprLoxPressures;
+    driver.on_prc_state         = OnPrcState;
     driver.on_log_chunk_prc_engine = OnLogChunkPrcEngine;
     driver.on_log_chunk_dpr_eth    = OnLogChunkDprEth;
     driver.on_log_chunk_dpr_lox    = OnLogChunkDprLox;
@@ -111,5 +120,122 @@ void Fc_Can_SendMainValveCmd(uint8_t is_ethanol, uint8_t open) {
 
   pi::context& ctx = Ctx();
   ctx.driver.driver_ptr = g_hfdcan;
-  pi::send_dpr_lox_cmd_valves(&ctx, cmd);
+  pi::send_prc_cmd_valves(&ctx, cmd);
+}
+
+// Unlike Fc_Can_SendMainValveCmd (which has to borrow DPR-LOX's cmd_valves
+// message since the bench board's real role is DprLox), these all target
+// Node::PrcP directly -- the message id already picks the engine board,
+// no valve_id trick needed.
+void Fc_Can_SendPrcClearToIgnite(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_prc_clear_to_ignite(&ctx, pi::payload::empty{});
+}
+
+void Fc_Can_SendPrcIgnite(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_prc_ignite(&ctx, pi::payload::empty{});
+}
+
+void Fc_Can_SendPrcPassivate(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::safety_key key{};
+  key.safety_key = pi::constants::SAFETY_KEY_PRC_PASSIVATE;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_prc_passivate(&ctx, key);
+}
+
+void Fc_Can_SendPrcReset(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::reset r{};
+  r.magic = pi::constants::RESET_MAGIC;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_prc_reset(&ctx, r);
+}
+
+void Fc_Can_SendDprLoxPressurize(uint8_t open) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::on_off cmd{};
+  cmd.state = open ? pi::constants::CMD_ON : pi::constants::CMD_OFF;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_lox_pressurize(&ctx, cmd);
+}
+
+void Fc_Can_SendDprLoxAbort(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::safety_key key{};
+  key.safety_key = pi::constants::SAFETY_KEY_DPR_LOX_ABORT;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_lox_abort(&ctx, key);
+}
+
+void Fc_Can_SendDprLoxPassivate(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::safety_key key{};
+  key.safety_key = pi::constants::SAFETY_KEY_DPR_LOX_PASSIVATE;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_lox_passivate(&ctx, key);
+}
+
+void Fc_Can_SendDprLoxReset(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::reset r{};
+  r.magic = pi::constants::RESET_MAGIC;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_lox_reset(&ctx, r);
+}
+
+void Fc_Can_SendDprEthPressurize(uint8_t open) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::on_off cmd{};
+  cmd.state = open ? pi::constants::CMD_ON : pi::constants::CMD_OFF;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_eth_pressurize(&ctx, cmd);
+}
+
+void Fc_Can_SendDprEthAbort(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::safety_key key{};
+  key.safety_key = pi::constants::SAFETY_KEY_DPR_ETH_ABORT;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_eth_abort(&ctx, key);
+}
+
+void Fc_Can_SendDprEthPassivate(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::safety_key key{};
+  key.safety_key = pi::constants::SAFETY_KEY_DPR_ETH_PASSIVATE;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_eth_passivate(&ctx, key);
+}
+
+void Fc_Can_SendDprEthReset(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::reset r{};
+  r.magic = pi::constants::RESET_MAGIC;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_eth_reset(&ctx, r);
+}
+
+void Fc_Can_SendBroadcastAbort(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::safety_key key{};
+  key.safety_key = pi::constants::SAFETY_KEY_BROADCAST_ABORT;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_broadcast_abort(&ctx, key);
 }
