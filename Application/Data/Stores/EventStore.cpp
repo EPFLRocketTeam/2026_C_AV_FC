@@ -67,3 +67,6 @@ void EventStore::set_catastrophic_failure(bool value) { data_.catastrophic_failu
 
 bool EventStore::get_imu_liftoff_detected() const { return data_.imu_liftoff_detected; }
 void EventStore::set_imu_liftoff_detected(bool value) { data_.imu_liftoff_detected = value; }
+
+bool EventStore::get_cut_off_detected() const { return data_.cut_off_detected; }
+void EventStore::set_cut_off_detected(bool value) { data_.cut_off_detected = value; }

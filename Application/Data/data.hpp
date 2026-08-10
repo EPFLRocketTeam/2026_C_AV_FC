@@ -545,6 +545,9 @@ public:
 
   bool get_imu_liftoff_detected() const;
   void set_imu_liftoff_detected(bool value);
+
+  bool get_cut_off_detected() const;
+  void set_cut_off_detected(bool value);
 };
 
 class StateStore : public IStore<State> {

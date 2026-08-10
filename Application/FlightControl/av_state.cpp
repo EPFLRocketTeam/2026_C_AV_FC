@@ -1,5 +1,6 @@
 #include "av_state.h"
 #include "Application/Data/data.hpp"
+#include "Application/FlightControl/prc_can.hpp"
 #include "Application/FlightControl/threshold.h"
 #include "Application/Kalman/kalman_lifecycle.h"
 #include "Drivers/STM32HAL/stm32hal.h"
@@ -108,8 +109,11 @@ State AvState::fromPressurization(DataDump const &dump) {
 }
 
 State AvState::fromIgnition(DataDump const &dump) {
+  // IGNITION only has ABORT_ON_GROUND/BURN as valid outgoing edges per the fsm diagram,
+  // ABORT_IN_FLIGHT only exists from BURN/ASCENT/DESCENT (after liftoff is confirmed),
+  // so a catastrophic failure here goes to ABORT_ON_GROUND, not ABORT_IN_FLIGHT.
   if (dump.event.catastrophic_failure) {
-    return State::ABORT_IN_FLIGHT;
+    return State::ABORT_ON_GROUND;
   }
 
   if (dump.uplinkCmd.id == 1) { // ABORT command
@@ -152,9 +156,11 @@ State AvState::fromBurn(DataDump const &dump) {
     return State::ABORT_IN_FLIGHT;
   }
 
-  // Hardcoded 2-second burn duration timer
-  const uint32_t burn_elapsed_ms = HAL_GetTick() - burn_entry_ms_;
-  if (burn_elapsed_ms >= 2000u) {
+  // Engine cut-off (ECO) detected (MO/ME both closed -- see prc_can.cpp's
+  // OnPrcState, fed by 2026_C_AV_PRC's engine board prc_state telemetry)
+  // OR max burn duration elapsed, per spec.
+  if (dump.event.cut_off_detected ||
+      dump.propSensors.timer_burn > static_cast<uint32_t>(BURN_MAX_DURATION)) {
     return State::ASCENT;
   }
 
@@ -306,8 +312,19 @@ void AvState::update(const DataDump &dump) {
 
     // Liftoff contract: first in-flight state reached by this FSM is BURN.
     if (currentState == State::BURN) {
-      burn_entry_ms_ = HAL_GetTick();
       kalman_on_liftoff(dump.av_timestamp);
+    }
+
+    // Abort side effect (spec: "Immediately gives the command to the DPRs
+    // to depressurize the tanks (ABORT) and propulsion board to shutdown
+    // the engine with subsequent passivation") -- broadcast_abort is
+    // recognized by both 2026_C_AV_PRC's DPR FSM (PrcState::IsAbortCmd)
+    // and its engine FSM (PrcEngineState::AbortCmd), role-agnostic, so one
+    // send reaches every board. NOTE: the spec also requires "immediately
+    // triggers the SepMech" -- no separation mechanism driver/CAN message
+    // exists anywhere in this codebase yet, so that part is not done here.
+    if (currentState == State::ABORT_IN_FLIGHT || currentState == State::ABORT_ON_GROUND) {
+      Fc_Can_SendBroadcastAbort();
     }
   }
 }

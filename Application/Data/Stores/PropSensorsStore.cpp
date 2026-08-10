@@ -23,7 +23,8 @@ PropSensors::PropSensors()
     fuel_inj_cooling_temperature(0.0),
     LOX_inj_temperature(0.0),
     chamber_temperature(0.0),
-    PR_state(0)
+    PR_state(0),
+    timer_burn(0)
 {}
 
 PropSensorsStore::PropSensorsStore() {}
