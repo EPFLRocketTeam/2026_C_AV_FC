@@ -363,6 +363,12 @@ void AvState::update(const DataDump &dump) {
   if (currentState == State::DESCENT) {
     timers.set_descent_timer(HAL_GetTick() - descent_entry_ms_);
   }
+
+  // fromBurn()'s BURN_MAX_DURATION fallback reads this -- reuses
+  // liftoff_entry_ms_ since BURN entry is liftoff, same timestamp.
+  if (currentState == State::BURN) {
+    GOATStore::get_instance().propSensorsStore.set_timer_burn(HAL_GetTick() - liftoff_entry_ms_);
+  }
 }
 std::string AvState::stateToString(State state) {
   switch (state) {

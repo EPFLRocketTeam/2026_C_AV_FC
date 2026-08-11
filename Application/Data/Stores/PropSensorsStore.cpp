@@ -82,3 +82,6 @@ void PropSensorsStore::set_chamber_temperature(double value) { data_.chamber_tem
 
 uint32_t PropSensorsStore::get_PR_state() const { return data_.PR_state; }
 void PropSensorsStore::set_PR_state(uint32_t value) { data_.PR_state = value; }
+
+uint32_t PropSensorsStore::get_timer_burn() const { return data_.timer_burn; }
+void PropSensorsStore::set_timer_burn(uint32_t value) { data_.timer_burn = value; }

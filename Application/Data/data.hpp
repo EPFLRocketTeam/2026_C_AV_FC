@@ -403,6 +403,9 @@ public:
 
   uint32_t get_PR_state() const;
   void set_PR_state(uint32_t value);
+
+  uint32_t get_timer_burn() const;
+  void set_timer_burn(uint32_t value);
 };
 
 class ValvesStore : public IStore<Valves> {
