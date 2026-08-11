@@ -24,10 +24,10 @@ static DataDump neutralDump() {
 static DataDump validIgnitionDump() {
   DataDump d = neutralDump();
   d.event.timer_launch_delay    = true;
-  // Instantaneous pressures must stay below the safety check limit.
-  d.propSensors.N2_pressure     = PRESSURIZATION_CHECK_PRESSURE - 5.0;
-  d.propSensors.fuel_pressure   = PRESSURIZATION_CHECK_PRESSURE - 5.0;
-  d.propSensors.LOX_pressure    = PRESSURIZATION_CHECK_PRESSURE - 5.0;
+  // Instantaneous LOX/Fuel pressures must stay below the safety check
+  // limit (N2/COPV isn't part of that check -- see fromPressurization()).
+  d.propSensors.fuel_pressure   = PRESSURIZATION_MAX_CRITICAL_PRESSURE - 5.0;
+  d.propSensors.LOX_pressure    = PRESSURIZATION_MAX_CRITICAL_PRESSURE - 5.0;
   // Mean pressures must be inside the valid pressurisation band.
   const double mid = (PRESSURE_LOWER + PRESSURE_UPPER) / 2.0;
   d.propSensors.N2_pressure_mean   = mid;
@@ -81,7 +81,9 @@ static void advanceToIgnition(AvState &fsm) {
 static void advanceToBurn(AvState &fsm) {
   advanceToIgnition(fsm);
   DataDump d = neutralDump();
-  d.vehiculeOverview.no_cable_continuity = 1; // umbilical disconnected → liftoff
+  // Liftoff requires both signals together, not either alone.
+  d.vehiculeOverview.no_cable_continuity = 1;
+  d.event.vertical_acc_hold = ACC_HOLD_DID_HOLD;
   fsm.update(d);
   ASSERT_EQ(fsm.getCurrentState(), State::BURN);
 }
@@ -263,23 +265,25 @@ TEST_F(AvStatePressurization, AbortOnGroundWhenAbortCmdReceived) {
   EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_ON_GROUND);
 }
 
-TEST_F(AvStatePressurization, AbortOnGroundWhenN2InstantPressureTooHigh) {
+TEST_F(AvStatePressurization, StaysInPressurizationWhenOnlyN2InstantPressureTooHigh) {
+  // Spec's overpressure abort only covers LOX/Fuel tanks, not N2/COPV --
+  // N2 pressure alone must not trigger an abort.
   DataDump d = neutralDump();
-  d.propSensors.N2_pressure = PRESSURIZATION_CHECK_PRESSURE + 1.0;
+  d.propSensors.N2_pressure = PRESSURIZATION_MAX_CRITICAL_PRESSURE + 1.0;
   fsm_.update(d);
-  EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_ON_GROUND);
+  EXPECT_EQ(fsm_.getCurrentState(), State::PRESSURIZATION);
 }
 
 TEST_F(AvStatePressurization, AbortOnGroundWhenFuelInstantPressureTooHigh) {
   DataDump d = neutralDump();
-  d.propSensors.fuel_pressure = PRESSURIZATION_CHECK_PRESSURE + 1.0;
+  d.propSensors.fuel_pressure = PRESSURIZATION_MAX_CRITICAL_PRESSURE + 1.0;
   fsm_.update(d);
   EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_ON_GROUND);
 }
 
 TEST_F(AvStatePressurization, AbortOnGroundWhenLOXInstantPressureTooHigh) {
   DataDump d = neutralDump();
-  d.propSensors.LOX_pressure = PRESSURIZATION_CHECK_PRESSURE + 1.0;
+  d.propSensors.LOX_pressure = PRESSURIZATION_MAX_CRITICAL_PRESSURE + 1.0;
   fsm_.update(d);
   EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_ON_GROUND);
 }
@@ -315,15 +319,28 @@ protected:
   AvState fsm_;
 };
 
-TEST_F(AvStateIgnitionTest, TransitionsToBurnWhenCableDisconnected) {
+TEST_F(AvStateIgnitionTest, StaysInIgnitionWhenOnlyCableDisconnected) {
+  // Liftoff requires cable loss AND accel confirmation together -- cable
+  // alone is no longer sufficient (a disconnected cable alone could be a
+  // connector fault, not a real launch).
   DataDump d = neutralDump();
   d.vehiculeOverview.no_cable_continuity = 1;
   fsm_.update(d);
-  EXPECT_EQ(fsm_.getCurrentState(), State::BURN);
+  EXPECT_EQ(fsm_.getCurrentState(), State::IGNITION);
 }
 
-TEST_F(AvStateIgnitionTest, TransitionsToBurnWhenVerticalAccHoldDetected) {
+TEST_F(AvStateIgnitionTest, StaysInIgnitionWhenOnlyVerticalAccHoldDetected) {
+  // Same reasoning in reverse -- accel confirmation alone, without the
+  // cable actually disconnecting, isn't sufficient either.
   DataDump d = neutralDump();
+  d.event.vertical_acc_hold = ACC_HOLD_DID_HOLD;
+  fsm_.update(d);
+  EXPECT_EQ(fsm_.getCurrentState(), State::IGNITION);
+}
+
+TEST_F(AvStateIgnitionTest, TransitionsToBurnWhenCableDisconnectedAndAccHoldDetected) {
+  DataDump d = neutralDump();
+  d.vehiculeOverview.no_cable_continuity = 1;
   d.event.vertical_acc_hold = ACC_HOLD_DID_HOLD;
   fsm_.update(d);
   EXPECT_EQ(fsm_.getCurrentState(), State::BURN);
@@ -336,11 +353,15 @@ TEST_F(AvStateIgnitionTest, AbortOnGroundWhenAbortCmdReceived) {
   EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_ON_GROUND);
 }
 
-TEST_F(AvStateIgnitionTest, AbortInFlightWhenCatastrophicFailureRaised) {
+TEST_F(AvStateIgnitionTest, AbortOnGroundWhenCatastrophicFailureRaised) {
+  // IGNITION only has ABORT_ON_GROUND/BURN as valid outgoing edges --
+  // catastrophic failure here goes to ABORT_ON_GROUND, not
+  // ABORT_IN_FLIGHT (that only exists from BURN/ASCENT/DESCENT, after
+  // liftoff is confirmed).
   DataDump d = neutralDump();
   d.event.catastrophic_failure = true;
   fsm_.update(d);
-  EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_IN_FLIGHT);
+  EXPECT_EQ(fsm_.getCurrentState(), State::ABORT_ON_GROUND);
 }
 
 TEST_F(AvStateIgnitionTest, StaysInIgnitionWhenAccHoldNotElapsed) {
@@ -605,7 +626,12 @@ TEST(AvStateChain, FullHappyPathFromInitToLanded) {
   fsm.update(validIgnitionDump());
   EXPECT_EQ(fsm.getCurrentState(), State::IGNITION);
 
-  { DataDump d = neutralDump(); d.vehiculeOverview.no_cable_continuity = 1; fsm.update(d); }
+  {
+    DataDump d = neutralDump();
+    d.vehiculeOverview.no_cable_continuity = 1;
+    d.event.vertical_acc_hold = ACC_HOLD_DID_HOLD;
+    fsm.update(d);
+  }
   EXPECT_EQ(fsm.getCurrentState(), State::BURN);
 
   { DataDump d = neutralDump(); d.event.cut_off_detected = true; fsm.update(d); }

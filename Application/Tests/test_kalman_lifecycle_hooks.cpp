@@ -26,10 +26,10 @@ DataDump ignitionReadyDump() {
     d.propSensors.fuel_pressure_mean = mid;
     d.propSensors.LOX_pressure_mean = mid;
 
-    // Keep instantaneous values below abort threshold.
-    d.propSensors.N2_pressure = PRESSURIZATION_CHECK_PRESSURE - 5.0;
-    d.propSensors.fuel_pressure = PRESSURIZATION_CHECK_PRESSURE - 5.0;
-    d.propSensors.LOX_pressure = PRESSURIZATION_CHECK_PRESSURE - 5.0;
+    // Keep instantaneous LOX/Fuel values below abort threshold (N2/COPV
+    // isn't part of that check -- see fromPressurization()).
+    d.propSensors.fuel_pressure = PRESSURIZATION_MAX_CRITICAL_PRESSURE - 5.0;
+    d.propSensors.LOX_pressure = PRESSURIZATION_MAX_CRITICAL_PRESSURE - 5.0;
     return d;
 }
 

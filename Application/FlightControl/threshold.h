@@ -18,7 +18,7 @@
 #define PRESSURIZATION_OX_SET_PRESSURE   25.0f   // Bar
 #define PRESSURIZATION_FUEL_SET_PRESSURE 25.0f   // Bar
 #define PRESSURIZATION_RAMP_UP_DURATION  2.0f    // s
-#define PRESSURIZATION_CHECK_PRESSURE    20.0f   // Bar
+#define PRESSURIZATION_MAX_CRITICAL_PRESSURE 20.0f   // Bar
 #define PRECHILL_DURATION                30.0f   // s
 #define IGNITER_DURATION                 1.5f    // s
 #define IGNITION_DELAY                   0.5f    // s

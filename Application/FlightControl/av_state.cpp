@@ -87,9 +87,8 @@ State AvState::fromArmed(DataDump const &dump) {
 
 State AvState::fromPressurization(DataDump const &dump) {
   if (dump.uplinkCmd.id == 1 ||
-      PRESSURIZATION_CHECK_PRESSURE < dump.propSensors.N2_pressure ||
-      PRESSURIZATION_CHECK_PRESSURE < dump.propSensors.fuel_pressure ||
-      PRESSURIZATION_CHECK_PRESSURE < dump.propSensors.LOX_pressure)
+      PRESSURIZATION_MAX_CRITICAL_PRESSURE < dump.propSensors.fuel_pressure ||
+      PRESSURIZATION_MAX_CRITICAL_PRESSURE < dump.propSensors.LOX_pressure)
   // TODO: replace this with proper cmd id from the
   // protocol and add the condition p_tanks > p_prvs
   {
@@ -120,28 +119,22 @@ State AvState::fromIgnition(DataDump const &dump) {
     return State::ABORT_ON_GROUND;
   }
 
-  // --- Liftoff detection (DONE: tri-state vertical_acc_hold) ---
-  // The cable is always authoritative: if the umbilical disconnects,
-  // the rocket has left the pad regardless of the IMU evaluation.
-  if (dump.vehiculeOverview.no_cable_continuity) {
+  // --- Liftoff detection (tri-state vertical_acc_hold, AND'd with cable) ---
+  // Per spec: liftoff detected requires no_cable_continuity AND the accel
+  // hold confirming it together, not either alone -- a disconnected cable
+  // by itself doesn't prove the vehicle left the pad (could be a connector
+  // fault), and a confirmed accel hold without a cable disconnect is
+  // equally ambiguous. Same reasoning in reverse for "liftoff not
+  // detected". If the two signals disagree, or the accel hold evaluation
+  // hasn't concluded yet (ACC_HOLD_NOT_ELAPSED), stay in IGNITION.
+  const bool cable_lost = dump.vehiculeOverview.no_cable_continuity;
+  if (cable_lost && dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
     return State::BURN;
   }
-
-  // IMU-based liftoff: the Kalman subsystem evaluates whether the mean
-  // vertical acceleration exceeded ACCEL_LIFTOFF for ACCEL_LIFTOFF_DURATION_MS
-  // after entering IGNITION (post-RAMP_UP).  Three possible values:
-  //   ACC_HOLD_NOT_ELAPSED     – window still running → stay in IGNITION.
-  //   ACC_HOLD_DID_HOLD        – confirmed liftoff    → transition to BURN.
-  //   ACC_HOLD_DID_NOT_HOLD    – motor failed         → abort on ground.
-  if (dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
-    return State::BURN;
-  }
-
-  if (dump.event.vertical_acc_hold == ACC_HOLD_DID_NOT_HOLD) {
+  if (!cable_lost && dump.event.vertical_acc_hold == ACC_HOLD_DID_NOT_HOLD) {
     return State::ABORT_ON_GROUND;
   }
 
-  // ACC_HOLD_NOT_ELAPSED – evaluation still in progress.
   return currentState;
 }
 
