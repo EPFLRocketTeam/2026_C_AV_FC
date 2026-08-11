@@ -239,3 +239,32 @@ void Fc_Can_SendBroadcastAbort(void) {
   ctx.driver.driver_ptr = g_hfdcan;
   pi::send_broadcast_abort(&ctx, key);
 }
+
+static void SendCmdValves(void (*send)(pi::context*, pi::payload::cmd_valves), uint8_t valve_id, uint8_t open) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::cmd_valves cmd{};
+  cmd.valve_id = valve_id;
+  cmd.state    = open ? pi::constants::VALVE_STATE_OPEN : pi::constants::VALVE_STATE_CLOSED;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  send(&ctx, cmd);
+}
+
+void Fc_Can_SendDprLoxVent(uint8_t open) {
+  SendCmdValves(pi::send_dpr_lox_cmd_valves, pi::constants::VALVE_VENT, open);
+}
+void Fc_Can_SendDprEthVent(uint8_t open) {
+  SendCmdValves(pi::send_dpr_eth_cmd_valves, pi::constants::VALVE_VENT, open);
+}
+void Fc_Can_SendDprLoxSafety(uint8_t open) {
+  SendCmdValves(pi::send_dpr_lox_cmd_valves, pi::constants::VALVE_SAFETY, open);
+}
+void Fc_Can_SendDprEthSafety(uint8_t open) {
+  SendCmdValves(pi::send_dpr_eth_cmd_valves, pi::constants::VALVE_SAFETY, open);
+}
+void Fc_Can_SendDprLoxCopvVent(uint8_t open) {
+  SendCmdValves(pi::send_dpr_lox_cmd_valves, pi::constants::VALVE_COPV_VENT, open);
+}
+void Fc_Can_SendDprEthCopvVent(uint8_t open) {
+  SendCmdValves(pi::send_dpr_eth_cmd_valves, pi::constants::VALVE_COPV_VENT, open);
+}

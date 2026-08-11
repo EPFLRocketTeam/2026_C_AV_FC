@@ -69,6 +69,23 @@ void Fc_Can_SendDprEthPassivate(void);
 void Fc_Can_SendDprEthReset(void);
 void Fc_Can_SendBroadcastAbort(void);
 
+// Ground-station manual valve commands (VENT LOX/FUEL, PRESSURE LOX/FUEL,
+// VENT_COPV) -- exercises the same cmd_valves message as
+// Fc_Can_SendMainValveCmd, but targeting VALVE_SAFETY/VALVE_VENT/
+// VALVE_COPV_VENT instead of the Sol3/Sol4 bench channels. See
+// 2026_C_AV_PRC's prc_can.cpp ApplyCmdValves: only takes effect while the
+// receiving DPR board's FSM is in State::MANUAL, so it can't fight the
+// FSM's own valve control once a mission sequence is running. VENT_COPV
+// has no dedicated valve -- N2/COPV venting is a bundled Vent+Safety+
+// ball-valve sequence (see Prc_Fsm_ManualVentCopv), sent to both DPR
+// boards from fc_shell.cpp's OnVentCopv since it isn't board-specific.
+void Fc_Can_SendDprLoxVent(uint8_t open);
+void Fc_Can_SendDprEthVent(uint8_t open);
+void Fc_Can_SendDprLoxSafety(uint8_t open);
+void Fc_Can_SendDprEthSafety(uint8_t open);
+void Fc_Can_SendDprLoxCopvVent(uint8_t open);
+void Fc_Can_SendDprEthCopvVent(uint8_t open);
+
 #ifdef __cplusplus
 }
 #endif

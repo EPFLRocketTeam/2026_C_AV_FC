@@ -31,11 +31,31 @@ void OnMainFuel(void*, bool value) noexcept {
   printf("[SHELL] main fuel %s\r\n", value ? "open" : "close");
   Fc_Can_SendMainValveCmd(1, value ? 1 : 0);
 }
-void OnVentCopv(void*, bool value) noexcept { printf("[SHELL] vent copv %s\r\n", value ? "open" : "close"); }
-void OnVentLox(void*, bool value)  noexcept { printf("[SHELL] vent lox %s\r\n", value ? "open" : "close"); }
-void OnVentFuel(void*, bool value) noexcept { printf("[SHELL] vent fuel %s\r\n", value ? "open" : "close"); }
-void OnPressureLox(void*, bool value)  noexcept { printf("[SHELL] pressure lox %s\r\n", value ? "open" : "close"); }
-void OnPressureFuel(void*, bool value) noexcept { printf("[SHELL] pressure fuel %s\r\n", value ? "open" : "close"); }
+// VENT_COPV has no dedicated valve -- N2/COPV venting is a bundled
+// Vent+Safety+ball-valve sequence (see 2026_C_AV_PRC's
+// Prc_Fsm_ManualVentCopv), sent to both DPR boards since it isn't
+// board-specific.
+void OnVentCopv(void*, bool value) noexcept {
+  printf("[SHELL] vent copv %s\r\n", value ? "open" : "close");
+  Fc_Can_SendDprLoxCopvVent(value ? 1 : 0);
+  Fc_Can_SendDprEthCopvVent(value ? 1 : 0);
+}
+void OnVentLox(void*, bool value)  noexcept {
+  printf("[SHELL] vent lox %s\r\n", value ? "open" : "close");
+  Fc_Can_SendDprLoxVent(value ? 1 : 0);
+}
+void OnVentFuel(void*, bool value) noexcept {
+  printf("[SHELL] vent fuel %s\r\n", value ? "open" : "close");
+  Fc_Can_SendDprEthVent(value ? 1 : 0);
+}
+void OnPressureLox(void*, bool value)  noexcept {
+  printf("[SHELL] pressure lox %s\r\n", value ? "open" : "close");
+  Fc_Can_SendDprLoxSafety(value ? 1 : 0);
+}
+void OnPressureFuel(void*, bool value) noexcept {
+  printf("[SHELL] pressure fuel %s\r\n", value ? "open" : "close");
+  Fc_Can_SendDprEthSafety(value ? 1 : 0);
+}
 
 // Engine bay (PRC-P) ignition sequence -- manual/bench-test triggers for
 // 2026_C_AV_PRC's PrcEngineState (engine_state.cpp). See prc_can.hpp's
@@ -56,6 +76,13 @@ void OnPrcPassivate(void*) noexcept {
 void OnPrcReset(void*) noexcept {
   printf("[SHELL] prc reset\r\n");
   Fc_Can_SendPrcReset();
+}
+// Same broadcast_abort send as "dpr broadcast_abort" -- kept as its own
+// "prc abort" alias since it's the more discoverable name when
+// bench-testing the engine board specifically.
+void OnPrcAbort(void*) noexcept {
+  printf("[SHELL] prc abort\r\n");
+  Fc_Can_SendBroadcastAbort();
 }
 
 // DPR (LOX/ETH) bench-test triggers -- see prc_can.hpp's comment on the
@@ -117,6 +144,7 @@ void EnsureInit() {
     g_driver.prc_ignite = OnPrcIgnite;
     g_driver.prc_passivate = OnPrcPassivate;
     g_driver.prc_reset = OnPrcReset;
+    g_driver.prc_abort = OnPrcAbort;
     g_driver.dpr_lox_pressurize = OnDprLoxPressurize;
     g_driver.dpr_lox_abort = OnDprLoxAbort;
     g_driver.dpr_lox_passivate = OnDprLoxPassivate;
