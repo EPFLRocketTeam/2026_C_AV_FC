@@ -14,11 +14,19 @@ uint32_t g_line_len = 0;
 context g_cmd_ctx;
 driver  g_driver;
 
-// Stub handlers -- print what was parsed so the whole pipeline (typing ->
-// buffering -> push_char -> here) can be verified end to end before the
-// real CAN-command mapping is decided for each one.
-void OnPressurizeLox(void*, float value) noexcept { printf("[SHELL] pressurize lox %f\r\n", value); }
-void OnPressurizeEth(void*, float value) noexcept { printf("[SHELL] pressurize eth %f\r\n", value); }
+// PRESSURIZE ("Start the pressurization process") has no per-board split
+// and no float target in the CAN dictionary -- dpr_lox_pressurize/
+// dpr_eth_pressurize are both just on_off (see prc_intranet's
+// message_list.hpp), and the actual target pressure is a hardcoded
+// firmware constant on the DPR boards themselves (prc_state.cpp's
+// k_lox_set_pressure_bar/k_fuel_set_pressure_bar), not something
+// commanded per-mission. So this just starts/stops pressurization on
+// both boards together.
+void OnPressurize(void*, bool value) noexcept {
+  printf("[SHELL] pressurize %s\r\n", value ? "on" : "off");
+  Fc_Can_SendDprLoxPressurize(value ? 1 : 0);
+  Fc_Can_SendDprEthPressurize(value ? 1 : 0);
+}
 // Bench-test hookup: sends the CAN command that drives the two spare
 // solenoids wired to the DPR-LOX bench board (Sol3/Sol4), repurposed as
 // "LOX main"/"Ethanol main" -- see 2026_C_AV_PRC's prc_can.cpp
@@ -131,8 +139,7 @@ void EnsureInit() {
     if (g_initialized) return;
     g_initialized = true;
 
-    g_driver.p_lox = OnPressurizeLox;
-    g_driver.p_eth = OnPressurizeEth;
+    g_driver.pressurize = OnPressurize;
     g_driver.main_lox = OnMainLox;
     g_driver.main_fuel = OnMainFuel;
     g_driver.vent_copv = OnVentCopv;
