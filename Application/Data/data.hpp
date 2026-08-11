@@ -70,8 +70,9 @@ struct SensStatus {
 };
 
 struct FlightEventTimers {// TODO: Properly update the store test
-  uint32_t flight_duration;  
-  uint32_t descent_duration; 
+  uint32_t flight_duration;
+  uint32_t ascent_duration;
+  uint32_t descent_duration;
 
   FlightEventTimers();
 };
@@ -250,6 +251,9 @@ public:
 
   uint32_t get_flight_timer() const;
   void set_flight_timer(uint32_t value);
+
+  uint32_t get_ascent_timer() const;
+  void set_ascent_timer(uint32_t value);
 
   uint32_t get_descent_timer() const;
   void set_descent_timer(uint32_t value);

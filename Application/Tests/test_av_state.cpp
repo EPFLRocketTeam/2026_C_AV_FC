@@ -419,9 +419,9 @@ TEST_F(AvStateAscentTest, TransitionsToDescentWhenApogeeDetected) {
   EXPECT_EQ(fsm_.getCurrentState(), State::DESCENT);
 }
 
-TEST_F(AvStateAscentTest, TransitionsToDescentWhenFlightTimerExceedsAscentMax) {
+TEST_F(AvStateAscentTest, TransitionsToDescentWhenAscentTimerExceedsAscentMax) {
   DataDump d = neutralDump();
-  d.flightEventTimers.flight_duration = static_cast<uint32_t>(ASCENT_MAX_DURATION) + 1;
+  d.flightEventTimers.ascent_duration = static_cast<uint32_t>(ASCENT_MAX_DURATION) + 1;
   fsm_.update(d);
   EXPECT_EQ(fsm_.getCurrentState(), State::DESCENT);
 }

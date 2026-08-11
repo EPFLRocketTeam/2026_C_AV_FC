@@ -181,7 +181,7 @@ State AvState::fromAscent(DataDump const &dump) {
   // If all the sensors are calibrated and ready for use we go to the MANUAL
   // state
   else if (dump.event.apogee_detected ||
-           dump.flightEventTimers.flight_duration > ASCENT_MAX_DURATION) {
+           dump.flightEventTimers.ascent_duration > ASCENT_MAX_DURATION) {    // TODO confirm it is indeed ascent and not the flight duration that is wanted here
     // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
     return State::DESCENT;
   }
@@ -320,11 +320,23 @@ void AvState::update(const DataDump &dump) {
     // the engine with subsequent passivation") -- broadcast_abort is
     // recognized by both 2026_C_AV_PRC's DPR FSM (PrcState::IsAbortCmd)
     // and its engine FSM (PrcEngineState::AbortCmd), role-agnostic, so one
-    // send reaches every board. NOTE: the spec also requires "immediately
-    // triggers the SepMech" -- no separation mechanism driver/CAN message
-    // exists anywhere in this codebase yet, so that part is not done here.
+    // send reaches every board.
     if (currentState == State::ABORT_IN_FLIGHT || currentState == State::ABORT_ON_GROUND) {
       Fc_Can_SendBroadcastAbort();
+    }
+
+    // TODO(SepMech): spec requires "immediately triggers the SepMech" on
+    // entering ABORT_IN_FLIGHT. No separation mechanism driver/CAN message
+    // exists anywhere in this codebase yet -- call it here once it does.
+    if (currentState == State::ABORT_IN_FLIGHT) {
+      // Fc_Can_SendSepMechTrigger();
+    }
+
+    // TODO(SepMech): spec's DESCENT description: "Apogee reached and
+    // detected, separation mechanism triggered." Same missing driver as
+    // above -- call it here once it exists.
+    if (currentState == State::DESCENT) {
+      // Fc_Can_SendSepMechTrigger();
     }
   }
 }
