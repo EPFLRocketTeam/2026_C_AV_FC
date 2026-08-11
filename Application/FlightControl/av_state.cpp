@@ -312,7 +312,15 @@ void AvState::update(const DataDump &dump) {
 
     // Liftoff contract: first in-flight state reached by this FSM is BURN.
     if (currentState == State::BURN) {
+      liftoff_entry_ms_ = HAL_GetTick();
+      has_lifted_off_   = true;
       kalman_on_liftoff(dump.av_timestamp);
+    }
+    if (currentState == State::ASCENT) {
+      ascent_entry_ms_ = HAL_GetTick();
+    }
+    if (currentState == State::DESCENT) {
+      descent_entry_ms_ = HAL_GetTick();
     }
 
     // Abort side effect (spec: "Immediately gives the command to the DPRs
@@ -338,6 +346,22 @@ void AvState::update(const DataDump &dump) {
     if (currentState == State::DESCENT) {
       // Fc_Can_SendSepMechTrigger();
     }
+  }
+
+  // Published every tick (not just on transition) so fromAscent()/
+  // fromDescent()'s duration checks see a live, continuously advancing
+  // value -- ascent/descent_duration reset to 0 on entry (stamped above)
+  // and only mean anything while actually in that state; flight_duration
+  // keeps advancing for the rest of the flight once liftoff has happened.
+  auto& timers = GOATStore::get_instance().flightEventTimersStore;
+  if (has_lifted_off_) {
+    timers.set_flight_timer(HAL_GetTick() - liftoff_entry_ms_);
+  }
+  if (currentState == State::ASCENT) {
+    timers.set_ascent_timer(HAL_GetTick() - ascent_entry_ms_);
+  }
+  if (currentState == State::DESCENT) {
+    timers.set_descent_timer(HAL_GetTick() - descent_entry_ms_);
   }
 }
 std::string AvState::stateToString(State state) {

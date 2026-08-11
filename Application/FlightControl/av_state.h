@@ -64,6 +64,15 @@ private:
 
 
     State currentState;
+
+    // HAL_GetTick() timestamps for the timers published into
+    // GOATStore::flightEventTimersStore every tick (see update()) --
+    // flight_duration/ascent_duration/descent_duration, consumed by
+    // fromAscent()/fromDescent()'s duration-based exit conditions.
+    uint32_t liftoff_entry_ms_ = 0;
+    uint32_t ascent_entry_ms_  = 0;
+    uint32_t descent_entry_ms_ = 0;
+    bool     has_lifted_off_   = false;
 };
 
 #endif
