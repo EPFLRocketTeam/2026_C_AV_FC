@@ -30,10 +30,14 @@
 #define C_STAR                           1500.0f // m/s
 #define THROAT_AREA                      0.005f  // m2
 #define CUTOFF_DELAY                     0.2f    // s
-#define MIN_BURN_DURATION                10.0f   // s
+#define MIN_BURN_DURATION                60.0f   // s. Must cover the engine board's own
+                                                  // CLEAR_TO_IGNITE...BURN stage chain
+                                                  // (5 stages x 10s placeholder each, ~50s)
+                                                  // before trusting MO/ME-both-closed as a
+                                                  // real cutoff instead of pre-ignition.
 #define BURN_IMPULSE                     50000.0f // N.s
 #define BURN_MAX_DURATION                120.0f  // s
-#define ASCENT_MAX_DURATION              300.0f  // s
+#define ASCENT_MAX_DURATION              10.0f   // s -- bench placeholder, real value is 300.0f
 #define DESCENT_THRESHOLD_SPEED          -3.0f   // m/s
 #define DESCENT_THRESHOLD_DURATION       0.3f    // s
 #define PASSIVATION_DELAY_PRB            5.0f    // s

@@ -97,7 +97,7 @@ RingBuffer<GpsBasicFixData, 100> gpsData;
 // directly into the gpsData ring buffer, exercising the full GNSS→ESKF→rewind
 // pipeline without a real GPS receiver.
 #ifndef FAKE_GNSS_ENABLE
-#define FAKE_GNSS_ENABLE 0
+#define FAKE_GNSS_ENABLE 1
 #endif
 
 #if FAKE_GNSS_ENABLE
@@ -605,9 +605,12 @@ extern "C" void app_super_loop_setup(void) {
     // D-cache clean+invalidate before baro init as a safety measure.
     // If D-cache holds stale data for the SPI handle structs (AXI SRAM),
     // this ensures a clean state. Costs ~microseconds, runs once.
-    SCB_CleanInvalidateDCache();
-    __DSB();
-    __ISB();
+    // TEMPORARY: disabled to test whether this call is faulting -- boot
+    // silently died right after the print before this block and right
+    // before the print after it, with nothing but this call in between.
+    // SCB_CleanInvalidateDCache();
+    // __DSB();
+    // __ISB();
     printf("[APP] D-cache clean+invalidate done, starting baro init...\r\n");
 
     // Raw SPI test: bypasses SDK, directly reads chip IDs from all 4 baros
@@ -620,7 +623,7 @@ extern "C" void app_super_loop_setup(void) {
     }
 
     bool gps_state = g_superloop.gpsModule.init();
-#if FAKE_GNSS_ENABLE
+#if FAKE_GNSS_ENABLE   /////
     printf("[APP] FAKE_GNSS_ENABLE=1: skipping real GPS init, using synthetic 16Hz GNSS\r\n");
     // Don't init real GPS — no hardware attached.
 #else

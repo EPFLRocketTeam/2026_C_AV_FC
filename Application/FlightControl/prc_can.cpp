@@ -16,9 +16,7 @@ namespace {
 
 FDCAN_HandleTypeDef* g_hfdcan = nullptr;
 
-// HAL_FDCAN_AddMessageToTxFifoQ word-copies from this buffer regardless of
-// dlc, so pad to the full word-aligned MAX_PAYLOAD_SIZE rather than passing
-// `buffer` (only guaranteed readable for `dlc` bytes) straight through.
+// Pads to the full word-aligned payload since the HAL always word-copies.
 void CbSend(void* driver_ptr, uint16_t can_id, const uint8_t* buffer, uint32_t dlc) noexcept {
   auto* hfdcan = static_cast<FDCAN_HandleTypeDef*>(driver_ptr);
 
@@ -41,18 +39,11 @@ void CbSend(void* driver_ptr, uint16_t can_id, const uint8_t* buffer, uint32_t d
   }
 }
 
-// One reassembler per source board -- each owns its own 128-byte buffer,
-// see log_aggregator/reassembler.hpp's warning against sharing one
-// instance across sources.
+// One reassembler per source board, each with its own buffer.
 log_aggregator::LineReassembler g_log_prc_engine;
 log_aggregator::LineReassembler g_log_dpr_eth;
 log_aggregator::LineReassembler g_log_dpr_lox;
 
-// ctx is the source's tag string (e.g. "[PRC-ETH]"), passed straight
-// through from whichever Feed* call below invoked feed(). Goes out FC's
-// own local VCP via printf/_write, same path FC's own logs already use
-// -- safe from recursion since receiving a CAN frame and printing here
-// never triggers another CAN send on this board.
 void PrintTaggedLine(void* ctx, const char* line, uint32_t length) noexcept {
   printf("%s %.*s\r\n", static_cast<const char*>(ctx), static_cast<int>(length), line);
 }
@@ -76,10 +67,7 @@ void OnDprLoxPressures(void*, pi::payload::dpr_lox_pressures p) noexcept {
   sensors.set_LOX_pressure(p.p_ota);
 }
 
-// Engine cut-off (ECO) detection: the engine board's prc_state.valve_mask
-// carries MO/ME open/closed state (see prc_intranet's const.hpp,
-// VALVE_MASK_BIT_MO/ME). Both closed means the engine has cut off --
-// AvState::fromBurn() reads this back via event.cut_off_detected.
+// Both valves closed means the engine cut off.
 void OnPrcState(void*, pi::payload::prc_state state) noexcept {
   const bool mo_open = (state.valve_mask & pi::constants::VALVE_MASK_BIT_MO) != 0;
   const bool me_open = (state.valve_mask & pi::constants::VALVE_MASK_BIT_ME) != 0;
@@ -111,6 +99,7 @@ void Fc_Can_Init(FDCAN_HandleTypeDef *hfdcan) {
   g_hfdcan = hfdcan;
 }
 
+// Targets the engine board's own MO/ME valves, not a DPR board.
 void Fc_Can_SendMainValveCmd(uint8_t is_ethanol, uint8_t open) {
   if (g_hfdcan == nullptr) return;
 
@@ -123,10 +112,6 @@ void Fc_Can_SendMainValveCmd(uint8_t is_ethanol, uint8_t open) {
   pi::send_prc_cmd_valves(&ctx, cmd);
 }
 
-// Unlike Fc_Can_SendMainValveCmd (which has to borrow DPR-LOX's cmd_valves
-// message since the bench board's real role is DprLox), these all target
-// Node::PrcP directly -- the message id already picks the engine board,
-// no valve_id trick needed.
 void Fc_Can_SendPrcClearToIgnite(void) {
   if (g_hfdcan == nullptr) return;
   pi::context& ctx = Ctx();
@@ -157,6 +142,13 @@ void Fc_Can_SendPrcReset(void) {
   pi::context& ctx = Ctx();
   ctx.driver.driver_ptr = g_hfdcan;
   pi::send_prc_reset(&ctx, r);
+}
+
+void Fc_Can_SendPrcColdflow(void) {
+  if (g_hfdcan == nullptr) return;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_prc_coldflow(&ctx, pi::payload::empty{});
 }
 
 void Fc_Can_SendDprLoxPressurize(uint8_t open) {
@@ -267,4 +259,22 @@ void Fc_Can_SendDprLoxCopvVent(uint8_t open) {
 }
 void Fc_Can_SendDprEthCopvVent(uint8_t open) {
   SendCmdValves(pi::send_dpr_eth_cmd_valves, pi::constants::VALVE_COPV_VENT, open);
+}
+
+void Fc_Can_SendDprLoxBallValve(float percent_open) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::ball_valve_position pos{};
+  pos.percent_open = percent_open;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_lox_ball_valve(&ctx, pos);
+}
+
+void Fc_Can_SendDprEthBallValve(float percent_open) {
+  if (g_hfdcan == nullptr) return;
+  pi::payload::ball_valve_position pos{};
+  pos.percent_open = percent_open;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_dpr_eth_ball_valve(&ctx, pos);
 }

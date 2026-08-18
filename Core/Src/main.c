@@ -35,6 +35,7 @@
 #include "../../Drivers/ADXL375/Tests/adxl375_manual_test.h"
 #include "../../Application/Modules/sd_hardware_init.h"
 #include "../../Application/FlightControl/prc_can.hpp"
+#include "../../Application/main.h"
 #include "SX127X.h"
 /* USER CODE END Includes */
 
@@ -181,6 +182,7 @@ int main(void)
   MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
 
+
   Fc_Can_Init(&hfdcan1); /* latch hfdcan1 for Fc_Can_SendMainValveCmd, see Application/FlightControl/prc_can.hpp */
 
   /* Small delay to let USB enumerate -- but drain (and discard) FIFO0 while
@@ -193,43 +195,49 @@ int main(void)
    * discarding FIFO0 here (no printf involved) keeps the FIFO empty
    * through the whole USB enumeration window regardless of how long any
    * individual printf would have blocked. */
-  {
-    uint32_t usb_wait_start = HAL_GetTick();
-    while (HAL_GetTick() - usb_wait_start < 5000)
-    {
-      FDCAN_RxHeaderTypeDef rxHeader;
-      uint8_t rxData[8] = {0};
-      while (HAL_FDCAN_GetRxFifoFillLevel(&hfdcan1, FDCAN_RX_FIFO0) > 0)
-      {
-        if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &rxHeader, rxData) != HAL_OK)
-        {
-          break;
-        }
-      }
-    }
-    /* Clear any overflow flagged while deliberately discarding above --
-     * nothing was being reassembled/printed yet, so it isn't meaningful,
-     * and would otherwise show up as a spurious warning on the first real
-     * loop iteration below. */
-    __HAL_FDCAN_CLEAR_FLAG(&hfdcan1, FDCAN_FLAG_RX_FIFO0_MESSAGE_LOST);
-  }
+  /* TEMPORARY: disabled to test whether this 5s busy-wait (added for the
+   * PRC-CAN work, doesn't exist on the known-working plume branch) is
+   * delaying app_super_loop_setup()/iterate() long enough that IMU
+   * interrupts/data haven't started flowing by the time kalman_loop()
+   * first runs, tripping the zero-healthy-sources case in its Step 3
+   * round-robin drain loop. */
+  // {
+  //   uint32_t usb_wait_start = HAL_GetTick();
+  //   while (HAL_GetTick() - usb_wait_start < 5000)
+  //   {
+  //     FDCAN_RxHeaderTypeDef rxHeader;
+  //     uint8_t rxData[8] = {0};
+  //     while (HAL_FDCAN_GetRxFifoFillLevel(&hfdcan1, FDCAN_RX_FIFO0) > 0)
+  //     {
+  //       if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &rxHeader, rxData) != HAL_OK)
+  //       {
+  //         break;
+  //       }
+  //     }
+  //   }
+  //   /* Clear any overflow flagged while deliberately discarding above --
+  //    * nothing was being reassembled/printed yet, so it isn't meaningful,
+  //    * and would otherwise show up as a spurious warning on the first real
+  //    * loop iteration below. */
+  //   __HAL_FDCAN_CLEAR_FLAG(&hfdcan1, FDCAN_FLAG_RX_FIFO0_MESSAGE_LOST);
+  // }
   printf("USB on\r\n");
+  printf("[FC] idle\r\n"); // one-shot: confirms the serial link works even before any CAN traffic or shell input arrives
   /* SPI2_MISO is on PC2_C (analog-direct dual pad). The digital path only works
    * with the PC2 analog switch closed. Force it closed so reads aren't dead. */
   //__HAL_RCC_SYSCFG_CLK_ENABLE();
   //HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC2, SYSCFG_SWITCH_PC2_CLOSE);
   // sx127x_manual_test();
-  // sx127x_capsule_manual_test();
+  //sx127x_capsule_manual_test();
   //TMP1075_ManualTest_Run();
   //ADXL375_ManualTest_Run();
-  //manual_test_imu();
+  //manual_test_imu();  /* loops forever -- never returns, everything below this line won't run while active */
   //manual_test_buzzer();
 
-
-
-  //app_super_loop_setup();
+  app_super_loop_setup();
 
   /* USER CODE END 2 */
+
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -255,7 +263,7 @@ int main(void)
 	  	  }
 	  	  printf("loop\r\n");*/
 	  //printf("In loop \r\n");
-	  //app_super_loop_iterate();
+	  app_super_loop_iterate();
 
 	  {
 	    /*  Valve command test: ID=0x211, DLC=2, byte0 selects valve+action,
@@ -337,6 +345,7 @@ int main(void)
 	      printf("[CAN] WARNING: RX FIFO0 overflow, frame(s) rejected (count=%lu)\r\n",
 	             (unsigned long)rf0l_count);
 	    }
+
 	  }
 
 	  //printf("Pyros Test \r\n");
@@ -470,7 +479,7 @@ static void MX_FDCAN1_Init(void)
   hfdcan1.Init.MessageRAMOffset = 0;
   hfdcan1.Init.StdFiltersNbr = 1;
   hfdcan1.Init.ExtFiltersNbr = 0;
-  hfdcan1.Init.RxFifo0ElmtsNbr = 16;
+  hfdcan1.Init.RxFifo0ElmtsNbr = 32;
   hfdcan1.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
   hfdcan1.Init.RxFifo1ElmtsNbr = 0;
   hfdcan1.Init.RxFifo1ElmtSize = FDCAN_DATA_BYTES_8;

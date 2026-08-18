@@ -73,6 +73,15 @@ private:
     uint32_t ascent_entry_ms_  = 0;
     uint32_t descent_entry_ms_ = 0;
     bool     has_lifted_off_   = false;
+
+    // HAL_GetTick() timestamp of entry into PRESSURIZATION, drives
+    // fromPressurization()'s hold-delay check directly instead of the
+    // never-set event.timer_launch_delay flag.
+    uint32_t pressurization_entry_ms_ = 0;
+
+    // One-shot guard for the delayed DPR depressurize send in DESCENT
+    // (see update()), reset on every entry into DESCENT.
+    bool descent_depressurize_sent_ = false;
 };
 
 #endif

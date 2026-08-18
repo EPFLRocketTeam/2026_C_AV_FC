@@ -830,7 +830,13 @@ int kalman_loop() {
 	}
 
 	// Step 3: Round-robin drain — stop when ANY healthy ring empties.
-	for (;;) {
+	// TODO: guard added because healthy_source_count can be 0 on the first
+	// tick(s) after boot (no IMU has produced a frame yet), which spun this
+	// loop forever with the old unguarded for(;;). Not present upstream on
+	// fix/fc-flight-test-plume since that branch never hit the race.
+
+	//for (;;) {
+	while (healthy_source_count > 0) {
 		// Check all healthy sources still have data.
 		bool all_have_data = true;
 		for (size_t i = 0; i < 4; ++i) {
