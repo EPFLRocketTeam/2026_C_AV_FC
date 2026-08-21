@@ -90,7 +90,7 @@ State AvState::fromArmed(DataDump const &dump) {
 // instead of the never-set event.timer_launch_delay flag. Without real
 // pressurant, mean pressures never reach the nominal band, so this lets
 // the hold delay alone carry the transition on the bench.
-static constexpr uint32_t kPressurizationHoldDelayMs = 10000;
+static constexpr uint32_t kPressurizationHoldDelayMs = 30000;
 
 State AvState::fromPressurization(DataDump const &dump) {
   if (dump.uplinkCmd.id == 1 ||

@@ -59,12 +59,27 @@ void OnLogChunkDprLox(void*, pi::payload::log_chunk chunk) noexcept {
 }
 
 void OnDprEthPressures(void*, pi::payload::dpr_eth_pressures p) noexcept {
-  auto& sensors = GOATStore::get_instance().propSensorsStore;
-  sensors.set_fuel_pressure(p.p_eta);
+  GOATStore::get_instance().propSensorsStore.set_fuel_pressure_mean(p.p_eta);
 }
 void OnDprLoxPressures(void*, pi::payload::dpr_lox_pressures p) noexcept {
+  GOATStore::get_instance().propSensorsStore.set_LOX_pressure_mean(p.p_ota);
+}
+
+void OnPrcPInjector(void*, pi::payload::prc_p_injector p) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
-  sensors.set_LOX_pressure(p.p_ota);
+  sensors.set_LOX_inj_pressure(p.p_oin);
+  sensors.set_fuel_inj_pressure(p.p_ein);
+}
+void OnPrcPChamber(void*, pi::payload::prc_p_chamber p) noexcept {
+  GOATStore::get_instance().propSensorsStore.set_chamber_pressure(p.p_ccc);
+}
+void OnPrcTInjector(void*, pi::payload::prc_t_injector t) noexcept {
+  auto& sensors = GOATStore::get_instance().propSensorsStore;
+  sensors.set_LOX_inj_temperature(t.t_oin);
+  sensors.set_fuel_inj_temperature(t.t_ein);
+}
+void OnPrcTChamber(void*, pi::payload::prc_t_chamber t) noexcept {
+  GOATStore::get_instance().propSensorsStore.set_chamber_temperature(t.t_ccc);
 }
 
 // Both valves closed means the engine cut off.
@@ -80,6 +95,10 @@ pi::context& Ctx() {
     driver.send                 = CbSend;
     driver.on_dpr_eth_pressures = OnDprEthPressures;
     driver.on_dpr_lox_pressures = OnDprLoxPressures;
+    driver.on_prc_p_chamber     = OnPrcPChamber;
+    driver.on_prc_p_injector    = OnPrcPInjector;
+    driver.on_prc_t_chamber     = OnPrcTChamber;
+    driver.on_prc_t_injector    = OnPrcTInjector;
     driver.on_prc_state         = OnPrcState;
     driver.on_log_chunk_prc_engine = OnLogChunkPrcEngine;
     driver.on_log_chunk_dpr_eth    = OnLogChunkDprEth;

@@ -356,8 +356,14 @@ public:
   double get_fuel_pressure() const;
   void set_fuel_pressure(double value);
 
+  double get_fuel_pressure_mean() const;
+  void set_fuel_pressure_mean(double value);
+
   double get_LOX_pressure() const;
   void set_LOX_pressure(double value);
+
+  double get_LOX_pressure_mean() const;
+  void set_LOX_pressure_mean(double value);
 
   double get_igniter_pressure() const;
   void set_igniter_pressure(double value);

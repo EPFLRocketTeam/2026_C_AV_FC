@@ -35,8 +35,14 @@ void PropSensorsStore::set_N2_pressure(double value) { data_.N2_pressure = value
 double PropSensorsStore::get_fuel_pressure() const { return data_.fuel_pressure; }
 void PropSensorsStore::set_fuel_pressure(double value) { data_.fuel_pressure = value; }
 
+double PropSensorsStore::get_fuel_pressure_mean() const { return data_.fuel_pressure_mean; }
+void PropSensorsStore::set_fuel_pressure_mean(double value) { data_.fuel_pressure_mean = value; }
+
 double PropSensorsStore::get_LOX_pressure() const { return data_.LOX_pressure; }
 void PropSensorsStore::set_LOX_pressure(double value) { data_.LOX_pressure = value; }
+
+double PropSensorsStore::get_LOX_pressure_mean() const { return data_.LOX_pressure_mean; }
+void PropSensorsStore::set_LOX_pressure_mean(double value) { data_.LOX_pressure_mean = value; }
 
 double PropSensorsStore::get_igniter_pressure() const { return data_.igniter_pressure; }
 void PropSensorsStore::set_igniter_pressure(double value) { data_.igniter_pressure = value; }
