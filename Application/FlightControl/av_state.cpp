@@ -4,6 +4,7 @@
 #include "Application/FlightControl/threshold.h"
 #include "Application/Kalman/kalman_lifecycle.h"
 #include "Drivers/STM32HAL/stm32hal.h"
+#include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 
 extern "C" {
 #include "Application/FlightControl/uart_cmd.h"
@@ -24,7 +25,7 @@ State AvState::getCurrentState() { return currentState; }
 
 State AvState::fromInit(DataDump const &dump) {
   if (dump.uplinkCmd.id ==
-      2) // TODO: replace this with proper cmd id from the protocol
+      AV_CMD_CALIBRATE) // TODO: replace this with proper cmd id from the protocol
   {
     // Logger::log_eventf("FSM transition INIT->CALIBRATION");
     return State::CALIBRATION;
@@ -34,7 +35,7 @@ State AvState::fromInit(DataDump const &dump) {
 
 State AvState::fromCalibration(DataDump const &dump) {
   if (dump.uplinkCmd.id ==
-      1) // TODO: replace this with proper cmd id from the protocol
+		  AV_CMD_ABORT) // TODO: replace this with proper cmd id from the protocol
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::ABORT_ON_GROUND;
@@ -49,7 +50,7 @@ State AvState::fromCalibration(DataDump const &dump) {
 }
 
 State AvState::fromFilling(DataDump const &dump) {
-  if (dump.uplinkCmd.id == 1)
+  if (dump.uplinkCmd.id == AV_CMD_ABORT)
   // TODO: replace this with proper cmd
   // id from the protocol
   {
@@ -59,7 +60,7 @@ State AvState::fromFilling(DataDump const &dump) {
   // If all the sensors are calibrated and ready for use we go to the MANUAL
   // state
   else if (dump.uplinkCmd.id ==
-           2) // TODO: replace this with proper cmd id from the protocol
+		  AV_CMD_ARM) // TODO: replace this with proper cmd id from the protocol
   {
     // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
     return State::ARMED;
@@ -69,7 +70,7 @@ State AvState::fromFilling(DataDump const &dump) {
 
 State AvState::fromArmed(DataDump const &dump) {
   if (dump.uplinkCmd.id ==
-      1) // TODO: replace this with proper cmd id from the protocol
+		  AV_CMD_ABORT) // TODO: replace this with proper cmd id from the protocol
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::ABORT_ON_GROUND;
@@ -77,7 +78,7 @@ State AvState::fromArmed(DataDump const &dump) {
   // If all the sensors are calibrated and ready for use we go to the MANUAL
   // state
   else if (dump.uplinkCmd.id ==
-           2) // TODO: replace this with proper cmd id from the protocol
+		  AV_CMD_PRESSURIZE) // TODO: replace this with proper cmd id from the protocol
   {
     // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
     return State::PRESSURIZATION;
@@ -93,7 +94,7 @@ State AvState::fromArmed(DataDump const &dump) {
 static constexpr uint32_t kPressurizationHoldDelayMs = 30000;
 
 State AvState::fromPressurization(DataDump const &dump) {
-  if (dump.uplinkCmd.id == 1 ||
+  if (dump.uplinkCmd.id == AV_CMD_ABORT ||
       PRESSURIZATION_MAX_CRITICAL_PRESSURE < dump.propSensors.fuel_pressure ||
       PRESSURIZATION_MAX_CRITICAL_PRESSURE < dump.propSensors.LOX_pressure)
   // TODO: replace this with proper cmd id from the
@@ -128,7 +129,7 @@ State AvState::fromIgnition(DataDump const &dump) {
     return State::ABORT_ON_GROUND;
   }
 
-  if (dump.uplinkCmd.id == 1) { // ABORT command
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) { // ABORT command
     return State::ABORT_ON_GROUND;
   }
 
@@ -160,7 +161,7 @@ State AvState::fromBurn(DataDump const &dump) {
     return State::ABORT_IN_FLIGHT;
   }
 
-  if (dump.uplinkCmd.id == 1) // TODO: replace this with proper cmd id from the
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) // TODO: replace this with proper cmd id from the
                               // protocol and add the condition p_tanks > p_prvs
   {
     return State::ABORT_IN_FLIGHT;
@@ -189,7 +190,7 @@ State AvState::fromAscent(DataDump const &dump) {
     return State::ABORT_IN_FLIGHT;
   }
 
-  if (dump.uplinkCmd.id == 1) // TODO: replace this with proper cmd id from the
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) // TODO: replace this with proper cmd id from the
                               // protocol and add the condition p_tanks > p_prvs
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
@@ -213,7 +214,7 @@ State AvState::fromDescent(DataDump const &dump) {
     return State::ABORT_IN_FLIGHT;
   }
 
-  if (dump.uplinkCmd.id == 1) // TODO: replace this with proper cmd id from the
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) // TODO: replace this with proper cmd id from the
                               // protocol and add the condition p_tanks > p_prvs
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
@@ -232,7 +233,7 @@ State AvState::fromDescent(DataDump const &dump) {
 }
 
 State AvState::fromLanded(DataDump const &dump) {
-  if (dump.uplinkCmd.id == 1) // TODO: replace this with proper cmd id from the
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) // TODO: replace this with proper cmd id from the
                               // protocol and add the condition p_tanks > p_prvs
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
@@ -242,7 +243,7 @@ State AvState::fromLanded(DataDump const &dump) {
 }
 
 State AvState::fromAbortOnGround(DataDump const &dump) {
-  if (dump.uplinkCmd.id == 3) // TODO: replace this with proper cmd id from the
+  if (dump.uplinkCmd.id == AV_CMD_RECOVER) // TODO: replace this with proper cmd id from the
                               // protocol and add the condition p_tanks > p_prvs
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
@@ -252,7 +253,7 @@ State AvState::fromAbortOnGround(DataDump const &dump) {
 }
 
 State AvState::fromAbortInFlight(DataDump const &dump) {
-  if (dump.uplinkCmd.id == 3) // TODO: replace this with proper cmd id from the
+  if (dump.uplinkCmd.id == AV_CMD_RECOVER) // TODO: replace this with proper cmd id from the
                               // protocol and add the condition p_tanks > p_prvs
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");

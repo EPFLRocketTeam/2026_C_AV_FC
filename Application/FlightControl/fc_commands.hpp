@@ -32,6 +32,8 @@ void FillDriver(driver& drv);
 // in, 1 is ABORT, 3 is RECOVER. fsm_tick() consumes the id one-shot after
 // each tick, so it is safe to just set it.
 void OnAvCalibrate(void*) noexcept;
+void OnAvPressurize(void*) noexcept;
+void OnAvLaunch(void*) noexcept;
 void OnAvArm(void*) noexcept;
 void OnAvAbort(void*) noexcept;
 void OnAvRecover(void*) noexcept;

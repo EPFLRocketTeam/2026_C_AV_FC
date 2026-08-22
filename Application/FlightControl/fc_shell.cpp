@@ -6,6 +6,7 @@
 #include "Application/FlightControl/fc_commands.hpp"
 #include "Application/FlightControl/prc_can.hpp"
 #include "fc_commands_generated.hpp"
+#include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 
 namespace {
 
@@ -34,7 +35,7 @@ void OnPressurize(void*, bool value) noexcept {
   Fc_Can_SendDprLoxPressurize(value ? 1 : 0);
   Fc_Can_SendDprEthPressurize(value ? 1 : 0);
   if (value) {
-    flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(2);
+    flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_PRESSURIZE);
     Fc_Can_SendPrcClearToIgnite();
   }
 }
@@ -86,19 +87,27 @@ void OnBallFuel(void*, float value) noexcept {
 // just set it here.
 void OnAvCalibrate(void*) noexcept {
   printf("[SHELL] calibrate\r\n");
-  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(2);
+  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_CALIBRATE);
+}
+void OnAvPressurize(void*) noexcept {
+	  printf("[SHELL] pressurize\r\n");
+	  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_PRESSURIZE);
 }
 void OnAvArm(void*) noexcept {
   printf("[SHELL] arm\r\n");
-  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(2);
+  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_ARM);
+}
+void OnAvLaunch(void*) noexcept {
+  printf("[SHELL] launch\r\n");
+  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_LAUNCH);
 }
 void OnAvAbort(void*) noexcept {
   printf("[SHELL] abort\r\n");
-  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(1);
+  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_ABORT);
 }
 void OnAvRecover(void*) noexcept {
   printf("[SHELL] recover\r\n");
-  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(3);
+  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_RECOVER);
 }
 
 // Bench-test bypass: nothing in the real firmware ever calls

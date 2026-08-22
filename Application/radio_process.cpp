@@ -36,6 +36,27 @@ void handleRxCommand(void* data) noexcept {
 	const bool active = (packet->order_value == 1);
 
 	switch (packet->order_id) {
+	case AV_CMD_CALIBRATE:
+		fc_commands::OnAvCalibrate(nullptr);
+		break;
+	case AV_CMD_RECOVER:
+		fc_commands::OnAvRecover(nullptr);
+		break;
+	case AV_CMD_ARM:
+		fc_commands::OnAvArm(nullptr);
+		break;
+	case AV_CMD_PRESSURIZE:
+		fc_commands::OnAvPressurize(nullptr);
+		break;
+	case AV_CMD_LAUNCH:
+		fc_commands::OnAvLaunch(nullptr);
+		break;
+	case AV_CMD_ABORT:
+		fc_commands::OnAvAbort(nullptr);
+		break;
+
+
+
 	// Tank pressurization (PO/PE).
 	case AV_CMD_DPR_LOX:
 		fc_commands::OnDprLoxPressurize(nullptr, active);
