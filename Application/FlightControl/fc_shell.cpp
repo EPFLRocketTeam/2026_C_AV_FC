@@ -3,6 +3,7 @@
 #include <cstdio>
 
 #include "Application/Data/data.hpp"
+#include "Application/FlightControl/fc_commands.hpp"
 #include "Application/FlightControl/prc_can.hpp"
 #include "fc_commands_generated.hpp"
 
@@ -14,6 +15,14 @@ uint32_t g_line_len = 0;
 
 context g_cmd_ctx;
 driver  g_driver;
+
+};
+
+// The handlers below are declared in fc_commands.hpp so other command
+// sources (radio uplink, tests) can call them or bind them into their own
+// `driver`. Doc comments live in the header; only implementation notes
+// stay here.
+namespace fc_commands {
 
 // PRESSURIZE per the doc is a single command: it starts pressurizing the
 // DPR boards, is the trigger for AvState's ARMED -> PRESSURIZATION
@@ -169,42 +178,50 @@ void OnDprBroadcastAbort(void*) noexcept {
   Fc_Can_SendBroadcastAbort();
 }
 
+void FillDriver(driver& drv) {
+    drv.av_calibrate = OnAvCalibrate;
+    drv.av_arm = OnAvArm;
+    drv.av_abort = OnAvAbort;
+    drv.av_recover = OnAvRecover;
+    drv.av_force_calibrated = OnAvForceCalibrated;
+    drv.pressurize = OnPressurize;
+    drv.main_lox = OnMainLox;
+    drv.main_fuel = OnMainFuel;
+    drv.vent_copv = OnVentCopv;
+    drv.vent_lox = OnVentLox;
+    drv.vent_fuel = OnVentFuel;
+    drv.safety_lox = OnSafetyLox;
+    drv.safety_fuel = OnSafetyFuel;
+    drv.ball_lox = OnBallLox;
+    drv.ball_fuel = OnBallFuel;
+    drv.prc_clear_to_ignite = OnPrcClearToIgnite;
+    drv.prc_ignite = OnPrcIgnite;
+    drv.prc_passivate = OnPrcPassivate;
+    drv.prc_reset = OnPrcReset;
+    drv.prc_abort = OnPrcAbort;
+    drv.prc_coldflow = OnPrcColdflow;
+    drv.dpr_lox_pressurize = OnDprLoxPressurize;
+    drv.dpr_lox_abort = OnDprLoxAbort;
+    drv.dpr_lox_passivate = OnDprLoxPassivate;
+    drv.dpr_lox_reset = OnDprLoxReset;
+    drv.dpr_eth_pressurize = OnDprEthPressurize;
+    drv.dpr_eth_abort = OnDprEthAbort;
+    drv.dpr_eth_passivate = OnDprEthPassivate;
+    drv.dpr_eth_reset = OnDprEthReset;
+    drv.dpr_broadcast_abort = OnDprBroadcastAbort;
+}
+
+}  // namespace fc_commands
+
+namespace {
+
 bool g_initialized = false;
 
 void EnsureInit() {
     if (g_initialized) return;
     g_initialized = true;
 
-    g_driver.av_calibrate = OnAvCalibrate;
-    g_driver.av_arm = OnAvArm;
-    g_driver.av_abort = OnAvAbort;
-    g_driver.av_recover = OnAvRecover;
-    g_driver.av_force_calibrated = OnAvForceCalibrated;
-    g_driver.pressurize = OnPressurize;
-    g_driver.main_lox = OnMainLox;
-    g_driver.main_fuel = OnMainFuel;
-    g_driver.vent_copv = OnVentCopv;
-    g_driver.vent_lox = OnVentLox;
-    g_driver.vent_fuel = OnVentFuel;
-    g_driver.safety_lox = OnSafetyLox;
-    g_driver.safety_fuel = OnSafetyFuel;
-    g_driver.ball_lox = OnBallLox;
-    g_driver.ball_fuel = OnBallFuel;
-    g_driver.prc_clear_to_ignite = OnPrcClearToIgnite;
-    g_driver.prc_ignite = OnPrcIgnite;
-    g_driver.prc_passivate = OnPrcPassivate;
-    g_driver.prc_reset = OnPrcReset;
-    g_driver.prc_abort = OnPrcAbort;
-    g_driver.prc_coldflow = OnPrcColdflow;
-    g_driver.dpr_lox_pressurize = OnDprLoxPressurize;
-    g_driver.dpr_lox_abort = OnDprLoxAbort;
-    g_driver.dpr_lox_passivate = OnDprLoxPassivate;
-    g_driver.dpr_lox_reset = OnDprLoxReset;
-    g_driver.dpr_eth_pressurize = OnDprEthPressurize;
-    g_driver.dpr_eth_abort = OnDprEthAbort;
-    g_driver.dpr_eth_passivate = OnDprEthPassivate;
-    g_driver.dpr_eth_reset = OnDprEthReset;
-    g_driver.dpr_broadcast_abort = OnDprBroadcastAbort;
+    fc_commands::FillDriver(g_driver);
 }
 
 };

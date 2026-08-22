@@ -8,6 +8,9 @@
 extern "C" {
 #endif
 
+void simple_radio_process(void);
+
+
 void app_super_loop_setup(void);
 void app_super_loop_iterate(void);
 

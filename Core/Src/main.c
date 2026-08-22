@@ -234,7 +234,10 @@ int main(void)
   //manual_test_imu();  /* loops forever -- never returns, everything below this line won't run while active */
   //manual_test_buzzer();
 
+  simple_radio_process();
+
   app_super_loop_setup();
+
 
   /* USER CODE END 2 */
 
