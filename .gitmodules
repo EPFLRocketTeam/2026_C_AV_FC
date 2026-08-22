@@ -13,6 +13,6 @@
 [submodule "Drivers/CLI/2026_C_AV_CLI"]
 	path = Drivers/CLI/2026_C_AV_CLI
 	url = https://github.com/EPFLRocketTeam/2026_C_AV_CLI.git
-[submodule "Drivers/Drivers/ERT_RF_Protocol_Interface"]
-	path = Drivers/Drivers/ERT_RF_Protocol_Interface
-	url = https://github.com/EPFLRocketTeam/ERT_RF_Protocol_Interface
+[submodule "Drivers/ERT_RF_Protocol_Interface"]
+	path = Drivers/ERT_RF_Protocol_Interface
+	url = git@github.com:EPFLRocketTeam/ERT_RF_Protocol_Interface.git

@@ -39,9 +39,7 @@ public:
   }
 
   void update(uint32_t tick_ms) override {
-    flight_computer::GOATStore& g = flight_computer::GOATStore::get_instance();
-    GpsBasicFixData gpsFix{};
-    
+
     if (drivers_[0]->available()) {
     	drivers_[0]->read();
     }

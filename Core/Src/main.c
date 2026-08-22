@@ -234,7 +234,7 @@ int main(void)
   //manual_test_imu();  /* loops forever -- never returns, everything below this line won't run while active */
   //manual_test_buzzer();
 
-  simple_radio_process();
+  simple_radio_init();
 
   app_super_loop_setup();
 
@@ -250,7 +250,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  //HAL_Delay(1000);
-
+	  simple_radio_tick();
 	  /*
 	  	  printf("flag: %i\r\n", flag);
 	  	  if (!flag) {

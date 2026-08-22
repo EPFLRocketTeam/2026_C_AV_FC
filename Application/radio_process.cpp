@@ -4,6 +4,7 @@
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Common.h"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 #include "Application/FlightControl/fc_commands.hpp"
+#include "Application/Data/data.hpp"
 
 extern "C" {
 #include "Application/main.h"
@@ -20,6 +21,9 @@ void handleRxCommand(void* data) noexcept {
 	if (packet == nullptr) {
 		return;
 	}
+	flight_computer::GOATStore& g = flight_computer::GOATStore::get_instance();
+	g.uplinkCmdStore.set_id(packet->order_id);
+	g.uplinkCmdStore.set_value(packet->order_value);
 
 	// order_value is specified as strictly ACTIVE or INACTIVE. Anything else
 	// is a corrupt byte that survived CRC, so drop the command rather than
@@ -76,8 +80,8 @@ static void onPacketReceived(uint8_t packetId, uint8_t *payload, uint32_t length
 	printf("Decoded packet: id=0x%02X len=%lu payload=[%s]\r\n", packetId,
 			(unsigned long) length, (char*) payload);
 
-	if (packetId == GSC_CMD && length == av_uplink_size) {
 
+	if (packetId == GSC_CMD && length == av_uplink_size) {
 		handleRxCommand((av_uplink_t*)payload);
 	} else {
 		printf("Decode Error: Wrong packet id");
@@ -88,10 +92,22 @@ static void onPacketReceived(uint8_t packetId, uint8_t *payload, uint32_t length
 extern SPI_HandleTypeDef hspi2;
 extern SPI_HandleTypeDef hspi1;
 
-void simple_radio_process(void) {
-	SX127X_hw_t SX127X_TX_hw;
-	SX127X_hw_t SX127X_RX_hw;
+// The module stores raw pointers to its driver and buffer and is neither
+// copyable nor movable, so everything it points at must outlive
+// simple_radio_init() -- hence file scope, not locals.
+static SX127X_hw_t SX127X_TX_hw;
+static SX127X_hw_t SX127X_RX_hw;
 
+static SX127XCapsule tx(&SX127X_TX_hw, nullptr);
+static SX127XCapsule rx(&SX127X_RX_hw, onPacketReceived);
+
+static RingBuffer<av_uplink_t, 10> rx_buffer;
+static SX127XCapsule *rxArr[1] = {&rx};
+static RingBuffer<av_uplink_t, 10> *rxRing[1] = {&rx_buffer};
+
+RxRadioModule rx_module(rxArr, rxRing);
+
+void simple_radio_init(void) {
 	SX127X_RX_hw.dio0.port = GPIO_RFM_RX_INT0_GPIO_Port;
 	SX127X_RX_hw.dio0.pin = GPIO_RFM_RX_INT0_Pin;
 	SX127X_RX_hw.nss.port = SPI_RFM_RX_CS_GPIO_Port;
@@ -108,22 +124,15 @@ void simple_radio_process(void) {
 	SX127X_TX_hw.reset.pin = GPIO_RFM_TX_RST_Pin;
 	SX127X_TX_hw.spi = &hspi1;
 
-	SX127XCapsule tx(&SX127X_TX_hw, nullptr);
-	SX127XCapsule rx(&SX127X_RX_hw, onPacketReceived);
-
 	SX127X_hw_init(&SX127X_TX_hw);
 	SX127X_hw_Reset(&SX127X_TX_hw);
 
 	SX127X_hw_init(&SX127X_RX_hw);
 	SX127X_hw_Reset(&SX127X_RX_hw);
 
-	RingBuffer<av_uplink_t, 10> rx_buffer;
-	SX127XCapsule* rxArr[1] = {&rx};
-	RingBuffer<av_uplink_t, 10>* rxRing[1] = {&rx_buffer};
-	RxRadioModule rx_module{rxArr, rxRing};
 	rx_module.init();
+}
 
-	while (1) {
-		rx_module.update(0);
-	}
+void simple_radio_tick(void) {
+	rx_module.update(0);
 }
