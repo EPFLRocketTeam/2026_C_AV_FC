@@ -46,7 +46,7 @@ void handleRxCommand(void* data) noexcept {
 		fc_commands::OnAvArm(nullptr);
 		break;
 	case AV_CMD_PRESSURIZE:
-		fc_commands::OnAvPressurize(nullptr);
+		fc_commands::OnPressurize(nullptr, true);
 		break;
 	case AV_CMD_LAUNCH:
 		fc_commands::OnAvLaunch(nullptr);
