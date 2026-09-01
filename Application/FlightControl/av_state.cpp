@@ -95,8 +95,8 @@ static constexpr uint32_t kPressurizationHoldDelayMs = 30000;
 
 State AvState::fromPressurization(DataDump const &dump) {
   if (dump.uplinkCmd.id == AV_CMD_ABORT ||
-      PRESSURIZATION_MAX_CRITICAL_PRESSURE < dump.propSensors.fuel_pressure ||
-      PRESSURIZATION_MAX_CRITICAL_PRESSURE < dump.propSensors.LOX_pressure)
+      PRESSURIZATION_MAX_CRITICAL_PRESSURE < dump.propSensors.ETA_pressure ||
+      PRESSURIZATION_MAX_CRITICAL_PRESSURE < dump.propSensors.OTA_pressure)
   // TODO: replace this with proper cmd id from the
   // protocol and add the condition p_tanks > p_prvs
   {
@@ -107,12 +107,14 @@ State AvState::fromPressurization(DataDump const &dump) {
   const bool hold_delay_elapsed =
       HAL_GetTick() - pressurization_entry_ms_ >= kPressurizationHoldDelayMs;
   const bool pressure_nominal =
-      dump.propSensors.fuel_pressure_mean < PRESSURE_UPPER &&
-      dump.propSensors.LOX_pressure_mean < PRESSURE_UPPER &&
-      dump.propSensors.N2_pressure_mean < PRESSURE_UPPER &&
-      dump.propSensors.fuel_pressure_mean > PRESSURE_LOWER &&
-      dump.propSensors.LOX_pressure_mean > PRESSURE_LOWER &&
-      dump.propSensors.N2_pressure_mean > PRESSURE_LOWER;
+      dump.propSensors.OTA_pressure < PRESSURE_UPPER &&
+      dump.propSensors.ETA_pressure < PRESSURE_UPPER &&
+      dump.propSensors.HPO_pressure < PRESSURE_COPV_UPPER &&
+      dump.propSensors.HPE_pressure < PRESSURE_COPV_UPPER &&
+      dump.propSensors.OTA_pressure > PRESSURE_LOWER &&
+      dump.propSensors.ETA_pressure > PRESSURE_LOWER &&
+      dump.propSensors.HPO_pressure > PRESSURE_COPV_LOWER &&
+  	  dump.propSensors.HPE_pressure > PRESSURE_COPV_LOWER;
 
   if (hold_delay_elapsed || pressure_nominal) {
     // Logger::log_eventf("FSM transition PRESSURIZATION->INGITION");
@@ -429,6 +431,7 @@ void AvState::update(const DataDump &dump) {
   // fromBurn()'s BURN_MAX_DURATION fallback reads this -- reuses
   // liftoff_entry_ms_ since BURN entry is liftoff, same timestamp.
   if (currentState == State::BURN) {
+	// TODO that shit looks bad
     GOATStore::get_instance().propSensorsStore.set_timer_burn(HAL_GetTick() - liftoff_entry_ms_);
   }
 }

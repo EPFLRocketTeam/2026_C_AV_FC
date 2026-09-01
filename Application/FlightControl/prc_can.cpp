@@ -59,10 +59,10 @@ void OnLogChunkDprLox(void*, pi::payload::log_chunk chunk) noexcept {
 }
 
 void OnDprEthPressures(void*, pi::payload::dpr_eth_pressures p) noexcept {
-  GOATStore::get_instance().propSensorsStore.set_fuel_pressure_mean(p.p_eta);
+  GOATStore::get_instance().propSensorsStore.set_ETA_pressure(p.p_eta);
 }
 void OnDprLoxPressures(void*, pi::payload::dpr_lox_pressures p) noexcept {
-  GOATStore::get_instance().propSensorsStore.set_LOX_pressure_mean(p.p_ota);
+  GOATStore::get_instance().propSensorsStore.set_OTA_pressure(p.p_ota);
 }
 
 void OnPrcPInjector(void*, pi::payload::prc_p_injector p) noexcept {

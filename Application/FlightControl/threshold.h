@@ -5,6 +5,9 @@
 #define PRESSURE_UPPER 100.0f
 #define PRESSURE_LOWER 80.0f
 
+#define PRESSURE_COPV_UPPER 100.0f
+#define PRESSURE_COPV_LOWER 80.0f
+
 // --- General Parameters ---
 #define N2_FILL_PRESSURE_LIMIT           100.0f  // Bar
 #define N2_CRITICAL_PRESSURE_LIMIT       50.0f   // Bar

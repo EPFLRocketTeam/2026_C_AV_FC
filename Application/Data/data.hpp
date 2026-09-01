@@ -131,7 +131,9 @@ struct PropSensors {
   double fls_OTA_temperature_5;
 
   double fuel_inj_pressure;
+  double fuel_inj_temperature;
   double LOX_inj_pressure;
+  double LOX_inj_temperature;
   double chamber_pressure;
   double chamber_temperature;
 
@@ -139,6 +141,8 @@ struct PropSensors {
   uint8_t dpr_fuel_state;
   uint8_t dpr_LOX_state;
   uint8_t engine_state;
+
+  uint32_t timer_burn;
 
   PropSensors();
 };
@@ -428,8 +432,14 @@ public:
   double get_fuel_inj_pressure () const;
   void set_fuel_inj_pressure (double value);
 
+  double get_fuel_inj_temperature () const;
+  void set_fuel_inj_temperature (double value);
+
   double get_LOX_inj_pressure () const;
   void set_LOX_inj_pressure (double value);
+
+  double get_LOX_inj_temperature () const;
+  void set_LOX_inj_temperature (double value);
 
   double get_chamber_pressure () const;
   void set_chamber_pressure (double value);
@@ -445,6 +455,9 @@ public:
 
   uint8_t get_engine_state () const;
   void set_engine_state (uint8_t value);
+  
+  uint32_t get_timer_burn () const;
+  void set_timer_burn (uint32_t value_ms);
 };
 
 class ValvesStore : public IStore<Valves> {

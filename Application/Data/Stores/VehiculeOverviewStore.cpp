@@ -4,8 +4,12 @@
 using namespace flight_computer;
 
 VehiculeOverview::VehiculeOverview()
-    : no_cable_continuity(0),
-      pyros_on({ false, false, false, false }) {}
+    : no_cable_continuity(0) {
+    pyros_on[0] = false;
+    pyros_on[1] = false;
+    pyros_on[2] = false;
+    pyros_on[3] = false;
+}
 
 VehiculeOverviewStore::VehiculeOverviewStore() {}
 

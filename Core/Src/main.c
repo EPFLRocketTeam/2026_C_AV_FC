@@ -81,10 +81,10 @@ SPI_HandleTypeDef hspi5;
 UART_HandleTypeDef huart6;
 
 /* USER CODE BEGIN PV */
-static uint8_t flag = 0;
+//static uint8_t flag = 0;
 volatile static uint32_t status = 0;
-static uint8_t tab[255];
-static uint8_t addr = 0x08;
+//static uint8_t tab[255];
+//static uint8_t addr = 0x08;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
