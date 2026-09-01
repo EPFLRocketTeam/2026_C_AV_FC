@@ -1,6 +1,7 @@
 #include "Core/Inc/main.h"
 #include "Application/app_timebase.h"
 #include "Modules/rx_radio_module.hpp"
+#include "Modules/tx_radio_module.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Common.h"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 #include "Application/FlightControl/fc_commands.hpp"
@@ -127,6 +128,7 @@ static SX127XCapsule *rxArr[1] = {&rx};
 static RingBuffer<av_uplink_t, 10> *rxRing[1] = {&rx_buffer};
 
 RxRadioModule rx_module(rxArr, rxRing);
+TxRadioModule tx_module(&tx, 100); // 10 Hz send
 
 void simple_radio_init(void) {
 	SX127X_RX_hw.dio0.port = GPIO_RFM_RX_INT0_GPIO_Port;
@@ -152,8 +154,13 @@ void simple_radio_init(void) {
 	SX127X_hw_Reset(&SX127X_RX_hw);
 
 	rx_module.init();
+	tx_module.init();
 }
 
 void simple_radio_tick(void) {
 	rx_module.update(0);
+
+	if (tx_module.should_send()) {
+		tx_module.send(flight_computer::GOATStore::get_instance().get());
+	}
 }

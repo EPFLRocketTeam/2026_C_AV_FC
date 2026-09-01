@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Application/app_timebase.h"
 #include "Application/Data/data.hpp"
 #include "Drivers/SX127X/SX127X_capsule.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/DownlinkCompression_Firehorn2.h"
@@ -115,9 +116,11 @@ private:
     SX127XCapsule *driver_;
 
     uint32_t packet_nbr = 0;
+    uint32_t next_time = 0;
+    uint32_t ms_between_send;
 public:
-    explicit TxRadioModule(SX127XCapsule *driver)
-      : driver_(driver) {}
+    explicit TxRadioModule(SX127XCapsule *driver, uint32_t ms_between_send)
+      : driver_(driver), ms_between_send(ms_between_send) {}
 
     bool init () {
 	  driver_->init(864.34e6, SX127X_POWER_11DBM, SX127X_LORA_SF_8,
@@ -125,7 +128,13 @@ public:
 	  	av_downlink_size);
     }
 
+    bool should_send () {
+        return next_time <= app_timebase_now_ms();
+    }
+
     bool send (const flight_computer::DataDump &dump) {
+        next_time = app_timebase_now_ms() + ms_between_send;
+
         av_downlink_unpacked_t packet;
         packet.packet_nbr = packet_nbr ++;
         
