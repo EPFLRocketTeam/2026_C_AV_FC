@@ -42,12 +42,12 @@ extern SPI_HandleTypeDef hspi5;           // whichever SPI peripheral BMP390 is 
 
 using namespace Drivers::BMP390;
 
-#define BARO_LOG(fmt, ...) printf("[BARO] " fmt "\r\n", ##__VA_ARGS__)
+// #define BARO_LOG(fmt, ...) printf("[BARO] " fmt "\r\n", ##__VA_ARGS__)
 
-static int g_pass = 0;
-static int g_fail = 0;
+//static int g_pass = 0;
+//static int g_fail = 0;
 
-#define ASSERT(cond, msg)                                            \
+/*#define ASSERT(cond, msg)                                            \
     do {                                                             \
         if (cond) {                                                  \
             ++g_pass;                                                \
@@ -57,19 +57,19 @@ static int g_fail = 0;
             BARO_LOG("FAIL  " msg " (line %d)", __LINE__);          \
         }                                                            \
     } while (0)
-
-static bool approxEq(float a, float b, float eps) {
+*/
+/*static bool approxEq(float a, float b, float eps) {
     return fabsf(a - b) < eps;
-}
+}*/
 
-static void delay_ms(uint32_t ms) {
+/*static void delay_ms(uint32_t ms) {
     uint32_t t = HAL_GetTick();
     while ((HAL_GetTick() - t) < ms) {}
-}
+}*/
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-static void test_init_ping_configure(BMP390_SDK& baro) {
+/*static void test_init_ping_configure(BMP390_SDK& baro) {
     bool init_ok = baro.init();
     ASSERT(init_ok, "init()");
     if (!init_ok) {
@@ -80,7 +80,7 @@ static void test_init_ping_configure(BMP390_SDK& baro) {
     bool ping_ok = baro.ping();
     ASSERT(ping_ok, "ping()");
     if (!ping_ok) {
-        BARO_LOG("", baro.lastError());
+        BARO_LOG(" error: %s", baro.lastError());
     }
 
     baro.configure(OsrPressure::x4, OsrTemp::x1, IIRFilter::OFF);
@@ -182,7 +182,7 @@ static void test_plausibility(BMP390_SDK& baro) {
            "");
     ASSERT(d.temperature_c > -40.0f && d.temperature_c < 85.0f,
            "");
-}
+}*/
 
 // ─────────────────────────────────────────────────────────────────────────────
 

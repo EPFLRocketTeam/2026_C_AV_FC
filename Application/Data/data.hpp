@@ -80,6 +80,8 @@ struct FlightEventTimers {// TODO: Properly update the store test
 struct VehiculeOverview {// TODO: Properly update the store test
   uint8_t no_cable_continuity;
 
+  bool pyros_on[4];
+
   VehiculeOverview();
 };
 
@@ -107,43 +109,51 @@ struct NavSensors {
 };
 
 struct PropSensors {
-  double N2_pressure;
-  double N2_pressure_mean; // TODO: Update data store
+  // === FUEL ===
+  double HPE_pressure;
+  double ETA_pressure;
 
-  double fuel_pressure;
-  double fuel_pressure_mean; // TODO: Update data store
+  // === LOX ===
+  double HPO_pressure;
+  double OTA_pressure;
 
-  double LOX_pressure;
-  double LOX_pressure_mean; // TODO: Update data store
+  // on lox tank, connected to PRC-lox
+  //  1 -> highest on rocket
+  //  4 -> lowest 
+  double fls_OTA_temperature_1;
+  double fls_OTA_temperature_2;
+  double fls_OTA_temperature_3;
+  double fls_OTA_temperature_4;
 
-  double igniter_pressure;
-  double LOX_inj_pressure;
+  // === ENGINE ===
+  
+  // 5 -> lowest
+  double fls_OTA_temperature_5;
+
   double fuel_inj_pressure;
-  double chamber_pressure;
-  double fuel_level;
-  double LOX_level;
-  double N2_temperature;
-  double fuel_temperature;
-  double LOX_temperature;
-  double igniter_temperature;
   double fuel_inj_temperature;
-  double fuel_inj_cooling_temperature;
+  double LOX_inj_pressure;
   double LOX_inj_temperature;
+  double chamber_pressure;
   double chamber_temperature;
-  uint32_t PR_state;
+
+  // === STATE ===
+  uint8_t dpr_fuel_state;
+  uint8_t dpr_LOX_state;
+  uint8_t engine_state;
+
   uint32_t timer_burn;
 
   PropSensors();
 };
 
 struct Valves {
-  bool valve_dpr_pressure_lox;
-  bool valve_dpr_pressure_fuel;
-  bool valve_dpr_vent_copv;
-  bool valve_dpr_vent_lox;
-  bool valve_dpr_vent_fuel;
-  bool valve_prb_main_lox;
-  bool valve_prb_main_fuel;
+  bool main_LOX_open, main_fuel_open;
+
+  bool vent_LOX_open, vent_fuel_open;
+  bool safety_LOX_open, safety_fuel_open;
+
+  float ball_valve_LOX, ball_valve_fuel;
 
   Valves();
 };
@@ -174,7 +184,15 @@ struct NavigationData {
 
 struct Batteries {
   float lpb_voltage;
-  float hpb_voltage;
+	float lpb_current;
+	float vout_5v_voltage;
+	float vout_5v_current;
+	float hpb_main_voltage;
+	float hpb_main_current;
+	float hpb_backup_voltage;
+	float hpb_backup_current;
+	float vout_24v_voltage;
+	float vout_24v_current;
 
   Batteries();
 };
@@ -238,11 +256,35 @@ class BatteriesStore : public IStore<Batteries> {
 public:
   BatteriesStore();
 
-  float get_lpb_voltage() const;
-  void set_lpb_voltage(float value);
+  float get_lpb_voltage () const;
+  void set_lpb_voltage (float value);
 
-  float get_hpb_voltage() const;
-  void set_hpb_voltage(float value);
+  float get_lpb_current () const;
+  void set_lpb_current (float value);
+
+  float get_vout_5v_voltage () const;
+  void set_vout_5v_voltage (float value);
+
+  float get_vout_5v_current () const;
+  void set_vout_5v_current (float value);
+
+  float get_hpb_main_voltage () const;
+  void set_hpb_main_voltage (float value);
+
+  float get_hpb_main_current () const;
+  void set_hpb_main_current (float value);
+
+  float get_hpb_backup_voltage () const;
+  void set_hpb_backup_voltage (float value);
+
+  float get_hpb_backup_current () const;
+  void set_hpb_backup_current (float value);
+
+  float get_vout_24v_voltage () const;
+  void set_vout_24v_voltage (float value);
+
+  float get_vout_24v_current () const;
+  void set_vout_24v_current (float value);
 };
 
 class FlightEventTimersStore : public IStore<FlightEventTimers> {
@@ -265,6 +307,16 @@ public:
 
   uint8_t get_no_cable_continuity() const;
   void set_no_cable_continuity(uint8_t value);
+
+  bool get_pyro_ch1_on () const;
+  bool get_pyro_ch2_on () const;
+  bool get_pyro_ch3_on () const;
+  bool get_pyro_ch4_on () const;
+
+  void set_pyro_ch1_on (bool value);
+  void set_pyro_ch2_on (bool value);
+  void set_pyro_ch3_on (bool value);
+  void set_pyro_ch4_on (bool value);
 };
 
 class CamsRecordingStore : public IStore<CamsRecording> {
@@ -350,94 +402,91 @@ class PropSensorsStore : public IStore<PropSensors> {
 public:
   PropSensorsStore();
 
-  double get_N2_pressure() const;
-  void set_N2_pressure(double value);
+  double get_HPE_pressure () const;
+  void set_HPE_pressure (double value);
 
-  double get_fuel_pressure() const;
-  void set_fuel_pressure(double value);
+  double get_ETA_pressure () const;
+  void set_ETA_pressure (double value);
 
-  double get_fuel_pressure_mean() const;
-  void set_fuel_pressure_mean(double value);
+  double get_HPO_pressure () const;
+  void set_HPO_pressure (double value);
 
-  double get_LOX_pressure() const;
-  void set_LOX_pressure(double value);
+  double get_OTA_pressure () const;
+  void set_OTA_pressure (double value);
 
-  double get_LOX_pressure_mean() const;
-  void set_LOX_pressure_mean(double value);
+  double get_fls_OTA_temperature_1 () const;
+  void set_fls_OTA_temperature_1 (double value);
 
-  double get_igniter_pressure() const;
-  void set_igniter_pressure(double value);
+  double get_fls_OTA_temperature_2 () const;
+  void set_fls_OTA_temperature_2 (double value);
 
-  double get_LOX_inj_pressure() const;
-  void set_LOX_inj_pressure(double value);
+  double get_fls_OTA_temperature_3 () const;
+  void set_fls_OTA_temperature_3 (double value);
 
-  double get_fuel_inj_pressure() const;
-  void set_fuel_inj_pressure(double value);
+  double get_fls_OTA_temperature_4 () const;
+  void set_fls_OTA_temperature_4 (double value);
 
-  double get_chamber_pressure() const;
-  void set_chamber_pressure(double value);
+  double get_fls_OTA_temperature_5 () const;
+  void set_fls_OTA_temperature_5 (double value);
 
-  double get_fuel_level() const;
-  void set_fuel_level(double value);
+  double get_fuel_inj_pressure () const;
+  void set_fuel_inj_pressure (double value);
 
-  double get_LOX_level() const;
-  void set_LOX_level(double value);
+  double get_fuel_inj_temperature () const;
+  void set_fuel_inj_temperature (double value);
 
-  double get_N2_temperature() const;
-  void set_N2_temperature(double value);
+  double get_LOX_inj_pressure () const;
+  void set_LOX_inj_pressure (double value);
 
-  double get_fuel_temperature() const;
-  void set_fuel_temperature(double value);
+  double get_LOX_inj_temperature () const;
+  void set_LOX_inj_temperature (double value);
 
-  double get_LOX_temperature() const;
-  void set_LOX_temperature(double value);
+  double get_chamber_pressure () const;
+  void set_chamber_pressure (double value);
 
-  double get_igniter_temperature() const;
-  void set_igniter_temperature(double value);
+  double get_chamber_temperature () const;
+  void set_chamber_temperature (double value);
 
-  double get_fuel_inj_temperature() const;
-  void set_fuel_inj_temperature(double value);
+  uint8_t get_dpr_fuel_state () const;
+  void set_dpr_fuel_state (uint8_t value);
 
-  double get_fuel_inj_cooling_temperature() const;
-  void set_fuel_inj_cooling_temperature(double value);
+  uint8_t get_dpr_LOX_state () const;
+  void set_dpr_LOX_state (uint8_t value);
 
-  double get_LOX_inj_temperature() const;
-  void set_LOX_inj_temperature(double value);
-
-  double get_chamber_temperature() const;
-  void set_chamber_temperature(double value);
-
-  uint32_t get_PR_state() const;
-  void set_PR_state(uint32_t value);
-
-  uint32_t get_timer_burn() const;
-  void set_timer_burn(uint32_t value);
+  uint8_t get_engine_state () const;
+  void set_engine_state (uint8_t value);
+  
+  uint32_t get_timer_burn () const;
+  void set_timer_burn (uint32_t value_ms);
 };
 
 class ValvesStore : public IStore<Valves> {
 public:
   ValvesStore();
 
-  bool get_valve_dpr_pressure_lox() const;
-  void set_valve_dpr_pressure_lox(bool value);
+  bool  get_main_LOX_open () const;
+  void  set_main_LOX_open (bool value);
 
-  bool get_valve_dpr_pressure_fuel() const;
-  void set_valve_dpr_pressure_fuel(bool value);
+  bool  get_main_fuel_open () const;
+  void  set_main_fuel_open (bool value);
 
-  bool get_valve_dpr_vent_copv() const;
-  void set_valve_dpr_vent_copv(bool value);
+  bool  get_vent_LOX_open () const;
+  void  set_vent_LOX_open (bool value);
 
-  bool get_valve_dpr_vent_lox() const;
-  void set_valve_dpr_vent_lox(bool value);
+  bool  get_vent_fuel_open () const;
+  void  set_vent_fuel_open (bool value);
 
-  bool get_valve_dpr_vent_fuel() const;
-  void set_valve_dpr_vent_fuel(bool value);
+  bool  get_safety_LOX_open () const;
+  void  set_safety_LOX_open (bool value);
 
-  bool get_valve_prb_main_lox() const;
-  void set_valve_prb_main_lox(bool value);
+  bool  get_safety_fuel_open () const;
+  void  set_safety_fuel_open (bool value);
 
-  bool get_valve_prb_main_fuel() const;
-  void set_valve_prb_main_fuel(bool value);
+  float get_ball_valve_LOX () const;
+  void  set_ball_valve_LOX (float value);
+
+  float get_ball_valve_fuel () const;
+  void  set_ball_valve_fuel (float value);
 };
 
 class NavigationDataStore : public IStore<NavigationData> {

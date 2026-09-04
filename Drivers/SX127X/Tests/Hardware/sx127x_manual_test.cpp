@@ -135,5 +135,7 @@ int sx127x_manual_test(void) {
 
 
 	}
+
+	return 0;
 }
 

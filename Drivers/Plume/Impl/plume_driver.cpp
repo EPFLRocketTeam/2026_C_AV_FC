@@ -56,7 +56,7 @@ extern "C" void HAL_SD_ErrorCallback(SD_HandleTypeDef *hsd) {
     g_sd_dma_complete = 1;       /* unblock the ready check */
 }
 
-#define DBG(...) printf(" - " #__VA_ARGS__ ": %u \r\n", __VA_ARGS__);
+#define DBG(...) printf(" - " #__VA_ARGS__ ": %lu \r\n", (uint32_t) __VA_ARGS__);
 uint8_t plume_stm32_disk_information (SD_HandleTypeDef* hsd, struct plume_disk* disk_info) {
     if (hsd->State != HAL_SD_STATE_READY) {
         return -50;
@@ -65,8 +65,8 @@ uint8_t plume_stm32_disk_information (SD_HandleTypeDef* hsd, struct plume_disk* 
     disk_info->number_blocks = hsd->SdCard.LogBlockNbr;
     disk_info->block_size    = hsd->SdCard.LogBlockSize;
     printf("Information on disk: \r\n");
-    printf(" - number blocks : %u\r\n", (uint32_t) disk_info->number_blocks);
-    printf(" - block size    : %u\r\n", (uint32_t) disk_info->block_size);
+    printf(" - number blocks : %lu\r\n", (uint32_t) disk_info->number_blocks);
+    printf(" - block size    : %lu\r\n", (uint32_t) disk_info->block_size);
     DBG(hsd->SdCard.BlockNbr);
     DBG(hsd->SdCard.BlockSize);
     DBG(hsd->SdCard.CardSpeed);

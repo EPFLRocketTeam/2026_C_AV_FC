@@ -3,7 +3,7 @@
 #define APP_FSM_H
 
 namespace flight_computer {
-enum State {
+enum State : uint8_t {
   /* =============== On ground =============== */
   INIT,
   CALIBRATION,

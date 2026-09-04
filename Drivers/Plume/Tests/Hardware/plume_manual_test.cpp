@@ -24,8 +24,8 @@ void plume_manual_test (SD_HandleTypeDef *hsd) {
         return ;
     }
 
-    printf("[PLUME] Remaining number of files: %lu\r\n", interface.number_files_remaining());
-    printf("[PLUME] Remaining disk size: %lu\r\n", interface.disk_size_remaining());
+    printf("[PLUME] Remaining number of files: %u\r\n", interface.number_files_remaining());
+    printf("[PLUME] Remaining disk size: %u\r\n", interface.disk_size_remaining());
 
     printf("[PLUME] Opening file...\r\n");
     if (!interface.open_file()) {
@@ -33,8 +33,8 @@ void plume_manual_test (SD_HandleTypeDef *hsd) {
         return ;
     }
 
-    printf("[PLUME] Remaining number of files: %lu\r\n", interface.number_files_remaining());
-    printf("[PLUME] Remaining disk size: %lu\r\n", interface.disk_size_remaining());
+    printf("[PLUME] Remaining number of files: %u\r\n", interface.number_files_remaining());
+    printf("[PLUME] Remaining disk size: %u\r\n", interface.disk_size_remaining());
 
     printf("[PLUME] Writing 'Hello, World !\\n'\r\n");
     if (interface.write((const uint8_t*) "Hello, World !\n", 16) != PLUME_OK) {
@@ -49,20 +49,20 @@ void plume_manual_test (SD_HandleTypeDef *hsd) {
 
         uint8_t status = interface.write((const uint8_t*) (&j), sizeof(uint32_t));
         if (status != PLUME_OK) {
-            printf("[PLUME] Failure of write for %u. Error code: %u\r\n", i, (uint32_t) status);
+            printf("[PLUME] Failure of write for %lu. Error code: %lu\r\n", i, (uint32_t) status);
             return ;
         }
 
         status = interface.tick();
         if (status != PLUME_OK) {
-            printf("[PLUME] Failure of tick at %u. Error code: %u\r\n", i, (uint32_t) status);
+            printf("[PLUME] Failure of tick at %lu. Error code: %lu\r\n", i, (uint32_t) status);
             return ;
         }
     }
 
     uint32_t end_tick = HAL_GetTick();
-    printf("[PLUME] Done in %u ticks.\r\n", end_tick - start_tick);
+    printf("[PLUME] Done in %lu ticks.\r\n", end_tick - start_tick);
 
-    printf("[PLUME] Remaining number of files: %lu\r\n", interface.number_files_remaining());
-    printf("[PLUME] Remaining disk size: %lu\r\n", interface.disk_size_remaining());
+    printf("[PLUME] Remaining number of files: %u\r\n", interface.number_files_remaining());
+    printf("[PLUME] Remaining disk size: %u\r\n", interface.disk_size_remaining());
 }

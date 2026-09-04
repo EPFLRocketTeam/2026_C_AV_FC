@@ -97,7 +97,7 @@ public:
             return ;
         }
 
-        if (current_time >= block_duration[offset] + block_start_time) {
+        if (((size_t) current_time) >= block_duration[offset] + block_start_time) {
             end_block();
         }
     }
@@ -118,7 +118,7 @@ public:
         int offset = 0;
         setup_preambule(block_duration, block_on, offset);
 
-        for (int i_el = 0; i_el < N_els; i_el ++) {
+        for (unsigned int i_el = 0; i_el < N_els; i_el ++) {
             setup_module(block_duration, block_on, offset, temp[i_el]);
         }
 

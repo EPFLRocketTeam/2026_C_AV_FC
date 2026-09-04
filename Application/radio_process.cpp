@@ -1,6 +1,7 @@
 #include "Core/Inc/main.h"
 #include "Application/app_timebase.h"
 #include "Modules/rx_radio_module.hpp"
+#include "Modules/tx_radio_module.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Common.h"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 #include "Application/FlightControl/fc_commands.hpp"
@@ -68,10 +69,10 @@ void handleRxCommand(void* data) noexcept {
 	// SPO/SPE ball valves. The protocol dropped DPR_CONFIG and is now fixed
 	// to ball valves, so these are always present alongside AV_CMD_DPR_*.
 	case AV_CMD_SDPR_LOX:
-		fc_commands::OnBallLox(nullptr, active ? kBallValveOpen : kBallValveClose);
+		fc_commands::OnSafetyLox(nullptr, active);
 		break;
 	case AV_CMD_SDPR_FUEL:
-		fc_commands::OnBallFuel(nullptr, active ? kBallValveOpen : kBallValveClose);
+		fc_commands::OnSafetyFuel(nullptr, active);
 		break;
 
 	// MO/ME on the Engine board, bypassing the FSM.
@@ -127,6 +128,7 @@ static SX127XCapsule *rxArr[1] = {&rx};
 static RingBuffer<av_uplink_t, 10> *rxRing[1] = {&rx_buffer};
 
 RxRadioModule rx_module(rxArr, rxRing);
+TxRadioModule tx_module(&tx, 1000); // 1 Hz send
 
 void simple_radio_init(void) {
 	SX127X_RX_hw.dio0.port = GPIO_RFM_RX_INT0_GPIO_Port;
@@ -151,9 +153,18 @@ void simple_radio_init(void) {
 	SX127X_hw_init(&SX127X_RX_hw);
 	SX127X_hw_Reset(&SX127X_RX_hw);
 
+	printf("Rx module init.\n");
 	rx_module.init();
+	printf("Tx module init.\n");
+	printf("driver: %p\n", &tx);
+	tx_module.init();
+	printf("Done.\n");
 }
 
 void simple_radio_tick(void) {
 	rx_module.update(0);
+
+	if (tx_module.should_send()) {
+		tx_module.send(flight_computer::GOATStore::get_instance().get());
+	}
 }

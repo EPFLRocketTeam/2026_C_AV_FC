@@ -15,8 +15,11 @@
 
 #include "SX127X.h"
 #include "capsule.h"
+#include <stdio.h>
 
 class SX127XCapsule {
+private:
+	uint8_t internalBuffer[SX127X_MAX_PACKET];
 public:
 	/** Called with (packetId, payload, payloadLength) for every frame whose
 	 *  Capsule checksum verified. */
@@ -43,6 +46,7 @@ public:
 			uint8_t payloadLength) {
 		SX127X_init(&module, frequency, power, LoRa_SF, LoRa_BW, LoRa_CR,
 				LoRa_CRC_sum, capsule.getCodedLen(payloadLength));
+		printf("capsule init is ok.\n");
 	}
 
 	/**
@@ -57,11 +61,9 @@ public:
 		if (codedLen > SX127X_MAX_PACKET) {
 			return false;
 		}
-		uint8_t *frame = capsule.encode(packetId,
-				const_cast<uint8_t*>(payload), length);
-		int sent = SX127X_transmit(&module, frame,
+		capsule.encode(packetId, const_cast<uint8_t*>(payload), length, internalBuffer);
+		int sent = SX127X_transmit(&module, internalBuffer,
 				static_cast<uint8_t>(codedLen), timeout);
-		delete[] frame; // encode() allocates on the heap
 		return sent == 1;
 	}
 

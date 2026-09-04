@@ -59,10 +59,12 @@ void OnLogChunkDprLox(void*, pi::payload::log_chunk chunk) noexcept {
 }
 
 void OnDprEthPressures(void*, pi::payload::dpr_eth_pressures p) noexcept {
-  GOATStore::get_instance().propSensorsStore.set_fuel_pressure_mean(p.p_eta);
+  GOATStore::get_instance().propSensorsStore.set_ETA_pressure(p.p_eta);
+  GOATStore::get_instance().propSensorsStore.set_HPE_pressure(p.p_hpe);
 }
 void OnDprLoxPressures(void*, pi::payload::dpr_lox_pressures p) noexcept {
-  GOATStore::get_instance().propSensorsStore.set_LOX_pressure_mean(p.p_ota);
+  GOATStore::get_instance().propSensorsStore.set_OTA_pressure(p.p_ota);
+  GOATStore::get_instance().propSensorsStore.set_HPO_pressure(p.p_hpo);
 }
 
 void OnPrcPInjector(void*, pi::payload::prc_p_injector p) noexcept {
@@ -87,6 +89,21 @@ void OnPrcState(void*, pi::payload::prc_state state) noexcept {
   const bool mo_open = (state.valve_mask & pi::constants::VALVE_MASK_BIT_MO) != 0;
   const bool me_open = (state.valve_mask & pi::constants::VALVE_MASK_BIT_ME) != 0;
   GOATStore::get_instance().eventStore.set_cut_off_detected(!mo_open && !me_open);
+  GOATStore::get_instance().valvesStore.set_main_LOX_open(mo_open);
+  GOATStore::get_instance().valvesStore.set_main_fuel_open(me_open);
+}
+
+void OnDprLoxState (void*, pi::payload::dpr_state state) noexcept {
+  const bool safety_open = (state.valve_mask & pi::constants::VALVE_MASK_BIT_SAFETY) != 0;
+  const bool vent_open = (state.valve_mask & pi::constants::VALVE_MASK_BIT_VENT) != 0;
+  GOATStore::get_instance().valvesStore.set_safety_LOX_open(safety_open);
+  GOATStore::get_instance().valvesStore.set_vent_LOX_open(vent_open);
+}
+void OnDprEthState (void*, pi::payload::dpr_state state) noexcept {
+  const bool safety_open = (state.valve_mask & pi::constants::VALVE_MASK_BIT_SAFETY) != 0;
+  const bool vent_open = (state.valve_mask & pi::constants::VALVE_MASK_BIT_VENT) != 0;
+  GOATStore::get_instance().valvesStore.set_safety_fuel_open(safety_open);
+  GOATStore::get_instance().valvesStore.set_vent_fuel_open(vent_open);
 }
 
 pi::context& Ctx() {
@@ -100,6 +117,8 @@ pi::context& Ctx() {
     driver.on_prc_t_chamber     = OnPrcTChamber;
     driver.on_prc_t_injector    = OnPrcTInjector;
     driver.on_prc_state         = OnPrcState;
+    driver.on_dpr_lox_state     = OnDprLoxState;
+    driver.on_dpr_eth_state     = OnDprEthState;
     driver.on_log_chunk_prc_engine = OnLogChunkPrcEngine;
     driver.on_log_chunk_dpr_eth    = OnLogChunkDprEth;
     driver.on_log_chunk_dpr_lox    = OnLogChunkDprLox;
