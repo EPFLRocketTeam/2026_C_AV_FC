@@ -235,6 +235,7 @@ int main(void)
   //manual_test_buzzer();
 
   simple_radio_init();
+  printf("Out of init.\n");
 
   app_super_loop_setup();
 
@@ -250,6 +251,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  //HAL_Delay(1000);
+	  //printf("In tick.\n");
 	  simple_radio_tick();
 	  /*
 	  	  printf("flag: %i\r\n", flag);
@@ -482,7 +484,7 @@ static void MX_FDCAN1_Init(void)
   hfdcan1.Init.MessageRAMOffset = 0;
   hfdcan1.Init.StdFiltersNbr = 1;
   hfdcan1.Init.ExtFiltersNbr = 0;
-  hfdcan1.Init.RxFifo0ElmtsNbr = 32;
+  hfdcan1.Init.RxFifo0ElmtsNbr = 64;
   hfdcan1.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
   hfdcan1.Init.RxFifo1ElmtsNbr = 0;
   hfdcan1.Init.RxFifo1ElmtSize = FDCAN_DATA_BYTES_8;

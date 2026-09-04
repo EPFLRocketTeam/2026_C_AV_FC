@@ -35,6 +35,7 @@ PREPARE_DOWNLINK(flight_computer::NavSensors) {
     (void) packet; (void) dump;
 }
 PREPARE_DOWNLINK(flight_computer::PropSensors) {
+	// TODO HPO, HPE temperature
     packet.HPO_pressure = dump.HPO_pressure;
    	packet.HPE_pressure = dump.HPE_pressure;
 	packet.fuel_pressure = dump.ETA_pressure;
@@ -123,9 +124,12 @@ public:
       : driver_(driver), ms_between_send(ms_between_send) {}
 
     bool init () {
-	  driver_->init(864.34e6, SX127X_POWER_11DBM, SX127X_LORA_SF_8,
-	  	SX127X_LORA_BW_125KHZ, SX127X_LORA_CR_4_7, SX127X_LORA_CRC_EN,
+    	//printf("driver: %p\n", driver_);
+	  driver_->init(866.34e6, SX127X_POWER_20DBM, SX127X_LORA_SF_7,
+	  	SX127X_LORA_BW_250KHZ, SX127X_LORA_CR_4_7, SX127X_LORA_CRC_EN,
 	  	av_downlink_size);
+	  //printf("init is ok.\n");
+	  return true;
     }
 
     bool should_send () {
@@ -138,10 +142,19 @@ public:
         av_downlink_unpacked_t packet;
         packet.packet_nbr = packet_nbr ++;
         
+        //printf("Prepare downlink %u.\n", HAL_GetTick());
         prepare_downlink_packet(packet, dump);
 
-        av_downlink_t compressed_packet = encode_downlink(packet);
+        struct __attribute__((packed)) Guard {
+			volatile uint32_t canary_before = 0xAABBCCDD;
+			av_downlink_t     compressed_packet;
+			volatile uint32_t canary_after  = 0xDDCCBBAA;
+		} guard;
 
-        return driver_->transmit(CAPSULE_ID::AV_TELEMETRY, (uint8_t*) &compressed_packet, av_downlink_size);
+        //printf("Encode downlink.\n");
+        encode_downlink(&guard.compressed_packet, packet);
+        //printf("Encoding done.\n");
+
+        return driver_->transmit(CAPSULE_ID::AV_TELEMETRY, (uint8_t*) &guard.compressed_packet, av_downlink_size);
     }
 };

@@ -8,6 +8,7 @@
 
 #include "../SX127X.h"
 #include <string.h>
+#include <stdio.h>
 
 /* All register accesses are issued as a single continuous SPI frame (one
  * HAL transfer with NSS held low for the whole exchange). Splitting the
@@ -265,7 +266,9 @@ int SX127X_LoRaTxPacket(SX127X_t *module, uint8_t *txBuffer, uint8_t length,
 void SX127X_init(SX127X_t *module, uint64_t frequency, uint8_t power,
 		uint8_t LoRa_SF, uint8_t LoRa_BW, uint8_t LoRa_CR,
 		uint8_t LoRa_CRC_sum, uint8_t packetLength) {
+	printf("Hi ?\n");
 	SX127X_hw_init(module->hw);
+	printf("Hello ?\n");
 	module->frequency = frequency;
 	module->power = power;
 	module->LoRa_SF = LoRa_SF;
@@ -273,7 +276,9 @@ void SX127X_init(SX127X_t *module, uint64_t frequency, uint8_t power,
 	module->LoRa_CR = LoRa_CR;
 	module->LoRa_CRC_sum = LoRa_CRC_sum;
 	module->packetLength = packetLength;
+	printf("Config ?\n");
 	SX127X_config(module);
+	printf("Done config.\n");
 }
 
 int SX127X_transmit(SX127X_t *module, uint8_t *txBuf, uint8_t length,

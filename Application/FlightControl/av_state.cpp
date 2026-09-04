@@ -28,7 +28,9 @@ State AvState::fromInit(DataDump const &dump) {
       AV_CMD_CALIBRATE) // TODO: replace this with proper cmd id from the protocol
   {
     // Logger::log_eventf("FSM transition INIT->CALIBRATION");
-    return State::CALIBRATION;
+    // TODO replace this with State::CALIBRATION
+	//   Dirty fix for DPR tests
+	return State::FILLING;
   }
   return currentState;
 }

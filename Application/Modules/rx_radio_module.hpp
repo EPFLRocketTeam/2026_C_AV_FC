@@ -26,7 +26,7 @@ public:
       : Module(drivers, buffers) {}
 
   bool init() override {
-	  drivers_[0]->init(866.34e6, SX127X_POWER_11DBM, SX127X_LORA_SF_8,
+	  drivers_[0]->init(864.34e6, SX127X_POWER_11DBM, SX127X_LORA_SF_8,
 	  	SX127X_LORA_BW_125KHZ, SX127X_LORA_CR_4_7, SX127X_LORA_CRC_EN,
 	  	av_uplink_size);
 
