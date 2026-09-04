@@ -9,6 +9,8 @@
 #include "Modules/sd_logger.hpp"
 #include "Drivers/Buzzer/buzzer.hpp"
 #include "Application/Kalman/kalman_health.hpp"
+#include "Application/Config/config.hpp"
+#include "Application/FlightControl/fc_shell.hpp"
 
 
 // Forward-declared — defined in av_state.cpp to avoid BMP390 header clash.
@@ -675,6 +677,10 @@ extern "C" void app_super_loop_setup(void) {
 }
 
 extern "C" void app_super_loop_iterate(void) {
+	FC_Shell_Tick();
+    RUN_EVERY(100)
+        config::internal::tick();
+
 	//printf("Buzzer advancing ---------------------------------------------\r\n");
 	g_superloop.buzzer.tick(HAL_GetTick());
     if (g_superloop.buzzer.is_finished() && !g_buzzer_finished) {

@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "stm32h7xx_hal.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,6 +44,11 @@ void Fc_Can_SendDprLoxCopvVent(uint8_t open);
 void Fc_Can_SendDprEthCopvVent(uint8_t open);
 void Fc_Can_SendDprLoxBallValve(float percent_open);
 void Fc_Can_SendDprEthBallValve(float percent_open);
+
+// Config
+void Fc_Can_SendLogDprEth (bool can, bool enabled);
+void Fc_Can_SendLogDprLox (bool can, bool enabled);
+void Fc_Can_SendLogEngine (bool can, bool enabled);
 
 #ifdef __cplusplus
 }

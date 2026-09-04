@@ -36,6 +36,7 @@
 #include "../../Application/Modules/sd_hardware_init.h"
 #include "../../Application/FlightControl/prc_can.hpp"
 #include "../../Application/main.h"
+#include "../../Application/app_timebase.h"
 #include "SX127X.h"
 /* USER CODE END Includes */
 

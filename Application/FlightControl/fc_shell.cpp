@@ -3,10 +3,12 @@
 #include <cstdio>
 
 #include "Application/Data/data.hpp"
+#include "Application/Config/config.hpp"
 #include "Application/FlightControl/fc_commands.hpp"
 #include "Application/FlightControl/prc_can.hpp"
 #include "fc_commands_generated.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
+#include "Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET/include/prc_intranet/payload.hpp"
 
 namespace {
 
@@ -187,6 +189,100 @@ void OnDprBroadcastAbort(void*) noexcept {
   Fc_Can_SendBroadcastAbort();
 }
 
+void config_burn_cutoff_delay (void* ctx, int value) {
+  config::internal::write().Burn.CutoffDelayMs = value;
+}
+void config_burn_impulse (void* ctx, float value) {
+  config::internal::write().Burn.Impulse = value;
+}
+void config_burn_max_duration_engine (void* ctx, int value) {
+  config::internal::write().Burn.EngineMaxDurationMs = value;
+}
+void config_burn_max_duration_fc (void* ctx, int value) {
+  config::internal::write().Burn.FcMaxDurationMs = value;
+}
+void config_burn_min_duration (void* ctx, int value) {
+  config::internal::write().Burn.MinDurationMs = value;
+}
+void config_ignition_delay (void* ctx, int value) {
+  config::internal::write().Ignition.DelayMs = value;
+}
+void config_ignition_igniter_duration (void* ctx, int value) {
+  config::internal::write().Ignition.IgniterDurationMs = value;
+}
+void config_ignition_prechill_duration (void* ctx, int value) {
+  config::internal::write().Ignition.PrechillDurationMs = value;
+}
+void config_ignition_ramp_up (void* ctx, int value) {
+  config::internal::write().Ignition.RampUpMs = value;
+}
+void config_pressurize_fuel_set_pressure (void* ctx, float value) {
+  config::internal::write().Pressurization.FuelSetPressure = value;
+}
+void config_pressurize_hold_delay (void* ctx, int value) {
+  config::internal::write().Pressurization.HoldDelayMs = value;
+}
+void config_pressurize_lox_set_pressure (void* ctx, float value) {
+  config::internal::write().Pressurization.LoxSetPressure = value;
+}
+void config_pressurize_max_critical_pressure (void* ctx, float value) {
+  config::internal::write().Pressurization.MaxCriticalPressure = value;
+}
+void config_pressurize_max_nominal_pressure (void* ctx, float value) {
+  config::internal::write().Pressurization.MaxNominalPressure = value;
+}
+void config_pressurize_min_nominal_pressure (void* ctx, float value) {
+  config::internal::write().Pressurization.MinNominalPressure = value;
+}
+void config_pressurize_ramp_up_duration (void* ctx, int value) {
+  config::internal::write().Pressurization.RampUpDurationMs = value;
+}
+
+#define app_printf(...) printf(__VA_ARGS__);
+void config_print_buffer (void* ctx) {
+  FlightParams params = config::internal::write();
+  PRINT_FLIGHT_PARAMS(params);
+}
+void config_print_commited (void* ctx) {
+  FlightParams params = config::get();
+  PRINT_FLIGHT_PARAMS(params);
+}
+void config_print_status (void* ctx) {
+	config::internal::print_status();
+}
+#undef app_printf
+
+void config_commit (void* ctx) {
+  config::internal::commit();
+}
+
+void logs_can_engine(void* ctx, bool value) {
+  printf("[SHELL] can engine %s\r\n", value ? "on" : "off");
+  Fc_Can_SendLogEngine(true, value);
+}
+void logs_can_eth(void* ctx, bool value) {
+  printf("[SHELL] can eth %s\r\n", value ? "on" : "off");
+  Fc_Can_SendLogDprEth(true, value);
+}
+void logs_can_fc(void* ctx, bool value) { /* Non sense, TODO remove */ }
+void logs_can_lox(void* ctx, bool value) {
+  printf("[SHELL] can lox %s\r\n", value ? "on" : "off");
+  Fc_Can_SendLogDprLox(true, value);
+}
+void logs_usb_engine(void* ctx, bool value) {
+  printf("[SHELL] usb engine %s\r\n", value ? "on" : "off");
+  Fc_Can_SendLogEngine(false, value);
+}
+void logs_usb_eth(void* ctx, bool value) {
+  printf("[SHELL] usb eth %s\r\n", value ? "on" : "off");
+  Fc_Can_SendLogDprEth(false, value);
+}
+void logs_usb_fc(void* ctx, bool value) { /* TODO add feature */ }
+void logs_usb_lox(void* ctx, bool value) {
+  printf("[SHELL] usb lox %s\r\n", value ? "on" : "off");
+  Fc_Can_SendLogDprLox(false, value);
+}
+
 void FillDriver(driver& drv) {
     drv.av_calibrate = OnAvCalibrate;
     drv.av_arm = OnAvArm;
@@ -218,6 +314,34 @@ void FillDriver(driver& drv) {
     drv.dpr_eth_passivate = OnDprEthPassivate;
     drv.dpr_eth_reset = OnDprEthReset;
     drv.dpr_broadcast_abort = OnDprBroadcastAbort;
+    drv.config_burn_cutoff_delay = config_burn_cutoff_delay;
+    drv.config_burn_impulse = config_burn_impulse;
+    drv.config_burn_max_duration_engine = config_burn_max_duration_engine;
+    drv.config_burn_max_duration_fc = config_burn_max_duration_fc;
+    drv.config_burn_min_duration = config_burn_min_duration;
+    drv.config_commit = config_commit;
+    drv.config_ignition_delay = config_ignition_delay;
+    drv.config_ignition_igniter_duration = config_ignition_igniter_duration;
+    drv.config_ignition_prechill_duration = config_ignition_prechill_duration;
+    drv.config_ignition_ramp_up = config_ignition_ramp_up;
+    drv.config_pressurize_fuel_set_pressure = config_pressurize_fuel_set_pressure;
+    drv.config_pressurize_hold_delay = config_pressurize_hold_delay;
+    drv.config_pressurize_lox_set_pressure = config_pressurize_lox_set_pressure;
+    drv.config_pressurize_max_critical_pressure = config_pressurize_max_critical_pressure;
+    drv.config_pressurize_max_nominal_pressure = config_pressurize_max_nominal_pressure;
+    drv.config_pressurize_min_nominal_pressure = config_pressurize_min_nominal_pressure;
+    drv.config_pressurize_ramp_up_duration = config_pressurize_ramp_up_duration;
+    drv.config_print_buffer = config_print_buffer;
+    drv.config_print_commited = config_print_commited;
+    drv.config_print_status = config_print_status;
+    drv.logs_can_engine = logs_can_engine;
+    drv.logs_can_eth = logs_can_eth;
+    drv.logs_can_fc = logs_can_fc;
+    drv.logs_can_lox = logs_can_lox;
+    drv.logs_usb_engine = logs_usb_engine;
+    drv.logs_usb_eth = logs_usb_eth;
+    drv.logs_usb_fc = logs_usb_fc;
+    drv.logs_usb_lox = logs_usb_lox;
 }
 
 }  // namespace fc_commands
@@ -235,7 +359,21 @@ void EnsureInit() {
 
 };
 
+namespace {
+volatile uint8_t  rx_flag = 0;
+uint8_t  rx_buffer[64];
+uint16_t rx_len = 0;
+};
+
 void Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length) {
+	if (length + rx_len <= sizeof(rx_buffer)) {
+		memcpy(rx_buffer + rx_len, data, length);
+		rx_len += length;
+		rx_flag = 1; // Set flag for main loop
+	}
+}
+
+void __Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length) {
     EnsureInit();
 
     for (uint32_t i = 0; i < length; i++) {
@@ -263,4 +401,18 @@ void Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length) {
             g_line_buffer[g_line_len++] = byte;
         }
     }
+}
+void FC_Shell_Tick () {
+	if (rx_flag == 0) return ;
+
+	int start = 0;
+	for (int offset = 0; offset < rx_len; offset ++) {
+		if (rx_buffer[offset] == '\n') {
+			__Fc_Shell_ProcessRxBytes(rx_buffer + start, offset + 1 - start);
+			start = offset + 1;
+		}
+	}
+
+	rx_len = 0;
+	rx_flag = 0;
 }

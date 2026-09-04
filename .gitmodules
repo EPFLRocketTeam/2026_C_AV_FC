@@ -16,3 +16,6 @@
 [submodule "Drivers/ERT_RF_Protocol_Interface"]
 	path = Drivers/ERT_RF_Protocol_Interface
 	url = git@github.com:EPFLRocketTeam/ERT_RF_Protocol_Interface.git
+[submodule "Application/Config/2026_C_AV_FLIGHT_PARAMS"]
+	path = Application/Config/2026_C_AV_FLIGHT_PARAMS
+	url = https://github.com/EPFLRocketTeam/2026_C_AV_FLIGHT_PARAMS.git

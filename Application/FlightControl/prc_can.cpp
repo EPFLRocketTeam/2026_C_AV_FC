@@ -8,6 +8,7 @@
 #include "prc_intranet/const.hpp"
 #include "prc_intranet/dispatch.hpp"
 #include "prc_intranet/transmit.hpp"
+#include "Application/Config/config.hpp"
 
 using namespace flight_computer;
 namespace pi = prc_intranet;
@@ -15,6 +16,21 @@ namespace pi = prc_intranet;
 namespace {
 
 FDCAN_HandleTypeDef* g_hfdcan = nullptr;
+
+uint32_t get_fdcan_dlc(uint8_t bytes) {
+    switch (bytes) {
+        case 0: return FDCAN_DLC_BYTES_0;
+        case 1: return FDCAN_DLC_BYTES_1;
+        case 2: return FDCAN_DLC_BYTES_2;
+        case 3: return FDCAN_DLC_BYTES_3;
+        case 4: return FDCAN_DLC_BYTES_4;
+        case 5: return FDCAN_DLC_BYTES_5;
+        case 6: return FDCAN_DLC_BYTES_6;
+        case 7: return FDCAN_DLC_BYTES_7;
+        case 8: return FDCAN_DLC_BYTES_8;
+        default: return FDCAN_DLC_BYTES_8; // Fallback
+    }
+}
 
 // Pads to the full word-aligned payload since the HAL always word-copies.
 void CbSend(void* driver_ptr, uint16_t can_id, const uint8_t* buffer, uint32_t dlc) noexcept {
@@ -34,9 +50,17 @@ void CbSend(void* driver_ptr, uint16_t can_id, const uint8_t* buffer, uint32_t d
   uint8_t txData[pi::constants::MAX_PAYLOAD_SIZE] = {0};
   memcpy(txData, buffer, dlc);
 
-  if (HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &txHeader, txData) != HAL_OK) {
-    printf("[FC CAN] TX failed, id=0x%X\r\n", can_id);
+  HAL_StatusTypeDef status = HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &txHeader, txData);
+
+  if (status != HAL_OK) {
+      uint32_t error_code = HAL_FDCAN_GetError(hfdcan);
+      uint32_t state      = HAL_FDCAN_GetState(hfdcan);
+      uint32_t fifo_fill  = HAL_FDCAN_GetTxFifoFreeLevel(hfdcan);
+
+      printf("[FC CAN] TX failed (Status: %d, State: 0x%X, Error: 0x%X, Free FIFO: %d)\r\n", 
+            status, state, error_code, fifo_fill);
   }
+
 }
 
 // One reassembler per source board, each with its own buffer.
@@ -106,6 +130,16 @@ void OnDprEthState (void*, pi::payload::dpr_state state) noexcept {
   GOATStore::get_instance().valvesStore.set_vent_fuel_open(vent_open);
 }
 
+void OnConfigCrcDprEth (void*, pi::payload::config_crc crc) noexcept {
+  config::internal::On_Crc(BoardIds::FP_PRC_ETH, crc.crc_buffer, crc.crc_commited);
+}
+void OnConfigCrcDprLox (void*, pi::payload::config_crc crc) noexcept {
+  config::internal::On_Crc(BoardIds::FP_PRC_LOX, crc.crc_buffer, crc.crc_commited);
+}
+void OnConfigCrcEngine (void*, pi::payload::config_crc crc) noexcept {
+  config::internal::On_Crc(BoardIds::FP_ENGINE, crc.crc_buffer, crc.crc_commited);
+}
+
 pi::context& Ctx() {
   static pi::context ctx = [] {
     pi::prc_driver driver{};
@@ -119,9 +153,12 @@ pi::context& Ctx() {
     driver.on_prc_state         = OnPrcState;
     driver.on_dpr_lox_state     = OnDprLoxState;
     driver.on_dpr_eth_state     = OnDprEthState;
-    driver.on_log_chunk_prc_engine = OnLogChunkPrcEngine;
-    driver.on_log_chunk_dpr_eth    = OnLogChunkDprEth;
-    driver.on_log_chunk_dpr_lox    = OnLogChunkDprLox;
+    driver.on_log_chunk_prc_engine  = OnLogChunkPrcEngine;
+    driver.on_log_chunk_dpr_eth     = OnLogChunkDprEth;
+    driver.on_log_chunk_dpr_lox     = OnLogChunkDprLox;
+    driver.on_config_crc_dpr_eth    = OnConfigCrcDprEth;
+    driver.on_config_crc_dpr_lox    = OnConfigCrcDprLox;
+    driver.on_config_crc_prc_engine = OnConfigCrcEngine;
     return pi::create_context(driver);
   }();
   return ctx;
@@ -315,4 +352,53 @@ void Fc_Can_SendDprEthBallValve(float percent_open) {
   pi::context& ctx = Ctx();
   ctx.driver.driver_ptr = g_hfdcan;
   pi::send_dpr_eth_ball_valve(&ctx, pos);
+}
+
+void Fc_Can_SendLogDprEth (bool can, bool enabled) {
+  if (g_hfdcan == nullptr) return ;
+  pi::payload::log_config conf;
+  conf.board = pi::payload::board_id::DPR_ETH;
+  conf.channel = can ? pi::payload::log_channel::CAN : pi::payload::log_channel::USB;
+  conf.enabled = enabled;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_log_config(&ctx, conf);
+}
+void Fc_Can_SendLogDprLox (bool can, bool enabled) {
+  if (g_hfdcan == nullptr) return ;
+  pi::payload::log_config conf;
+  conf.board = pi::payload::board_id::DPR_LOX;
+  conf.channel = can ? pi::payload::log_channel::CAN : pi::payload::log_channel::USB;
+  conf.enabled = enabled;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_log_config(&ctx, conf);
+}
+void Fc_Can_SendLogEngine (bool can, bool enabled) {
+  if (g_hfdcan == nullptr) return ;
+  pi::payload::log_config conf;
+  conf.board = pi::payload::board_id::ENGINE;
+  conf.channel = can ? pi::payload::log_channel::CAN : pi::payload::log_channel::USB;
+  conf.enabled = enabled;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_log_config(&ctx, conf);
+}
+
+void config::internal::Fc_Can_SendChunkLog (prc_intranet::payload::config_chunk chunk) {
+  if (g_hfdcan == nullptr) return ;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_config_send_data(&ctx, chunk);
+}
+void config::internal::Fc_Can_SendCommit (BoardIds ids) {
+  if (g_hfdcan == nullptr) return ;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::payload::config_commit c;
+  if (ids == BoardIds::FP_ENGINE) c.board = pi::payload::board_id::ENGINE;
+  else if (ids == BoardIds::FP_PRC_LOX) c.board = pi::payload::board_id::DPR_LOX;
+  else if (ids == BoardIds::FP_PRC_ETH) c.board = pi::payload::board_id::DPR_ETH;
+  else return ;
+  pi::send_config_send_commit(&ctx, c);
 }
