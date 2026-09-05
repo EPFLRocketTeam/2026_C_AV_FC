@@ -421,7 +421,7 @@ void AvState::update(const DataDump &dump) {
     // 50 s total. Keep this in sync if those stop being uniform.
     // constexpr uint32_t kDescentDepressurizeDelayMs = 50000;
     if (!descent_depressurize_sent_ &&
-        HAL_GetTick() - descent_entry_ms_ >= config::get().Descent.Depressurize.DelayMs) {
+        HAL_GetTick() - descent_entry_ms_ >= config::get().Descent.Depressurize.DPR.DelayMs) {
       Fc_Can_SendDprLoxPassivate();
       Fc_Can_SendDprEthPassivate();
       descent_depressurize_sent_ = true;
