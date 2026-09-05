@@ -115,6 +115,7 @@ void OnPrcState(void*, pi::payload::prc_state state) noexcept {
   GOATStore::get_instance().eventStore.set_cut_off_detected(!mo_open && !me_open);
   GOATStore::get_instance().valvesStore.set_main_LOX_open(mo_open);
   GOATStore::get_instance().valvesStore.set_main_fuel_open(me_open);
+  // printf("[PRC-ENG] mo=%s me=%s cutoff=%u\n", mo_open ? "open" : "close", me_open ? "open" : "close", (int) (!mo_open && !me_open));
 }
 
 void OnDprLoxState (void*, pi::payload::dpr_state state) noexcept {

@@ -140,7 +140,9 @@ State AvState::fromIgnition(DataDump const &dump) {
   // accel-hold check always reads ACC_HOLD_DID_NOT_HOLD, so IGNITION would
   // always auto-abort. Force BURN here instead; real liftoff logic below is
   // left intact and unreachable until this is removed.
-  return State::BURN;
+  bool mo_open = GOATStore::get_instance().valvesStore.get_main_LOX_open();
+  bool me_open = GOATStore::get_instance().valvesStore.get_main_fuel_open();
+  return (mo_open && me_open) ? State::BURN : currentState;
 
   // Liftoff detection, per spec: cable disconnect OR the accel hold
   // confirming it is enough for BURN, either signal alone is trusted.
@@ -180,7 +182,7 @@ State AvState::fromBurn(DataDump const &dump) {
   // BURN_MAX_DURATION are seconds, so both need the *1000 conversion --
   // it was missing here, which made BURN_MAX_DURATION's "120 s" behave as
   // 120 ms in practice.
-  if (dump.event.cut_off_detected ||
+  if ((dump.event.cut_off_detected && dump.propSensors.timer_burn > config::get().Burn.MinDurationMs) ||
       dump.propSensors.timer_burn > config::get().Burn.FcMaxDurationMs) {
     return State::ASCENT;
   }
