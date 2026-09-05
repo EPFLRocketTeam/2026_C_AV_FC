@@ -1,5 +1,6 @@
 #include "av_state.h"
 #include "Application/Data/data.hpp"
+#include "Application/Config/config.hpp"
 #include "Application/FlightControl/prc_can.hpp"
 #include "Application/FlightControl/threshold.h"
 #include "Application/Kalman/kalman_lifecycle.h"
@@ -25,7 +26,7 @@ State AvState::getCurrentState() { return currentState; }
 
 State AvState::fromInit(DataDump const &dump) {
   if (dump.uplinkCmd.id ==
-      AV_CMD_CALIBRATE) // TODO: replace this with proper cmd id from the protocol
+      AV_CMD_CALIBRATE)
   {
     // Logger::log_eventf("FSM transition INIT->CALIBRATION");
     // TODO replace this with State::CALIBRATION
@@ -37,7 +38,7 @@ State AvState::fromInit(DataDump const &dump) {
 
 State AvState::fromCalibration(DataDump const &dump) {
   if (dump.uplinkCmd.id ==
-		  AV_CMD_ABORT) // TODO: replace this with proper cmd id from the protocol
+		  AV_CMD_ABORT)
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::ABORT_ON_GROUND;
@@ -62,7 +63,7 @@ State AvState::fromFilling(DataDump const &dump) {
   // If all the sensors are calibrated and ready for use we go to the MANUAL
   // state
   else if (dump.uplinkCmd.id ==
-		  AV_CMD_ARM) // TODO: replace this with proper cmd id from the protocol
+		  AV_CMD_ARM)
   {
     // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
     return State::ARMED;
@@ -72,7 +73,7 @@ State AvState::fromFilling(DataDump const &dump) {
 
 State AvState::fromArmed(DataDump const &dump) {
   if (dump.uplinkCmd.id ==
-		  AV_CMD_ABORT) // TODO: replace this with proper cmd id from the protocol
+		  AV_CMD_ABORT)
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::ABORT_ON_GROUND;
@@ -80,7 +81,7 @@ State AvState::fromArmed(DataDump const &dump) {
   // If all the sensors are calibrated and ready for use we go to the MANUAL
   // state
   else if (dump.uplinkCmd.id ==
-		  AV_CMD_PRESSURIZE) // TODO: replace this with proper cmd id from the protocol
+		  AV_CMD_PRESSURIZE)
   {
     // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
     return State::PRESSURIZATION;
@@ -93,12 +94,12 @@ State AvState::fromArmed(DataDump const &dump) {
 // instead of the never-set event.timer_launch_delay flag. Without real
 // pressurant, mean pressures never reach the nominal band, so this lets
 // the hold delay alone carry the transition on the bench.
-static constexpr uint32_t kPressurizationHoldDelayMs = 30000;
+// static constexpr uint32_t kPressurizationHoldDelayMs = 30000;
 
 State AvState::fromPressurization(DataDump const &dump) {
   if (dump.uplinkCmd.id == AV_CMD_ABORT ||
-      PRESSURIZATION_MAX_CRITICAL_PRESSURE < dump.propSensors.ETA_pressure ||
-      PRESSURIZATION_MAX_CRITICAL_PRESSURE < dump.propSensors.OTA_pressure)
+      config::get().Pressurization.MaxCriticalPressure < dump.propSensors.ETA_pressure ||
+      config::get().Pressurization.MaxCriticalPressure < dump.propSensors.OTA_pressure)
   // TODO: replace this with proper cmd id from the
   // protocol and add the condition p_tanks > p_prvs
   {
@@ -107,18 +108,16 @@ State AvState::fromPressurization(DataDump const &dump) {
   }
 
   const bool hold_delay_elapsed =
-      HAL_GetTick() - pressurization_entry_ms_ >= kPressurizationHoldDelayMs;
+      HAL_GetTick() - pressurization_entry_ms_ >= config::get().Pressurization.HoldDelayMs;
+  // TODO nominal pressure per tank
+  // TODO add commands for 
   const bool pressure_nominal =
-      dump.propSensors.OTA_pressure < PRESSURE_UPPER &&
-      dump.propSensors.ETA_pressure < PRESSURE_UPPER &&
-      dump.propSensors.HPO_pressure < PRESSURE_COPV_UPPER &&
-      dump.propSensors.HPE_pressure < PRESSURE_COPV_UPPER &&
-      dump.propSensors.OTA_pressure > PRESSURE_LOWER &&
-      dump.propSensors.ETA_pressure > PRESSURE_LOWER &&
-      dump.propSensors.HPO_pressure > PRESSURE_COPV_LOWER &&
-  	  dump.propSensors.HPE_pressure > PRESSURE_COPV_LOWER;
+      dump.propSensors.OTA_pressure < config::get().Pressurization.MaxLoxNominalPressure  &&
+      dump.propSensors.ETA_pressure < config::get().Pressurization.MaxFuelNominalPressure &&
+      dump.propSensors.OTA_pressure > config::get().Pressurization.MinLoxNominalPressure  &&
+      dump.propSensors.ETA_pressure > config::get().Pressurization.MinFuelNominalPressure; 
 
-  if (hold_delay_elapsed || pressure_nominal) {
+  if (hold_delay_elapsed && pressure_nominal) {
     // Logger::log_eventf("FSM transition PRESSURIZATION->INGITION");
     return State::IGNITION;
   }
@@ -141,7 +140,9 @@ State AvState::fromIgnition(DataDump const &dump) {
   // accel-hold check always reads ACC_HOLD_DID_NOT_HOLD, so IGNITION would
   // always auto-abort. Force BURN here instead; real liftoff logic below is
   // left intact and unreachable until this is removed.
-  return State::BURN;
+  bool mo_open = GOATStore::get_instance().valvesStore.get_main_LOX_open();
+  bool me_open = GOATStore::get_instance().valvesStore.get_main_fuel_open();
+  return (mo_open && me_open) ? State::BURN : currentState;
 
   // Liftoff detection, per spec: cable disconnect OR the accel hold
   // confirming it is enough for BURN, either signal alone is trusted.
@@ -153,6 +154,7 @@ State AvState::fromIgnition(DataDump const &dump) {
   if (cable_lost || dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
     return State::BURN;
   }
+  // TODO wtf, maybe add a delay idk
   if (!cable_lost && dump.event.vertical_acc_hold == ACC_HOLD_DID_NOT_HOLD) {
     return State::ABORT_ON_GROUND;
   }
@@ -165,7 +167,7 @@ State AvState::fromBurn(DataDump const &dump) {
     return State::ABORT_IN_FLIGHT;
   }
 
-  if (dump.uplinkCmd.id == AV_CMD_ABORT) // TODO: replace this with proper cmd id from the
+  if (dump.uplinkCmd.id == AV_CMD_ABORT)
                               // protocol and add the condition p_tanks > p_prvs
   {
     return State::ABORT_IN_FLIGHT;
@@ -180,9 +182,8 @@ State AvState::fromBurn(DataDump const &dump) {
   // BURN_MAX_DURATION are seconds, so both need the *1000 conversion --
   // it was missing here, which made BURN_MAX_DURATION's "120 s" behave as
   // 120 ms in practice.
-  if ((dump.event.cut_off_detected &&
-       dump.propSensors.timer_burn > static_cast<uint32_t>(MIN_BURN_DURATION * 1000.0f)) ||
-      dump.propSensors.timer_burn > static_cast<uint32_t>(BURN_MAX_DURATION * 1000.0f)) {
+  if ((dump.event.cut_off_detected && dump.propSensors.timer_burn > config::get().Burn.MinDurationMs) ||
+      dump.propSensors.timer_burn > config::get().Burn.FcMaxDurationMs) {
     return State::ASCENT;
   }
 
@@ -194,7 +195,7 @@ State AvState::fromAscent(DataDump const &dump) {
     return State::ABORT_IN_FLIGHT;
   }
 
-  if (dump.uplinkCmd.id == AV_CMD_ABORT) // TODO: replace this with proper cmd id from the
+  if (dump.uplinkCmd.id == AV_CMD_ABORT)
                               // protocol and add the condition p_tanks > p_prvs
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
@@ -205,8 +206,9 @@ State AvState::fromAscent(DataDump const &dump) {
   // ascent_duration is milliseconds (HAL_GetTick()-based); ASCENT_MAX_DURATION
   // is seconds, hence *1000 -- same unit bug fromBurn() had with
   // BURN_MAX_DURATION/MIN_BURN_DURATION.
+  // TODO add Ascent to parameters ????
   else if (dump.event.apogee_detected ||
-           dump.flightEventTimers.ascent_duration > static_cast<uint32_t>(ASCENT_MAX_DURATION * 1000.0f)) {    // TODO confirm it is indeed ascent and not the flight duration that is wanted here
+           dump.flightEventTimers.ascent_duration > config::get().Ascent.AscentMaxDurationMs) {
     // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
     return State::DESCENT;
   }
@@ -218,7 +220,7 @@ State AvState::fromDescent(DataDump const &dump) {
     return State::ABORT_IN_FLIGHT;
   }
 
-  if (dump.uplinkCmd.id == AV_CMD_ABORT) // TODO: replace this with proper cmd id from the
+  if (dump.uplinkCmd.id == AV_CMD_ABORT)
                               // protocol and add the condition p_tanks > p_prvs
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
@@ -229,7 +231,8 @@ State AvState::fromDescent(DataDump const &dump) {
   // descent_duration is milliseconds; DESCENT_THRESHOLD_DURATION is
   // seconds, same *1000 fix as ASCENT_MAX_DURATION above.
   else if (dump.event.touchdown_detected &&
-           dump.flightEventTimers.descent_duration > static_cast<uint32_t>(DESCENT_THRESHOLD_DURATION * 1000.0f)) {
+    // TODO also put Ms as a suffix
+           dump.flightEventTimers.descent_duration > config::get().Descent.MaxDurationMs) {
     // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
     return State::LANDED;
   }
@@ -237,8 +240,7 @@ State AvState::fromDescent(DataDump const &dump) {
 }
 
 State AvState::fromLanded(DataDump const &dump) {
-  if (dump.uplinkCmd.id == AV_CMD_ABORT) // TODO: replace this with proper cmd id from the
-                              // protocol and add the condition p_tanks > p_prvs
+  if (dump.uplinkCmd.id == AV_CMD_ABORT)
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::ABORT_ON_GROUND;
@@ -247,8 +249,7 @@ State AvState::fromLanded(DataDump const &dump) {
 }
 
 State AvState::fromAbortOnGround(DataDump const &dump) {
-  if (dump.uplinkCmd.id == AV_CMD_RECOVER) // TODO: replace this with proper cmd id from the
-                              // protocol and add the condition p_tanks > p_prvs
+  if (dump.uplinkCmd.id == AV_CMD_RECOVER)
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::INIT;
@@ -257,8 +258,7 @@ State AvState::fromAbortOnGround(DataDump const &dump) {
 }
 
 State AvState::fromAbortInFlight(DataDump const &dump) {
-  if (dump.uplinkCmd.id == AV_CMD_RECOVER) // TODO: replace this with proper cmd id from the
-                              // protocol and add the condition p_tanks > p_prvs
+  if (dump.uplinkCmd.id == AV_CMD_RECOVER)
   {
     // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::INIT;
@@ -421,9 +421,9 @@ void AvState::update(const DataDump &dump) {
     // delay, passivation fuel duration, interlude, passivation ox duration,
     // depressurize delay -- each currently 10 s in engine_state.cpp, so
     // 50 s total. Keep this in sync if those stop being uniform.
-    constexpr uint32_t kDescentDepressurizeDelayMs = 50000;
+    // constexpr uint32_t kDescentDepressurizeDelayMs = 50000;
     if (!descent_depressurize_sent_ &&
-        HAL_GetTick() - descent_entry_ms_ >= kDescentDepressurizeDelayMs) {
+        HAL_GetTick() - descent_entry_ms_ >= config::get().Descent.Depressurize.DPR.DelayMs) {
       Fc_Can_SendDprLoxPassivate();
       Fc_Can_SendDprEthPassivate();
       descent_depressurize_sent_ = true;
@@ -433,7 +433,6 @@ void AvState::update(const DataDump &dump) {
   // fromBurn()'s BURN_MAX_DURATION fallback reads this -- reuses
   // liftoff_entry_ms_ since BURN entry is liftoff, same timestamp.
   if (currentState == State::BURN) {
-	// TODO that shit looks bad
     GOATStore::get_instance().propSensorsStore.set_timer_burn(HAL_GetTick() - liftoff_entry_ms_);
   }
 }

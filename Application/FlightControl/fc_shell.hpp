@@ -22,6 +22,7 @@ extern "C" {
 // may contain a partial line, a full line, or multiple lines; the shell
 // buffers/reassembles across calls as needed.
 void Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length);
+void FC_Shell_Tick();
 
 #ifdef __cplusplus
 }
