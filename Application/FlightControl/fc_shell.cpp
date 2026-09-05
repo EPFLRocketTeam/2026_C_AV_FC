@@ -216,26 +216,26 @@ void config_ignition_prechill_duration (void* ctx, int value) {
 void config_ignition_ramp_up (void* ctx, int value) {
   config::internal::write().Ignition.RampUpMs = value;
 }
-void config_pressurize_fuel_set_pressure (void* ctx, float value) {
-  config::internal::write().Pressurization.FuelSetPressure = value;
-}
 void config_pressurize_hold_delay (void* ctx, int value) {
   config::internal::write().Pressurization.HoldDelayMs = value;
 }
-void config_pressurize_lox_set_pressure (void* ctx, float value) {
-  config::internal::write().Pressurization.LoxSetPressure = value;
+void config_pressurize_max_fuel_nominal_pressure (void* ctx, float value) {
+  config::internal::write().Pressurization.MaxFuelNominalPressure = value;
 }
-void config_pressurize_max_critical_pressure (void* ctx, float value) {
-  config::internal::write().Pressurization.MaxCriticalPressure = value;
+void config_pressurize_max_lox_nominal_pressure (void* ctx, float value) {
+  config::internal::write().Pressurization.MaxLoxNominalPressure = value;
 }
-void config_pressurize_max_nominal_pressure (void* ctx, float value) {
-  config::internal::write().Pressurization.MaxNominalPressure = value;
+void config_pressurize_min_fuel_nominal_pressure (void* ctx, float value) {
+  config::internal::write().Pressurization.MinFuelNominalPressure = value;
 }
-void config_pressurize_min_nominal_pressure (void* ctx, float value) {
-  config::internal::write().Pressurization.MinNominalPressure = value;
+void config_pressurize_min_lox_nominal_pressure (void* ctx, float value) {
+  config::internal::write().Pressurization.MinLoxNominalPressure = value;
 }
-void config_pressurize_ramp_up_duration (void* ctx, int value) {
-  config::internal::write().Pressurization.RampUpDurationMs = value;
+void config_pressurize_target_pressure_fuel (void* ctx, float value) {
+  config::internal::write().Pressurization.TargetPressureFuel = value;
+}
+void config_pressurize_target_pressure_lox (void* ctx, float value) {
+  config::internal::write().Pressurization.TargetPressureLox = value;
 }
 
 #define app_printf(...) printf(__VA_ARGS__);
@@ -324,13 +324,13 @@ void FillDriver(driver& drv) {
     drv.config_ignition_igniter_duration = config_ignition_igniter_duration;
     drv.config_ignition_prechill_duration = config_ignition_prechill_duration;
     drv.config_ignition_ramp_up = config_ignition_ramp_up;
-    drv.config_pressurize_fuel_set_pressure = config_pressurize_fuel_set_pressure;
     drv.config_pressurize_hold_delay = config_pressurize_hold_delay;
-    drv.config_pressurize_lox_set_pressure = config_pressurize_lox_set_pressure;
-    drv.config_pressurize_max_critical_pressure = config_pressurize_max_critical_pressure;
-    drv.config_pressurize_max_nominal_pressure = config_pressurize_max_nominal_pressure;
-    drv.config_pressurize_min_nominal_pressure = config_pressurize_min_nominal_pressure;
-    drv.config_pressurize_ramp_up_duration = config_pressurize_ramp_up_duration;
+    drv.config_pressurize_max_fuel_nominal_pressure = config_pressurize_max_fuel_nominal_pressure;
+    drv.config_pressurize_max_lox_nominal_pressure = config_pressurize_max_lox_nominal_pressure;
+    drv.config_pressurize_min_fuel_nominal_pressure = config_pressurize_min_fuel_nominal_pressure;
+    drv.config_pressurize_min_lox_nominal_pressure = config_pressurize_min_lox_nominal_pressure;
+    drv.config_pressurize_target_pressure_fuel = config_pressurize_target_pressure_fuel;
+    drv.config_pressurize_target_pressure_lox = config_pressurize_target_pressure_lox;
     drv.config_print_buffer = config_print_buffer;
     drv.config_print_commited = config_print_commited;
     drv.config_print_status = config_print_status;
