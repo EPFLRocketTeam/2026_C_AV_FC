@@ -264,6 +264,9 @@ void coldflow_ream (void* ctx) {
     return ;
   
   Fc_Can_SendPrcReset();
+  Fc_Can_SendDprEthReset();
+  Fc_Can_SendDprLoxReset();
+  
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_ARM);
 }
 
