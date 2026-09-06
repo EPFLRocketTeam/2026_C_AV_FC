@@ -195,6 +195,10 @@ State AvState::fromAscent(DataDump const &dump) {
     return State::ABORT_IN_FLIGHT;
   }
 
+  if (config::get().ColdflowMode && dump.uplinkCmd.id == AV_CMD_ARM) {
+    return State::ARMED;
+  }
+
   if (dump.uplinkCmd.id == AV_CMD_ABORT)
                               // protocol and add the condition p_tanks > p_prvs
   {

@@ -237,6 +237,9 @@ void config_pressurize_target_pressure_fuel (void* ctx, float value) {
 void config_pressurize_target_pressure_lox (void* ctx, float value) {
   config::internal::write().Pressurization.TargetPressureLox = value;
 }
+void config_set_coldflow_mode(void* ctx, bool value) {
+  config::internal::write().ColdflowMode = value;
+}
 
 #define app_printf(...) printf(__VA_ARGS__);
 void config_print_buffer (void* ctx) {
@@ -254,6 +257,14 @@ void config_print_status (void* ctx) {
 
 void config_commit (void* ctx) {
   config::internal::commit();
+}
+void coldflow_ream (void* ctx) {
+  if (!config::get().ColdflowMode) return ;
+  if (flight_computer::GOATStore::get_instance().stateStore.get() != flight_computer::State::ASCENT)
+    return ;
+  
+  Fc_Can_SendPrcReset();
+  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_ARM);
 }
 
 void logs_can_engine(void* ctx, bool value) {
@@ -304,7 +315,6 @@ void FillDriver(driver& drv) {
     drv.prc_passivate = OnPrcPassivate;
     drv.prc_reset = OnPrcReset;
     drv.prc_abort = OnPrcAbort;
-    drv.prc_coldflow = OnPrcColdflow;
     drv.dpr_lox_pressurize = OnDprLoxPressurize;
     drv.dpr_lox_abort = OnDprLoxAbort;
     drv.dpr_lox_passivate = OnDprLoxPassivate;
@@ -314,6 +324,7 @@ void FillDriver(driver& drv) {
     drv.dpr_eth_passivate = OnDprEthPassivate;
     drv.dpr_eth_reset = OnDprEthReset;
     drv.dpr_broadcast_abort = OnDprBroadcastAbort;
+    drv.coldflow_rearm = coldflow_ream;
     drv.config_burn_cutoff_delay = config_burn_cutoff_delay;
     drv.config_burn_impulse = config_burn_impulse;
     drv.config_burn_max_duration_engine = config_burn_max_duration_engine;
@@ -334,6 +345,7 @@ void FillDriver(driver& drv) {
     drv.config_print_buffer = config_print_buffer;
     drv.config_print_commited = config_print_commited;
     drv.config_print_status = config_print_status;
+    drv.config_set_coldflow_mode = config_set_coldflow_mode;
     drv.logs_can_engine = logs_can_engine;
     drv.logs_can_eth = logs_can_eth;
     drv.logs_can_fc = logs_can_fc;
