@@ -341,6 +341,13 @@ void AvState::update(const DataDump &dump) {
            stateToString(currentState).c_str());
     kalman_on_state_change(static_cast<uint32_t>(currentState));
 
+    if (currentState == State::ARMED && previous_state == State::ASCENT
+     && config::get().ColdflowMode) {
+      Fc_Can_SendPrcReset();
+      Fc_Can_SendDprEthReset();
+      Fc_Can_SendDprLoxReset();
+    }
+
     if (currentState == State::PRESSURIZATION) {
       pressurization_entry_ms_ = HAL_GetTick();
     }

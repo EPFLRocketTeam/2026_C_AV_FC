@@ -262,11 +262,7 @@ void coldflow_ream (void* ctx) {
   if (!config::get().ColdflowMode) return ;
   if (flight_computer::GOATStore::get_instance().stateStore.get() != flight_computer::State::ASCENT)
     return ;
-  
-  Fc_Can_SendPrcReset();
-  Fc_Can_SendDprEthReset();
-  Fc_Can_SendDprLoxReset();
-  
+
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_ARM);
 }
 
