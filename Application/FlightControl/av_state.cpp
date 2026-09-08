@@ -211,11 +211,12 @@ State AvState::fromAscent(DataDump const &dump) {
   // is seconds, hence *1000 -- same unit bug fromBurn() had with
   // BURN_MAX_DURATION/MIN_BURN_DURATION.
   // TODO add Ascent to parameters ????
-  else if (dump.event.apogee_detected ||
+  // TODO add descent back
+  /* else if (dump.event.apogee_detected ||
            dump.flightEventTimers.ascent_duration > config::get().Ascent.AscentMaxDurationMs) {
     // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
     return State::DESCENT;
-  }
+  } */
   return currentState;
 }
 
