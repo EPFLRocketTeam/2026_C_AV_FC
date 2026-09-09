@@ -107,9 +107,10 @@ void OnAvAbort(void*) noexcept {
   printf("[SHELL] abort\r\n");
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_ABORT);
 }
-void OnAvRecover(void*) noexcept {
+void OnAvRecover(void* ctx) noexcept {
   printf("[SHELL] recover\r\n");
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_RECOVER);
+  OnPrcReset(ctx);
 }
 
 // Bench-test bypass: nothing in the real firmware ever calls
@@ -137,6 +138,8 @@ void OnPrcPassivate(void*) noexcept {
 void OnPrcReset(void*) noexcept {
   printf("[SHELL] prc reset\r\n");
   Fc_Can_SendPrcReset();
+  Fc_Can_SendDprEthReset();
+  Fc_Can_SendDprLoxReset();
 }
 void OnPrcAbort(void*) noexcept {
   printf("[SHELL] prc abort\r\n");

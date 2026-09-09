@@ -29,7 +29,7 @@ void handleRxCommand(void* data) noexcept {
 	// order_value is specified as strictly ACTIVE or INACTIVE. Anything else
 	// is a corrupt byte that survived CRC, so drop the command rather than
 	// letting it fall through to the "close" case and move a valve.
-	if (packet->order_id == AV_CMD_DPR_LOX && packet->order_id == AV_CMD_DPR_FUEL) {
+	if (packet->order_id == AV_CMD_DPR_LOX || packet->order_id == AV_CMD_DPR_FUEL) {
 		if (packet->order_value > 90) {
 			printf("[RADIO] bad order_value 0x%02X for id %u, ignored\r\n",
 					packet->order_value, packet->order_id);
