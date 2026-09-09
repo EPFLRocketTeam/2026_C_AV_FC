@@ -53,37 +53,18 @@ State AvState::fromCalibration(DataDump const &dump) {
 }
 
 State AvState::fromFilling(DataDump const &dump) {
-  if (dump.uplinkCmd.id == AV_CMD_ABORT)
-  // TODO: replace this with proper cmd
-  // id from the protocol
-  {
-    // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) {
     return State::ABORT_ON_GROUND;
-  }
-  // If all the sensors are calibrated and ready for use we go to the MANUAL
-  // state
-  else if (dump.uplinkCmd.id ==
-		  AV_CMD_ARM)
-  {
-    // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
+  } else if (dump.uplinkCmd.id == AV_CMD_ARM) {
     return State::ARMED;
   }
   return currentState;
 }
 
 State AvState::fromArmed(DataDump const &dump) {
-  if (dump.uplinkCmd.id ==
-		  AV_CMD_ABORT)
-  {
-    // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) {
     return State::ABORT_ON_GROUND;
-  }
-  // If all the sensors are calibrated and ready for use we go to the MANUAL
-  // state
-  else if (dump.uplinkCmd.id ==
-		  AV_CMD_PRESSURIZE)
-  {
-    // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
+  } else if (dump.uplinkCmd.id == AV_CMD_PRESSURIZE) {
     return State::PRESSURIZATION;
   }
   return currentState;
@@ -100,17 +81,12 @@ State AvState::fromPressurization(DataDump const &dump) {
   if (dump.uplinkCmd.id == AV_CMD_ABORT ||
       config::get().Pressurization.MaxCriticalPressure < dump.propSensors.ETA_pressure ||
       config::get().Pressurization.MaxCriticalPressure < dump.propSensors.OTA_pressure)
-  // TODO: replace this with proper cmd id from the
-  // protocol and add the condition p_tanks > p_prvs
   {
-    // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::ABORT_ON_GROUND;
   }
 
   const bool hold_delay_elapsed =
       HAL_GetTick() - pressurization_entry_ms_ >= config::get().Pressurization.HoldDelayMs;
-  // TODO nominal pressure per tank
-  // TODO add commands for 
   const bool pressure_nominal =
       dump.propSensors.OTA_pressure < config::get().Pressurization.MaxLoxNominalPressure  &&
       dump.propSensors.ETA_pressure < config::get().Pressurization.MaxFuelNominalPressure &&
@@ -118,21 +94,13 @@ State AvState::fromPressurization(DataDump const &dump) {
       dump.propSensors.ETA_pressure > config::get().Pressurization.MinFuelNominalPressure; 
 
   if (hold_delay_elapsed && pressure_nominal) {
-    // Logger::log_eventf("FSM transition PRESSURIZATION->INGITION");
     return State::IGNITION;
   }
   return currentState;
 }
 
 State AvState::fromIgnition(DataDump const &dump) {
-  // IGNITION only has ABORT_ON_GROUND/BURN as valid outgoing edges per the fsm diagram,
-  // ABORT_IN_FLIGHT only exists from BURN/ASCENT/DESCENT (after liftoff is confirmed),
-  // so a catastrophic failure here goes to ABORT_ON_GROUND, not ABORT_IN_FLIGHT.
-  if (dump.event.catastrophic_failure) {
-    return State::ABORT_ON_GROUND;
-  }
-
-  if (dump.uplinkCmd.id == AV_CMD_ABORT) { // ABORT command
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) {
     return State::ABORT_ON_GROUND;
   }
 
@@ -191,63 +159,33 @@ State AvState::fromBurn(DataDump const &dump) {
 }
 
 State AvState::fromAscent(DataDump const &dump) {
-  if (dump.event.catastrophic_failure) {
-    return State::ABORT_IN_FLIGHT;
-  }
-
   if (config::get().ColdflowMode && dump.uplinkCmd.id == AV_CMD_ARM) {
     return State::ARMED;
   }
 
-  if (dump.uplinkCmd.id == AV_CMD_ABORT)
-                              // protocol and add the condition p_tanks > p_prvs
-  {
-    // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) {
     return State::ABORT_IN_FLIGHT;
-  }
-  // If all the sensors are calibrated and ready for use we go to the MANUAL
-  // state
-  // ascent_duration is milliseconds (HAL_GetTick()-based); ASCENT_MAX_DURATION
-  // is seconds, hence *1000 -- same unit bug fromBurn() had with
-  // BURN_MAX_DURATION/MIN_BURN_DURATION.
-  // TODO add Ascent to parameters ????
-  // TODO add descent back
-  /* else if (dump.event.apogee_detected ||
-           dump.flightEventTimers.ascent_duration > config::get().Ascent.AscentMaxDurationMs) {
-    // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
+  } else if (
+      (!config::get().ColdflowMode)
+       &&  (dump.event.apogee_detected
+         || dump.flightEventTimers.ascent_duration > config::get().Ascent.AscentMaxDurationMs)) {
     return State::DESCENT;
-  } */
+  }
   return currentState;
 }
 
 State AvState::fromDescent(DataDump const &dump) {
-  if (dump.event.catastrophic_failure) {
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) {
     return State::ABORT_IN_FLIGHT;
-  }
-
-  if (dump.uplinkCmd.id == AV_CMD_ABORT)
-                              // protocol and add the condition p_tanks > p_prvs
-  {
-    // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
-    return State::ABORT_IN_FLIGHT;
-  }
-  // If all the sensors are calibrated and ready for use we go to the MANUAL
-  // state
-  // descent_duration is milliseconds; DESCENT_THRESHOLD_DURATION is
-  // seconds, same *1000 fix as ASCENT_MAX_DURATION above.
-  else if (dump.event.touchdown_detected &&
-    // TODO also put Ms as a suffix
-           dump.flightEventTimers.descent_duration > config::get().Descent.MaxDurationMs) {
-    // Logger::log_eventf("FSM transition CALIBRATION->MANUAL");
+  } else if (dump.event.touchdown_detected
+          && dump.flightEventTimers.descent_duration > config::get().Descent.MaxDurationMs) {
     return State::LANDED;
   }
   return currentState;
 }
 
 State AvState::fromLanded(DataDump const &dump) {
-  if (dump.uplinkCmd.id == AV_CMD_ABORT)
-  {
-    // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) {
     return State::ABORT_ON_GROUND;
   }
   return currentState;
@@ -256,7 +194,6 @@ State AvState::fromLanded(DataDump const &dump) {
 State AvState::fromAbortOnGround(DataDump const &dump) {
   if (dump.uplinkCmd.id == AV_CMD_RECOVER)
   {
-    // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::INIT;
   }
   return currentState;
@@ -265,7 +202,6 @@ State AvState::fromAbortOnGround(DataDump const &dump) {
 State AvState::fromAbortInFlight(DataDump const &dump) {
   if (dump.uplinkCmd.id == AV_CMD_RECOVER)
   {
-    // Logger::log_eventf("FSM transition CALIBRATION->ERROR_GROUND");
     return State::INIT;
   }
   return currentState;
@@ -273,24 +209,6 @@ State AvState::fromAbortInFlight(DataDump const &dump) {
 
 void AvState::update(const DataDump &dump) {
   const State previous_state = currentState;
-
-  // ── Override: UART force-liftoff command ──────────────────────────
-  // If the "LIFTOFF" command was received via USB CDC, jump straight
-  // to BURN from any ground state.  The flag is consumed (cleared)
-  // here so it acts as a one-shot.
-  if (g_uart_force_liftoff) {
-    g_uart_force_liftoff = false;
-    if (currentState <= State::IGNITION) {  // any pre-flight state
-      currentState = State::BURN;
-    }
-  }
-
-  // ── Override: IMU-based liftoff detection ─────────────────────────
-  // The dual-window detector in the Kalman subsystem sets this flag
-  // once sustained excess acceleration is confirmed.
-  if (dump.event.imu_liftoff_detected && currentState <= State::IGNITION) {
-    currentState = State::BURN;
-  }
 
   // ── Normal FSM transitions ────────────────────────────────────────
   if (currentState == previous_state) {
