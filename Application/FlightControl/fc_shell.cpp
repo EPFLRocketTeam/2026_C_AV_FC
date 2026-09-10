@@ -296,6 +296,13 @@ void logs_usb_lox(void* ctx, bool value) {
   Fc_Can_SendLogDprLox(false, value);
 }
 
+void config_pressurize_bv_opening_fuel (void* ctx, float value) {
+  config::internal::write().Pressurization.RampBVOpeningFuel = value;
+}
+void config_pressurize_bv_opening_lox (void* ctx, float value) {
+  config::internal::write().Pressurization.RampBVOpeningLox = value;
+}
+
 void FillDriver(driver& drv) {
     drv.av_calibrate = OnAvCalibrate;
     drv.av_arm = OnAvArm;
@@ -338,6 +345,8 @@ void FillDriver(driver& drv) {
     drv.config_ignition_prechill_duration = config_ignition_prechill_duration;
     drv.config_ignition_ramp_up = config_ignition_ramp_up;
     drv.config_pressurize_hold_delay = config_pressurize_hold_delay;
+    drv.config_pressurize_bv_opening_lox = config_pressurize_bv_opening_lox;
+    drv.config_pressurize_bv_opening_fuel = config_pressurize_bv_opening_fuel;
     drv.config_pressurize_max_fuel_nominal_pressure = config_pressurize_max_fuel_nominal_pressure;
     drv.config_pressurize_max_lox_nominal_pressure = config_pressurize_max_lox_nominal_pressure;
     drv.config_pressurize_min_fuel_nominal_pressure = config_pressurize_min_fuel_nominal_pressure;
