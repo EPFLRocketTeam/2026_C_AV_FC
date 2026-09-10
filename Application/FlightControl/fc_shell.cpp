@@ -302,6 +302,18 @@ void config_pressurize_bv_opening_fuel (void* ctx, float value) {
 void config_pressurize_bv_opening_lox (void* ctx, float value) {
   config::internal::write().Pressurization.RampBVOpeningLox = value;
 }
+void config_pressurize_preburn_duration_fuel (void* ctx, float value) {
+  config::internal::write().Pressurization.PreburnDurationFuelMs = value;
+}
+void config_pressurize_preburn_duration_lox (void* ctx, float value) {
+  config::internal::write().Pressurization.PreburnDurationLoxMs = value;
+}
+void config_pressurize_stable_opening_fuel (void* ctx, float value) {
+  config::internal::write().Pressurization.StableBVOpeningFuel = value;
+}
+void config_pressurize_stable_opening_lox (void* ctx, float value) {
+  config::internal::write().Pressurization.StableBVOpeningLox = value;
+}
 
 void FillDriver(driver& drv) {
     drv.av_calibrate = OnAvCalibrate;
@@ -351,6 +363,10 @@ void FillDriver(driver& drv) {
     drv.config_pressurize_max_lox_nominal_pressure = config_pressurize_max_lox_nominal_pressure;
     drv.config_pressurize_min_fuel_nominal_pressure = config_pressurize_min_fuel_nominal_pressure;
     drv.config_pressurize_min_lox_nominal_pressure = config_pressurize_min_lox_nominal_pressure;
+    drv.config_pressurize_preburn_duration_fuel = config_pressurize_preburn_duration_fuel;
+    drv.config_pressurize_preburn_duration_lox = config_pressurize_preburn_duration_lox;
+    drv.config_pressurize_stable_opening_fuel = config_pressurize_stable_opening_fuel;
+    drv.config_pressurize_stable_opening_lox = config_pressurize_stable_opening_lox;
     drv.config_pressurize_target_pressure_fuel = config_pressurize_target_pressure_fuel;
     drv.config_pressurize_target_pressure_lox = config_pressurize_target_pressure_lox;
     drv.config_print_buffer = config_print_buffer;
