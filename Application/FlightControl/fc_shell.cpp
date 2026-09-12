@@ -107,9 +107,10 @@ void OnAvAbort(void*) noexcept {
   printf("[SHELL] abort\r\n");
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_ABORT);
 }
-void OnAvRecover(void*) noexcept {
+void OnAvRecover(void* ctx) noexcept {
   printf("[SHELL] recover\r\n");
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_RECOVER);
+  OnPrcReset(ctx);
 }
 
 // Bench-test bypass: nothing in the real firmware ever calls
@@ -137,6 +138,8 @@ void OnPrcPassivate(void*) noexcept {
 void OnPrcReset(void*) noexcept {
   printf("[SHELL] prc reset\r\n");
   Fc_Can_SendPrcReset();
+  Fc_Can_SendDprEthReset();
+  Fc_Can_SendDprLoxReset();
 }
 void OnPrcAbort(void*) noexcept {
   printf("[SHELL] prc abort\r\n");
@@ -237,6 +240,9 @@ void config_pressurize_target_pressure_fuel (void* ctx, float value) {
 void config_pressurize_target_pressure_lox (void* ctx, float value) {
   config::internal::write().Pressurization.TargetPressureLox = value;
 }
+void config_set_coldflow_mode(void* ctx, bool value) {
+  config::internal::write().ColdflowMode = value;
+}
 
 #define app_printf(...) printf(__VA_ARGS__);
 void config_print_buffer (void* ctx) {
@@ -254,6 +260,13 @@ void config_print_status (void* ctx) {
 
 void config_commit (void* ctx) {
   config::internal::commit();
+}
+void coldflow_ream (void* ctx) {
+  if (!config::get().ColdflowMode) return ;
+  if (flight_computer::GOATStore::get_instance().stateStore.get() != flight_computer::State::ASCENT)
+    return ;
+
+  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_ARM);
 }
 
 void logs_can_engine(void* ctx, bool value) {
@@ -283,6 +296,25 @@ void logs_usb_lox(void* ctx, bool value) {
   Fc_Can_SendLogDprLox(false, value);
 }
 
+void config_pressurize_bv_opening_fuel (void* ctx, float value) {
+  config::internal::write().Pressurization.RampBVOpeningFuel = value;
+}
+void config_pressurize_bv_opening_lox (void* ctx, float value) {
+  config::internal::write().Pressurization.RampBVOpeningLox = value;
+}
+void config_pressurize_preburn_duration_fuel (void* ctx, float value) {
+  config::internal::write().Pressurization.PreburnDurationFuelMs = value;
+}
+void config_pressurize_preburn_duration_lox (void* ctx, float value) {
+  config::internal::write().Pressurization.PreburnDurationLoxMs = value;
+}
+void config_pressurize_stable_opening_fuel (void* ctx, float value) {
+  config::internal::write().Pressurization.StableBVOpeningFuel = value;
+}
+void config_pressurize_stable_opening_lox (void* ctx, float value) {
+  config::internal::write().Pressurization.StableBVOpeningLox = value;
+}
+
 void FillDriver(driver& drv) {
     drv.av_calibrate = OnAvCalibrate;
     drv.av_arm = OnAvArm;
@@ -304,7 +336,6 @@ void FillDriver(driver& drv) {
     drv.prc_passivate = OnPrcPassivate;
     drv.prc_reset = OnPrcReset;
     drv.prc_abort = OnPrcAbort;
-    drv.prc_coldflow = OnPrcColdflow;
     drv.dpr_lox_pressurize = OnDprLoxPressurize;
     drv.dpr_lox_abort = OnDprLoxAbort;
     drv.dpr_lox_passivate = OnDprLoxPassivate;
@@ -314,6 +345,7 @@ void FillDriver(driver& drv) {
     drv.dpr_eth_passivate = OnDprEthPassivate;
     drv.dpr_eth_reset = OnDprEthReset;
     drv.dpr_broadcast_abort = OnDprBroadcastAbort;
+    drv.coldflow_rearm = coldflow_ream;
     drv.config_burn_cutoff_delay = config_burn_cutoff_delay;
     drv.config_burn_impulse = config_burn_impulse;
     drv.config_burn_max_duration_engine = config_burn_max_duration_engine;
@@ -325,15 +357,22 @@ void FillDriver(driver& drv) {
     drv.config_ignition_prechill_duration = config_ignition_prechill_duration;
     drv.config_ignition_ramp_up = config_ignition_ramp_up;
     drv.config_pressurize_hold_delay = config_pressurize_hold_delay;
+    drv.config_pressurize_bv_opening_lox = config_pressurize_bv_opening_lox;
+    drv.config_pressurize_bv_opening_fuel = config_pressurize_bv_opening_fuel;
     drv.config_pressurize_max_fuel_nominal_pressure = config_pressurize_max_fuel_nominal_pressure;
     drv.config_pressurize_max_lox_nominal_pressure = config_pressurize_max_lox_nominal_pressure;
     drv.config_pressurize_min_fuel_nominal_pressure = config_pressurize_min_fuel_nominal_pressure;
     drv.config_pressurize_min_lox_nominal_pressure = config_pressurize_min_lox_nominal_pressure;
+    drv.config_pressurize_preburn_duration_fuel = config_pressurize_preburn_duration_fuel;
+    drv.config_pressurize_preburn_duration_lox = config_pressurize_preburn_duration_lox;
+    drv.config_pressurize_stable_opening_fuel = config_pressurize_stable_opening_fuel;
+    drv.config_pressurize_stable_opening_lox = config_pressurize_stable_opening_lox;
     drv.config_pressurize_target_pressure_fuel = config_pressurize_target_pressure_fuel;
     drv.config_pressurize_target_pressure_lox = config_pressurize_target_pressure_lox;
     drv.config_print_buffer = config_print_buffer;
     drv.config_print_commited = config_print_commited;
     drv.config_print_status = config_print_status;
+    drv.config_set_coldflow_mode = config_set_coldflow_mode;
     drv.logs_can_engine = logs_can_engine;
     drv.logs_can_eth = logs_can_eth;
     drv.logs_can_fc = logs_can_fc;

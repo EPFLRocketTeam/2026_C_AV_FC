@@ -29,12 +29,19 @@ void handleRxCommand(void* data) noexcept {
 	// order_value is specified as strictly ACTIVE or INACTIVE. Anything else
 	// is a corrupt byte that survived CRC, so drop the command rather than
 	// letting it fall through to the "close" case and move a valve.
-	if (packet->order_value != 1 && packet->order_value != 0) {
+	if (packet->order_id == AV_CMD_DPR_LOX || packet->order_id == AV_CMD_DPR_FUEL) {
+		if (packet->order_value > 90) {
+			printf("[RADIO] bad order_value 0x%02X for id %u, ignored\r\n",
+					packet->order_value, packet->order_id);
+			return;
+		}
+	} else if (packet->order_value != 1 && packet->order_value != 0) {
 		printf("[RADIO] bad order_value 0x%02X for id %u, ignored\r\n",
 				packet->order_value, packet->order_id);
 		return;
 	}
-	const bool active = (packet->order_value == 1);
+	const bool  active  = (packet->order_value == 1);
+	const float percent = ((float) packet->order_value) * 1.11111111f;
 
 	switch (packet->order_id) {
 	case AV_CMD_CALIBRATE:
@@ -54,16 +61,6 @@ void handleRxCommand(void* data) noexcept {
 		break;
 	case AV_CMD_ABORT:
 		fc_commands::OnAvAbort(nullptr);
-		break;
-
-
-
-	// Tank pressurization (PO/PE).
-	case AV_CMD_DPR_LOX:
-		fc_commands::OnDprLoxPressurize(nullptr, active);
-		break;
-	case AV_CMD_DPR_FUEL:
-		fc_commands::OnDprEthPressurize(nullptr, active);
 		break;
 
 	// SPO/SPE ball valves. The protocol dropped DPR_CONFIG and is now fixed
@@ -91,6 +88,13 @@ void handleRxCommand(void* data) noexcept {
 	case AV_CMD_VENT_FUEL:
 		fc_commands::OnVentFuel(nullptr, active);
 		break;
+
+	case AV_CMD_DPR_LOX:
+		fc_commands::OnBallLox(nullptr, percent);
+		break ;
+	case AV_CMD_DPR_FUEL:
+		fc_commands::OnBallFuel(nullptr, percent);
+		break ;
 
 	default:
 		printf("[RADIO] unhandled order_id %u\r\n", packet->order_id);
