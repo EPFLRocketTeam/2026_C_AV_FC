@@ -90,6 +90,23 @@ void OnDprLoxPressures(void*, pi::payload::dpr_lox_pressures p) noexcept {
   GOATStore::get_instance().propSensorsStore.set_OTA_pressure(p.p_ota);
   GOATStore::get_instance().propSensorsStore.set_HPO_pressure(p.p_hpo);
 }
+void OnDprLoxTempsOta12(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
+  auto& sensors = GOATStore::get_instance().propSensorsStore;
+  sensors.set_fls_OTA_temperature_1(t.ota1());
+  sensors.set_fls_OTA_temperature_2(t.ota2());
+}
+void OnDprLoxTempsOta34(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
+  // OTA4 moved to the engine board (see OnPrcTempsOta45 below) -- only
+  // OTA3 is meaningful in this message now.
+  GOATStore::get_instance().propSensorsStore.set_fls_OTA_temperature_3(t.ota3());
+}
+// Sent by the engine board (Node::PrcP), not DPR-LOX: OTA1-3 are read out
+// on DPR-LOX (OnDprLoxTempsOta12/34 above), OTA4/5 on the engine board.
+void OnPrcTempsOta45(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
+  auto& sensors = GOATStore::get_instance().propSensorsStore;
+  sensors.set_fls_OTA_temperature_4(t.ota4());
+  sensors.set_fls_OTA_temperature_5(t.ota5());
+}
 
 void OnPrcPInjector(void*, pi::payload::prc_p_injector p) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
@@ -147,6 +164,9 @@ pi::context& Ctx() {
     driver.send                 = CbSend;
     driver.on_dpr_eth_pressures = OnDprEthPressures;
     driver.on_dpr_lox_pressures = OnDprLoxPressures;
+    driver.on_dpr_lox_temps_ota_1_2 = OnDprLoxTempsOta12;
+    driver.on_dpr_lox_temps_ota_3_4 = OnDprLoxTempsOta34;
+    driver.on_dpr_lox_temps_ota_5_6 = OnPrcTempsOta45;
     driver.on_prc_p_chamber     = OnPrcPChamber;
     driver.on_prc_p_injector    = OnPrcPInjector;
     driver.on_prc_t_chamber     = OnPrcTChamber;
