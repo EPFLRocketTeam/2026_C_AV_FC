@@ -104,8 +104,8 @@ void OnDprLoxTempsOta34(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
 // on DPR-LOX (OnDprLoxTempsOta12/34 above), OTA4/5 on the engine board.
 void OnPrcTempsOta45(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
-  sensors.set_fls_OTA_temperature_4(t.ota4());
-  sensors.set_fls_OTA_temperature_5(t.ota5());
+  sensors.set_fls_OTA_temperature_4(t.ota5());
+  sensors.set_fls_OTA_temperature_5(t.ota6());
 }
 
 void OnPrcPInjector(void*, pi::payload::prc_p_injector p) noexcept {
