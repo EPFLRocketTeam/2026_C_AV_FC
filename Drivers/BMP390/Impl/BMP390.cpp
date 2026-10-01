@@ -1,6 +1,7 @@
 #include "../BMP390.hpp"
 #include <cstring>
 #include <cstdio>
+#include "app_printf.h"
 
 namespace Drivers { namespace BMP390 {
 
@@ -13,17 +14,17 @@ BMP390_SDK::BMP390_SDK(const Config& cfg) : cfg_(cfg) {}
 bool BMP390_SDK::init() {
     bmp3_enable_dwt();
 
-    printf("[BMP390] init: hspi=%p cs_port=%p cs_pin=0x%04X\r\n",
+    app_printf("[BMP390] init: hspi=%p cs_port=%p cs_pin=0x%04X\r\n",
            (void*)cfg_.hspi, (void*)cfg_.cs_port, cfg_.cs_pin);
 
     // Check SPI handle state before we do anything
     if (cfg_.hspi) {
-        printf("[BMP390] SPI handle state=%u err=0x%lX instance=%p\r\n",
+        app_printf("[BMP390] SPI handle state=%u err=0x%lX instance=%p\r\n",
                (unsigned)cfg_.hspi->State,
                (unsigned long)cfg_.hspi->ErrorCode,
                (void*)cfg_.hspi->Instance);
     } else {
-        printf("[BMP390] ERROR: hspi is NULL!\r\n");
+        app_printf("[BMP390] ERROR: hspi is NULL!\r\n");
         snprintf(lastErr_, sizeof(lastErr_), "hspi=NULL");
         return false;
     }
@@ -46,25 +47,25 @@ bool BMP390_SDK::init() {
         HAL_GPIO_WritePin(cfg_.cs_port, cfg_.cs_pin, GPIO_PIN_RESET);
         HAL_StatusTypeDef raw_st = HAL_SPI_TransmitReceive(cfg_.hspi, raw_tx, raw_rx, 3, 50);
         HAL_GPIO_WritePin(cfg_.cs_port, cfg_.cs_pin, GPIO_PIN_SET);
-        printf("[BMP390] RAW chip_id test: HAL=%d rx=[%02X %02X %02X] (expect xx xx 60)\r\n",
+        app_printf("[BMP390] RAW chip_id test: HAL=%d rx=[%02X %02X %02X] (expect xx xx 60)\r\n",
                (int)raw_st, raw_rx[0], raw_rx[1], raw_rx[2]);
     }
 
     // bmp3_init: validates chip-id, soft-resets, reads NVM calibration
-    printf("[BMP390] calling bmp3_init...\r\n");
+    app_printf("[BMP390] calling bmp3_init...\r\n");
     int8_t rs = bmp3_init(&dev_);
-    printf("[BMP390] bmp3_init returned %d (0=OK, -2=COMM_FAIL, -3=DEV_NOT_FOUND)\r\n", (int)rs);
+    app_printf("[BMP390] bmp3_init returned %d (0=OK, -2=COMM_FAIL, -3=DEV_NOT_FOUND)\r\n", (int)rs);
 
     if (rs != BMP3_OK) {
         uint8_t raw_id = 0;
         bmp3_get_regs(BMP3_REG_CHIP_ID, &raw_id, 1, &dev_);
-        printf("[BMP390] INIT FAILED: bmp3_init=%d chip_id=0x%02X (expected 0x60)\r\n",
+        app_printf("[BMP390] INIT FAILED: bmp3_init=%d chip_id=0x%02X (expected 0x60)\r\n",
                (int)rs, raw_id);
         snprintf(lastErr_, sizeof(lastErr_), "bmp3_init=%d chip_id=0x%02X", (int)rs, raw_id);
         return false;
     }
 
-    printf("[BMP390] bmp3_init OK, chip_id=0x%02X, configuring...\r\n", dev_.chip_id);
+    app_printf("[BMP390] bmp3_init OK, chip_id=0x%02X, configuring...\r\n", dev_.chip_id);
 
     // Apply defaults from config
     configure(static_cast<OsrPressure>(cfg_.osr_p),
@@ -77,10 +78,10 @@ bool BMP390_SDK::init() {
         bmp3_get_regs(BMP3_REG_PWR_CTRL, &pwr_ctrl, 1, &dev_);
         const bool press_ok = (pwr_ctrl & BMP3_PRESS_EN_MSK) != 0;
         const bool temp_ok  = (pwr_ctrl & BMP3_TEMP_EN_MSK)  != 0;
-        printf("[BMP390] PWR_CTRL readback: 0x%02X  press_en=%d temp_en=%d\r\n",
+        app_printf("[BMP390] PWR_CTRL readback: 0x%02X  press_en=%d temp_en=%d\r\n",
                pwr_ctrl, (int)press_ok, (int)temp_ok);
         if (!press_ok || !temp_ok) {
-            printf("[BMP390] WARNING: press/temp not enabled, writing directly\r\n");
+            app_printf("[BMP390] WARNING: press/temp not enabled, writing directly\r\n");
             uint8_t reg_addr = BMP3_REG_PWR_CTRL;
             uint8_t reg_data = BMP3_PRESS_EN_MSK | BMP3_TEMP_EN_MSK; // sleep mode + enables
             bmp3_set_regs(&reg_addr, &reg_data, 1, &dev_);
@@ -88,7 +89,7 @@ bool BMP390_SDK::init() {
     }
 
     healthy_ = true;
-    printf("[BMP390] init complete, healthy=true\r\n");
+    app_printf("[BMP390] init complete, healthy=true\r\n");
     return true;
 }
 

@@ -2,6 +2,7 @@
 // include it outside extern "C" (it has its own C++ guards).
 #include "Core/Inc/main.h"
 #include "Application/app_timebase.h"
+#include "Application/app_printf.h"
 #include "Modules/baro_module.hpp"
 #include "Modules/imu_modlue.hpp"
 #include "Modules/gps_module.hpp"
@@ -200,7 +201,7 @@ void manual_test_buzzer_set_buzzer_2 (bool status) {
     HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, status ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
 #ifdef DEBUG
-    printf("[BUZZER] Set at time %d: %d\r\n", HAL_GetTick(), status);
+    app_printf("[BUZZER] Set at time %d: %d\r\n", HAL_GetTick(), status);
 #endif
 }
 
@@ -519,7 +520,7 @@ static void baro_raw_spi_test() {
         {&hspi4, BMP_CS4_GPIO_Port, BMP_CS4_Pin, "BARO4(SPI4)"},
     };
 
-    printf("[RAW-BARO-TEST] Starting raw SPI chip ID reads...\r\n");
+    app_printf("[RAW-BARO-TEST] Starting raw SPI chip ID reads...\r\n");
     for (int i = 0; i < 4; i++) {
         auto& b = baros[i];
         // BMP390 SPI read: [reg|0x80] [dummy] [data]
@@ -535,13 +536,13 @@ static void baro_raw_spi_test() {
         HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(b.hspi, tx, rx, 3, 50);
         HAL_GPIO_WritePin(b.cs_port, b.cs_pin, GPIO_PIN_SET);
 
-        printf("[RAW-BARO-TEST] %s: HAL=%d SPI_state=%u SPI_err=0x%lX rx=[%02X %02X %02X] chip_id=0x%02X %s\r\n",
+        app_printf("[RAW-BARO-TEST] %s: HAL=%d SPI_state=%u SPI_err=0x%lX rx=[%02X %02X %02X] chip_id=0x%02X %s\r\n",
                b.name, (int)st,
                (unsigned)b.hspi->State, (unsigned long)b.hspi->ErrorCode,
                rx[0], rx[1], rx[2], rx[2],
                (rx[2] == 0x60) ? "OK" : "MISMATCH!");
     }
-    printf("[RAW-BARO-TEST] Done.\r\n");
+    app_printf("[RAW-BARO-TEST] Done.\r\n");
 }
 
 extern "C" void app_super_loop_setup(void) {
@@ -568,29 +569,29 @@ extern "C" void app_super_loop_setup(void) {
         if (!g_superloop.imuModule.sensorFailed(1)) g_superloop.invImu2.enableFsync();
         if (!g_superloop.imuModule.sensorFailed(2)) g_superloop.invImu3.enableFsync();
         if (!g_superloop.imuModule.sensorFailed(3)) g_superloop.invImu4.enableFsync();
-        printf("[APP] FSYNC PWM started on PD14 @ 6400 Hz\r\n");
+        app_printf("[APP] FSYNC PWM started on PD14 @ 6400 Hz\r\n");
     } else {
-        printf("[APP] WARNING: FSYNC PWM init failed — IMU timestamps may drift\r\n");
+        app_printf("[APP] WARNING: FSYNC PWM init failed — IMU timestamps may drift\r\n");
     }
-    printf("[APP] Initializing SD Card...\n");
+    app_printf("[APP] Initializing SD Card...\n");
     if (hsd1.Instance == NULL) {
-        printf("[APP] SD Card not initialized (hsd1.Instance == NULL).\n");
+        app_printf("[APP] SD Card not initialized (hsd1.Instance == NULL).\n");
     } else if (!g_sd_interface.init_sd_card(&hsd1, g_sd_arena_buffer, g_sd_arena_length)) {
-        printf("[APP] Failure of init SD card (non-fatal, continuing).\n");
+        app_printf("[APP] Failure of init SD card (non-fatal, continuing).\n");
     } else {
-        printf("Opening file...\n");
+        app_printf("Opening file...\n");
         if (!g_sd_interface.open_file()) {
-            printf("[APP] Failure of open on SD card (non-fatal).\n");
+            app_printf("[APP] Failure of open on SD card (non-fatal).\n");
         } else {
-            printf("[APP] SD card file opened OK.\n");
+            app_printf("[APP] SD card file opened OK.\n");
             g_sd_logging_active = true;
             g_sd_logger.init(&g_sd_interface);
             eskf::setEskfLogger(&g_sd_logger);
-            printf("[APP] SD logger active, ESKF logger connected.\n");
+            app_printf("[APP] SD logger active, ESKF logger connected.\n");
 
             /* Dump SDMMC bus config for diagnostics */
             uint32_t clkcr = hsd1.Instance->CLKCR;
-            printf("[SD-CFG] CLKCR=0x%08lX  ClkDiv=%lu  BusWide=%lu  HwFlow=%lu\r\n",
+            app_printf("[SD-CFG] CLKCR=0x%08lX  ClkDiv=%lu  BusWide=%lu  HwFlow=%lu\r\n",
                    (unsigned long)clkcr,
                    (unsigned long)(clkcr & 0x3FF),            /* CLKDIV bits[9:0] */
                    (unsigned long)((clkcr >> 14) & 0x3),      /* WIDBUS bits[15:14] */
@@ -600,7 +601,7 @@ extern "C" void app_super_loop_setup(void) {
 
     // ── Baro init diagnostics ──────────────────────────────────────────────
     // Print SPI handle states after IMU init (IMU uses SPI4, baros use SPI4+SPI5)
-    printf("[APP] SPI4 state=%u err=0x%lX  SPI5 state=%u err=0x%lX\r\n",
+    app_printf("[APP] SPI4 state=%u err=0x%lX  SPI5 state=%u err=0x%lX\r\n",
            (unsigned)hspi4.State, (unsigned long)hspi4.ErrorCode,
            (unsigned)hspi5.State, (unsigned long)hspi5.ErrorCode);
 
@@ -613,7 +614,7 @@ extern "C" void app_super_loop_setup(void) {
     // SCB_CleanInvalidateDCache();
     // __DSB();
     // __ISB();
-    printf("[APP] D-cache clean+invalidate done, starting baro init...\r\n");
+    app_printf("[APP] D-cache clean+invalidate done, starting baro init...\r\n");
 
     // Raw SPI test: bypasses SDK, directly reads chip IDs from all 4 baros
     baro_raw_spi_test();
@@ -621,12 +622,12 @@ extern "C" void app_super_loop_setup(void) {
     g_superloop.baroModule.setTriggerCallback(kalman_note_baro_trigger);
     if (!g_superloop.baroModule.init()) {
         // Non-fatal: system can operate with degraded baro (voting handles it)
-        printf("WARNING: No barometers initialized\r\n");
+        app_printf("WARNING: No barometers initialized\r\n");
     }
 
     bool gps_state = g_superloop.gpsModule.init();
 #if FAKE_GNSS_ENABLE   /////
-    printf("[APP] FAKE_GNSS_ENABLE=1: skipping real GPS init, using synthetic 16Hz GNSS\r\n");
+    app_printf("[APP] FAKE_GNSS_ENABLE=1: skipping real GPS init, using synthetic 16Hz GNSS\r\n");
     // Don't init real GPS — no hardware attached.
 #else
     if (!gps_state) {
@@ -640,7 +641,7 @@ extern "C" void app_super_loop_setup(void) {
         g_superloop.imuModule.setRawLogCallback(imu_raw_log_callback);
         g_superloop.baroModule.setRawLogCallback(baro_raw_log_callback);
         g_superloop.gps.setRawUbxCallback(ubx_raw_log_callback);
-        printf("[APP] Full-rate raw sensor logging enabled.\r\n");
+        app_printf("[APP] Full-rate raw sensor logging enabled.\r\n");
 
         // Log boot marker to delimit this session on SD
         uint8_t imu_ok = 0;
@@ -652,12 +653,12 @@ extern "C" void app_super_loop_setup(void) {
             if (g_superloop.baroModule.sensorInit(i)) baro_ok++;
         }
         g_sd_logger.logBootMarker(imu_ok, baro_ok, gps_state);
-        printf("[APP] Boot marker logged to SD.\r\n");
+        app_printf("[APP] Boot marker logged to SD.\r\n");
     }
 
     g_superloop.ready = true;
 #ifdef DEBUG
-    printf("-------------------%d, %d, %d,%d,%d,%d,%d,%d,%d-------------------\r\n," , g_superloop.imuModule.sensorFailed(0), g_superloop.imuModule.sensorFailed(1),
+    app_printf("-------------------%d, %d, %d,%d,%d,%d,%d,%d,%d-------------------\r\n," , g_superloop.imuModule.sensorFailed(0), g_superloop.imuModule.sensorFailed(1),
             g_superloop.imuModule.sensorFailed(2), g_superloop.imuModule.sensorFailed(3),
             g_superloop.baroModule.sensorInit(0), g_superloop.baroModule.sensorInit(1),
             g_superloop.baroModule.sensorInit(2), g_superloop.baroModule.sensorInit(3),
@@ -676,12 +677,14 @@ extern "C" void app_super_loop_setup(void) {
 
 }
 
+static int nb_superloops = 0;
+static int nb_consumed = 0;
 extern "C" void app_super_loop_iterate(void) {
 	FC_Shell_Tick();
     RUN_EVERY(100)
         config::internal::tick();
 
-	//printf("Buzzer advancing ---------------------------------------------\r\n");
+	//app_printf("Buzzer advancing ---------------------------------------------\r\n");
 	g_superloop.buzzer.tick(HAL_GetTick());
     if (g_superloop.buzzer.is_finished() && !g_buzzer_finished) {
         g_buzzer_finished = true;
@@ -692,7 +695,7 @@ extern "C" void app_super_loop_iterate(void) {
     if (g_buzzer_finished && !g_liftoff_detection_allowed &&
         (HAL_GetTick() - g_buzzer_finished_ms >= kLiftoffArmDelayMs)) {
         g_liftoff_detection_allowed = true;
-        printf("[LIFTOFF] Detection enabled (%lums after buzzer)\r\n",
+        app_printf("[LIFTOFF] Detection enabled (%lums after buzzer)\r\n",
                (unsigned long)kLiftoffArmDelayMs);
     }
 
@@ -704,6 +707,20 @@ extern "C" void app_super_loop_iterate(void) {
     // Write DataDump at ~62.5 Hz + on FSM transitions.
     // tick() is always called to drain the ring buffer via DMA.
     if (g_sd_logging_active) {
+        RUN_EVERY(100) {
+            app_printf("[SD] wr=%lu fail=%lu arena=%lu/%lu maxWr=%luus ticks=%lu disk=%luKB imu=%lu/%lu(%luKB)\r\n",
+                   (unsigned long)g_sd_logger.writeCount(),
+                   (unsigned long)g_sd_logger.writeFailCount(),
+                   (unsigned long)g_sd_interface.arena_used_bytes(),
+                   (unsigned long)g_sd_interface.arena_total_bytes(),
+                   (unsigned long)g_sd_logger.maxWriteTimeUs(),
+                   (unsigned long)g_sd_logger.tickCount(),
+                   (unsigned long)(g_sd_interface.disk_size_remaining() / 1024),
+                   (unsigned long)g_sd_logger.imuBatchCount(),
+                   (unsigned long)g_sd_logger.imuBatchFail(),
+                   (unsigned long)(g_sd_logger.imuBytesOk() / 1024));
+        }
+
         const uint32_t now_ms = HAL_GetTick();
         bool should_log = (now_ms - g_last_log_ms >= kLogIntervalMs);
 
@@ -787,21 +804,10 @@ extern "C" void app_super_loop_iterate(void) {
             g_metrics_tracker.reset();
 
             // Debug print SD health + app metrics (1 Hz)
-            printf("[SD] wr=%lu fail=%lu arena=%lu/%lu maxWr=%luus ticks=%lu disk=%luKB imu=%lu/%lu(%luKB)\r\n",
-                   (unsigned long)g_sd_logger.writeCount(),
-                   (unsigned long)g_sd_logger.writeFailCount(),
-                   (unsigned long)g_sd_interface.arena_used_bytes(),
-                   (unsigned long)g_sd_interface.arena_total_bytes(),
-                   (unsigned long)g_sd_logger.maxWriteTimeUs(),
-                   (unsigned long)g_sd_logger.tickCount(),
-                   (unsigned long)(g_sd_interface.disk_size_remaining() / 1024),
-                   (unsigned long)g_sd_logger.imuBatchCount(),
-                   (unsigned long)g_sd_logger.imuBatchFail(),
-                   (unsigned long)(g_sd_logger.imuBytesOk() / 1024));
             {
                 SdTimingStats st = sd_timing_snapshot();
                 uint32_t avg_cycle = (st.dma_count > 0) ? (uint32_t)(st.sum_cycle_us / st.dma_count) : 0;
-                printf("[SD-T] dma=%lu err=%lu(0x%lX) blk=%lu batch=%lu-%lu xfer=%luus prog=%luus cyc=%lu/%luus\r\n",
+                app_printf("[SD-T] dma=%lu err=%lu(0x%lX) blk=%lu batch=%lu-%lu xfer=%luus prog=%luus cyc=%lu/%luus\r\n",
                        (unsigned long)st.dma_count,
                        (unsigned long)st.dma_error_count,
                        (unsigned long)st.last_error_code,
@@ -813,7 +819,7 @@ extern "C" void app_super_loop_iterate(void) {
                        (unsigned long)avg_cycle,
                        (unsigned long)st.max_cycle_us);
             }
-            printf("[APP] loop=%lu/%lu/%luus(%lu) kal=%lu/%luus sd=%luus "
+            app_printf("[APP] loop=%lu/%lu/%luus(%lu) kal=%lu/%luus sd=%luus "
                    "grp=%lu solo=%lu stale=%lu\r\n",
                    (unsigned long)m.loop_min_us,
                    (unsigned long)m.loop_avg_us,
@@ -844,7 +850,23 @@ extern "C" void app_super_loop_iterate(void) {
         g_imu_status_flags[i] = g_superloop.imuModule.sensorStatusFlags(i);
     }
 
-    (void)g_superloop.imuModule.takeProducedCount();
+    nb_superloops ++;
+    RUN_EVERY(1000) {
+    	app_printf("[IMU STATUS] \n");
+    	for (size_t i = 0; i < 4; i ++) {
+    		printf(" IMU %d: healthy=%d status=%d\n", (int) i, (int) g_imu_healthy[i], (int) g_imu_status_flags[i]);
+    	}
+    	app_printf("PRODUCED: %d\n", nb_consumed);
+        app_printf("OVER TIME: %d\n", nb_superloops);
+    	app_printf("[BARO STATUS] \n");
+    	for (size_t i = 0; i < 4; i ++) {
+    		printf(" BARO %d: healthy=%d status=%d\n", (int) i, (int) g_baro_healthy[i], (int) g_baro_status_flags[i]);
+    	}
+        nb_superloops = 0;
+        nb_consumed = 0;
+    }
+
+    nb_consumed += g_superloop.imuModule.takeProducedCount();
     g_superloop.baroModule.update(iter_now_ms);
     for (size_t i = 0; i < 4; ++i) {
         g_baro_healthy[i] = g_superloop.baroModule.sensorHealthy(i) ? 1u : 0u;

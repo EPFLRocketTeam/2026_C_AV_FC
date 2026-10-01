@@ -4,6 +4,7 @@
 
 #include "Application/Data/data.hpp"
 #include "Application/Config/config.hpp"
+#include "Application/app_printf.h"
 #include "Application/FlightControl/fc_commands.hpp"
 #include "Application/FlightControl/prc_can.hpp"
 #include "fc_commands_generated.hpp"
@@ -33,7 +34,7 @@ namespace fc_commands {
 // see OnAvCalibrate's comment below), and also clears the Engine board to
 // ignite -- not three separate commands.
 void OnPressurize(void*, bool value) noexcept {
-  printf("[SHELL] pressurize %s\r\n", value ? "on" : "off");
+  app_printf("[SHELL] pressurize %s\r\n", value ? "on" : "off");
   Fc_Can_SendDprLoxPressurize(value ? 1 : 0);
   Fc_Can_SendDprEthPressurize(value ? 1 : 0);
   if (value) {
@@ -43,40 +44,40 @@ void OnPressurize(void*, bool value) noexcept {
 }
 // Toggles the engine board's MO valve directly, bypassing the FSM.
 void OnMainLox(void*, bool value)  noexcept {
-  printf("[SHELL] main lox %s\r\n", value ? "open" : "close");
+  app_printf("[SHELL] main lox %s\r\n", value ? "open" : "close");
   Fc_Can_SendMainValveCmd(0, value ? 1 : 0);
 }
 void OnMainFuel(void*, bool value) noexcept {
-  printf("[SHELL] main fuel %s\r\n", value ? "open" : "close");
+  app_printf("[SHELL] main fuel %s\r\n", value ? "open" : "close");
   Fc_Can_SendMainValveCmd(1, value ? 1 : 0);
 }
 void OnVentCopv(void*, bool value) noexcept {
-  printf("[SHELL] vent copv %s\r\n", value ? "open" : "close");
+  app_printf("[SHELL] vent copv %s\r\n", value ? "open" : "close");
   Fc_Can_SendDprLoxCopvVent(value ? 1 : 0);
   Fc_Can_SendDprEthCopvVent(value ? 1 : 0);
 }
 void OnVentLox(void*, bool value)  noexcept {
-  printf("[SHELL] vent lox %s\r\n", value ? "open" : "close");
+  app_printf("[SHELL] vent lox %s\r\n", value ? "open" : "close");
   Fc_Can_SendDprLoxVent(value ? 1 : 0);
 }
 void OnVentFuel(void*, bool value) noexcept {
-  printf("[SHELL] vent fuel %s\r\n", value ? "open" : "close");
+  app_printf("[SHELL] vent fuel %s\r\n", value ? "open" : "close");
   Fc_Can_SendDprEthVent(value ? 1 : 0);
 }
 void OnSafetyLox(void*, bool value)  noexcept {
-  printf("[SHELL] safety lox %s\r\n", value ? "open" : "close");
+  app_printf("[SHELL] safety lox %s\r\n", value ? "open" : "close");
   Fc_Can_SendDprLoxSafety(value ? 1 : 0);
 }
 void OnSafetyFuel(void*, bool value) noexcept {
-  printf("[SHELL] safety fuel %s\r\n", value ? "open" : "close");
+  app_printf("[SHELL] safety fuel %s\r\n", value ? "open" : "close");
   Fc_Can_SendDprEthSafety(value ? 1 : 0);
 }
 void OnBallLox(void*, float value) noexcept {
-  printf("[SHELL] ball lox %.1f\r\n", value);
+  app_printf("[SHELL] ball lox %.1f\r\n", value);
   Fc_Can_SendDprLoxBallValve(value);
 }
 void OnBallFuel(void*, float value) noexcept {
-  printf("[SHELL] ball fuel %.1f\r\n", value);
+  app_printf("[SHELL] ball fuel %.1f\r\n", value);
   Fc_Can_SendDprEthBallValve(value);
 }
 
@@ -88,27 +89,27 @@ void OnBallFuel(void*, float value) noexcept {
 // fsm_tick() consumes the id one-shot after each tick, so it's safe to
 // just set it here.
 void OnAvCalibrate(void*) noexcept {
-  printf("[SHELL] calibrate\r\n");
+  app_printf("[SHELL] calibrate\r\n");
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_CALIBRATE);
 }
 void OnAvPressurize(void*) noexcept {
-	  printf("[SHELL] pressurize\r\n");
+	  app_printf("[SHELL] pressurize\r\n");
 	  flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_PRESSURIZE);
 }
 void OnAvArm(void*) noexcept {
-  printf("[SHELL] arm\r\n");
+  app_printf("[SHELL] arm\r\n");
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_ARM);
 }
 void OnAvLaunch(void*) noexcept {
-  printf("[SHELL] launch\r\n");
+  app_printf("[SHELL] launch\r\n");
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_LAUNCH);
 }
 void OnAvAbort(void*) noexcept {
-  printf("[SHELL] abort\r\n");
+  app_printf("[SHELL] abort\r\n");
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_ABORT);
 }
 void OnAvRecover(void* ctx) noexcept {
-  printf("[SHELL] recover\r\n");
+  app_printf("[SHELL] recover\r\n");
   flight_computer::GOATStore::get_instance().uplinkCmdStore.set_id(AV_CMD_RECOVER);
   OnPrcReset(ctx);
 }
@@ -119,30 +120,30 @@ void OnAvRecover(void* ctx) noexcept {
 // Same idea as g_uart_force_liftoff, just wired into this shell instead
 // of the older raw uart_cmd_process parser.
 void OnAvForceCalibrated(void*) noexcept {
-  printf("[SHELL] force_calibrated\r\n");
+  app_printf("[SHELL] force_calibrated\r\n");
   flight_computer::GOATStore::get_instance().eventStore.set_calibrated(true);
 }
 
 void OnPrcClearToIgnite(void*) noexcept {
-  printf("[SHELL] prc clear_to_ignite\r\n");
+  app_printf("[SHELL] prc clear_to_ignite\r\n");
   Fc_Can_SendPrcClearToIgnite();
 }
 void OnPrcIgnite(void*) noexcept {
-  printf("[SHELL] prc ignite\r\n");
+  app_printf("[SHELL] prc ignite\r\n");
   Fc_Can_SendPrcIgnite();
 }
 void OnPrcPassivate(void*) noexcept {
-  printf("[SHELL] prc passivate\r\n");
+  app_printf("[SHELL] prc passivate\r\n");
   Fc_Can_SendPrcPassivate();
 }
 void OnPrcReset(void*) noexcept {
-  printf("[SHELL] prc reset\r\n");
+  app_printf("[SHELL] prc reset\r\n");
   Fc_Can_SendPrcReset();
   Fc_Can_SendDprEthReset();
   Fc_Can_SendDprLoxReset();
 }
 void OnPrcAbort(void*) noexcept {
-  printf("[SHELL] prc abort\r\n");
+  app_printf("[SHELL] prc abort\r\n");
   Fc_Can_SendBroadcastAbort();
 }
 // Manual bench test, separate from the Engine board's real FSM: prechill,
@@ -151,44 +152,44 @@ void OnPrcAbort(void*) noexcept {
 // 1 s, close both together. Retriggerable -- send "coldflow" again to
 // run it another time. See engine_state.cpp's ColdflowSequence.
 void OnPrcColdflow(void*) noexcept {
-  printf("[SHELL] coldflow\r\n");
+  app_printf("[SHELL] coldflow\r\n");
   Fc_Can_SendPrcColdflow();
 }
 
 void OnDprLoxPressurize(void*, bool value) noexcept {
-  printf("[SHELL] dpr lox pressurize %s\r\n", value ? "on" : "off");
+  app_printf("[SHELL] dpr lox pressurize %s\r\n", value ? "on" : "off");
   Fc_Can_SendDprLoxPressurize(value ? 1 : 0);
 }
 void OnDprLoxAbort(void*) noexcept {
-  printf("[SHELL] dpr lox abort\r\n");
+  app_printf("[SHELL] dpr lox abort\r\n");
   Fc_Can_SendDprLoxAbort();
 }
 void OnDprLoxPassivate(void*) noexcept {
-  printf("[SHELL] dpr lox passivate\r\n");
+  app_printf("[SHELL] dpr lox passivate\r\n");
   Fc_Can_SendDprLoxPassivate();
 }
 void OnDprLoxReset(void*) noexcept {
-  printf("[SHELL] dpr lox reset\r\n");
+  app_printf("[SHELL] dpr lox reset\r\n");
   Fc_Can_SendDprLoxReset();
 }
 void OnDprEthPressurize(void*, bool value) noexcept {
-  printf("[SHELL] dpr eth pressurize %s\r\n", value ? "on" : "off");
+  app_printf("[SHELL] dpr eth pressurize %s\r\n", value ? "on" : "off");
   Fc_Can_SendDprEthPressurize(value ? 1 : 0);
 }
 void OnDprEthAbort(void*) noexcept {
-  printf("[SHELL] dpr eth abort\r\n");
+  app_printf("[SHELL] dpr eth abort\r\n");
   Fc_Can_SendDprEthAbort();
 }
 void OnDprEthPassivate(void*) noexcept {
-  printf("[SHELL] dpr eth passivate\r\n");
+  app_printf("[SHELL] dpr eth passivate\r\n");
   Fc_Can_SendDprEthPassivate();
 }
 void OnDprEthReset(void*) noexcept {
-  printf("[SHELL] dpr eth reset\r\n");
+  app_printf("[SHELL] dpr eth reset\r\n");
   Fc_Can_SendDprEthReset();
 }
 void OnDprBroadcastAbort(void*) noexcept {
-  printf("[SHELL] dpr broadcast_abort\r\n");
+  app_printf("[SHELL] dpr broadcast_abort\r\n");
   Fc_Can_SendBroadcastAbort();
 }
 
@@ -244,7 +245,6 @@ void config_set_coldflow_mode(void* ctx, bool value) {
   config::internal::write().ColdflowMode = value;
 }
 
-#define app_printf(...) printf(__VA_ARGS__);
 void config_print_buffer (void* ctx) {
   FlightParams params = config::internal::write();
   PRINT_FLIGHT_PARAMS(params);
@@ -256,7 +256,6 @@ void config_print_commited (void* ctx) {
 void config_print_status (void* ctx) {
 	config::internal::print_status();
 }
-#undef app_printf
 
 void config_commit (void* ctx) {
   config::internal::commit();
@@ -270,29 +269,31 @@ void coldflow_ream (void* ctx) {
 }
 
 void logs_can_engine(void* ctx, bool value) {
-  printf("[SHELL] can engine %s\r\n", value ? "on" : "off");
+  app_printf("[SHELL] can engine %s\r\n", value ? "on" : "off");
   Fc_Can_SendLogEngine(true, value);
 }
 void logs_can_eth(void* ctx, bool value) {
-  printf("[SHELL] can eth %s\r\n", value ? "on" : "off");
+  app_printf("[SHELL] can eth %s\r\n", value ? "on" : "off");
   Fc_Can_SendLogDprEth(true, value);
 }
 void logs_can_fc(void* ctx, bool value) { /* Non sense, TODO remove */ }
 void logs_can_lox(void* ctx, bool value) {
-  printf("[SHELL] can lox %s\r\n", value ? "on" : "off");
+  app_printf("[SHELL] can lox %s\r\n", value ? "on" : "off");
   Fc_Can_SendLogDprLox(true, value);
 }
 void logs_usb_engine(void* ctx, bool value) {
-  printf("[SHELL] usb engine %s\r\n", value ? "on" : "off");
+  app_printf("[SHELL] usb engine %s\r\n", value ? "on" : "off");
   Fc_Can_SendLogEngine(false, value);
 }
 void logs_usb_eth(void* ctx, bool value) {
-  printf("[SHELL] usb eth %s\r\n", value ? "on" : "off");
+  app_printf("[SHELL] usb eth %s\r\n", value ? "on" : "off");
   Fc_Can_SendLogDprEth(false, value);
 }
-void logs_usb_fc(void* ctx, bool value) { /* TODO add feature */ }
+void logs_usb_fc(void* ctx, bool value) { 
+  app_printf_use_usb(value);
+}
 void logs_usb_lox(void* ctx, bool value) {
-  printf("[SHELL] usb lox %s\r\n", value ? "on" : "off");
+  app_printf("[SHELL] usb lox %s\r\n", value ? "on" : "off");
   Fc_Can_SendLogDprLox(false, value);
 }
 

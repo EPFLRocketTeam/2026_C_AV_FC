@@ -16,6 +16,7 @@
 #include "SX127X.h"
 #include "capsule.h"
 #include <stdio.h>
+#include "../../Application/app_printf.h"
 
 class SX127XCapsule {
 private:
@@ -46,7 +47,7 @@ public:
 			uint8_t payloadLength) {
 		SX127X_init(&module, frequency, power, LoRa_SF, LoRa_BW, LoRa_CR,
 				LoRa_CRC_sum, capsule.getCodedLen(payloadLength));
-		printf("capsule init is ok.\n");
+		app_printf("capsule init is ok.\n");
 	}
 
 	/**

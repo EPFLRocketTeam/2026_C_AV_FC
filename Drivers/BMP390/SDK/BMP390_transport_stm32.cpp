@@ -1,6 +1,7 @@
 #include "BMP390_transport_stm32.h"
 #include <cstring>
 #include <cstdio>
+#include "app_printf.h"
 
 // ── SPI transport ─────────────────────────────────────────────────────────────
 // BMP390 SPI read protocol: [addr|0x80] [dummy rx] [data...].
@@ -19,7 +20,7 @@ void bmp3_spi_debug_reset() {
 
 BMP3_INTF_RET_TYPE bmp3_spi_read(uint8_t reg, uint8_t* dst, uint32_t len, void* ctx) {
     if (!ctx || !dst || len == 0 || (len + 1) > kBufMax) {
-        printf("[BMP3-SPI] READ guard fail: ctx=%p dst=%p len=%lu\r\n",
+        app_printf("[BMP3-SPI] READ guard fail: ctx=%p dst=%p len=%lu\r\n",
                ctx, dst, (unsigned long)len);
         return -1;
     }
@@ -36,15 +37,15 @@ BMP3_INTF_RET_TYPE bmp3_spi_read(uint8_t reg, uint8_t* dst, uint32_t len, void* 
 
     if (g_bmp3_spi_debug_calls < kBmp3SpiDebugMaxCalls) {
         g_bmp3_spi_debug_calls++;
-        printf("[BMP3-SPI] RD reg=0x%02X len=%lu HAL=%d SPI_State=%u SPI_Err=0x%lX",
+        app_printf("[BMP3-SPI] RD reg=0x%02X len=%lu HAL=%d SPI_State=%u SPI_Err=0x%lX",
                reg, (unsigned long)len, (int)st,
                (unsigned)c->hspi->State,
                (unsigned long)c->hspi->ErrorCode);
         if (st == HAL_OK && len <= 4) {
-            printf(" rx[1..%lu]=", (unsigned long)len);
-            for (uint32_t i = 0; i < len; i++) printf("%02X ", rx[i+1]);
+            app_printf(" rx[1..%lu]=", (unsigned long)len);
+            for (uint32_t i = 0; i < len; i++) app_printf("%02X ", rx[i+1]);
         }
-        printf("\r\n");
+        app_printf("\r\n");
     }
 
     if (st != HAL_OK) return -1;
@@ -54,7 +55,7 @@ BMP3_INTF_RET_TYPE bmp3_spi_read(uint8_t reg, uint8_t* dst, uint32_t len, void* 
 
 BMP3_INTF_RET_TYPE bmp3_spi_write(uint8_t reg, const uint8_t* src, uint32_t len, void* ctx) {
     if (!ctx || !src || len == 0 || (len + 1) > kBufMax) {
-        printf("[BMP3-SPI] WRITE guard fail: ctx=%p src=%p len=%lu\r\n",
+        app_printf("[BMP3-SPI] WRITE guard fail: ctx=%p src=%p len=%lu\r\n",
                ctx, src, (unsigned long)len);
         return -1;
     }
@@ -71,7 +72,7 @@ BMP3_INTF_RET_TYPE bmp3_spi_write(uint8_t reg, const uint8_t* src, uint32_t len,
 
     if (g_bmp3_spi_debug_calls < kBmp3SpiDebugMaxCalls) {
         g_bmp3_spi_debug_calls++;
-        printf("[BMP3-SPI] WR reg=0x%02X len=%lu HAL=%d SPI_State=%u\r\n",
+        app_printf("[BMP3-SPI] WR reg=0x%02X len=%lu HAL=%d SPI_State=%u\r\n",
                reg, (unsigned long)len, (int)st, (unsigned)c->hspi->State);
     }
 

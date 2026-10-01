@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "Application/Data/data.hpp"
+#include "Application/app_printf.h"
 #include "log_aggregator/reassembler.hpp"
 #include "prc_intranet/const.hpp"
 #include "prc_intranet/dispatch.hpp"
@@ -57,8 +58,8 @@ void CbSend(void* driver_ptr, uint16_t can_id, const uint8_t* buffer, uint32_t d
       uint32_t state      = HAL_FDCAN_GetState(hfdcan);
       uint32_t fifo_fill  = HAL_FDCAN_GetTxFifoFreeLevel(hfdcan);
 
-      printf("[FC CAN] TX failed (Status: %d, State: 0x%X, Error: 0x%X, Free FIFO: %d)\r\n", 
-            status, state, error_code, fifo_fill);
+      //app_printf("[FC CAN] TX failed (Status: %d, State: 0x%X, Error: 0x%X, Free FIFO: %d)\r\n",
+      //      status, state, error_code, fifo_fill);
   }
 
 }
@@ -69,7 +70,7 @@ log_aggregator::LineReassembler g_log_dpr_eth;
 log_aggregator::LineReassembler g_log_dpr_lox;
 
 void PrintTaggedLine(void* ctx, const char* line, uint32_t length) noexcept {
-  printf("%s %.*s\r\n", static_cast<const char*>(ctx), static_cast<int>(length), line);
+  app_printf("%s %.*s\r\n", static_cast<const char*>(ctx), static_cast<int>(length), line);
 }
 
 void OnLogChunkPrcEngine(void*, pi::payload::log_chunk chunk) noexcept {
@@ -132,7 +133,7 @@ void OnPrcState(void*, pi::payload::prc_state state) noexcept {
   GOATStore::get_instance().eventStore.set_cut_off_detected(!mo_open && !me_open);
   GOATStore::get_instance().valvesStore.set_main_LOX_open(mo_open);
   GOATStore::get_instance().valvesStore.set_main_fuel_open(me_open);
-  // printf("[PRC-ENG] mo=%s me=%s cutoff=%u\n", mo_open ? "open" : "close", me_open ? "open" : "close", (int) (!mo_open && !me_open));
+  // app_printf("[PRC-ENG] mo=%s me=%s cutoff=%u\n", mo_open ? "open" : "close", me_open ? "open" : "close", (int) (!mo_open && !me_open));
 }
 
 void OnDprLoxState (void*, pi::payload::dpr_state state) noexcept {

@@ -124,11 +124,11 @@ public:
       : driver_(driver), ms_between_send(ms_between_send) {}
 
     bool init () {
-    	//printf("driver: %p\n", driver_);
+    	//app_printf("driver: %p\n", driver_);
 	  driver_->init(866.34e6, SX127X_POWER_20DBM, SX127X_LORA_SF_7,
 	  	SX127X_LORA_BW_250KHZ, SX127X_LORA_CR_4_7, SX127X_LORA_CRC_EN,
 	  	av_downlink_size);
-	  //printf("init is ok.\n");
+	  //app_printf("init is ok.\n");
 	  return true;
     }
 
@@ -142,7 +142,6 @@ public:
         av_downlink_unpacked_t packet;
         packet.packet_nbr = packet_nbr ++;
         
-        //printf("Prepare downlink %u.\n", HAL_GetTick());
         prepare_downlink_packet(packet, dump);
 
         struct __attribute__((packed)) Guard {
@@ -151,9 +150,7 @@ public:
 			volatile uint32_t canary_after  = 0xDDCCBBAA;
 		} guard;
 
-        //printf("Encode downlink.\n");
         encode_downlink(&guard.compressed_packet, packet);
-        //printf("Encoding done.\n");
 
         return driver_->transmit(CAPSULE_ID::AV_TELEMETRY, (uint8_t*) &guard.compressed_packet, av_downlink_size);
     }

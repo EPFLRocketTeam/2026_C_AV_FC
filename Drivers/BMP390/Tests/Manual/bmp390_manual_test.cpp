@@ -31,6 +31,7 @@
 #include "main.h"
 #include "bmp390_manual_test.h"
 #include "../../BMP390.hpp"
+#include "app_printf.h"
 
 #include <cstdio>
 #include <cmath>
@@ -42,7 +43,7 @@ extern SPI_HandleTypeDef hspi5;           // whichever SPI peripheral BMP390 is 
 
 using namespace Drivers::BMP390;
 
-// #define BARO_LOG(fmt, ...) printf("[BARO] " fmt "\r\n", ##__VA_ARGS__)
+// #define BARO_LOG(fmt, ...) app_printf("[BARO] " fmt "\r\n", ##__VA_ARGS__)
 
 //static int g_pass = 0;
 //static int g_fail = 0;
@@ -196,7 +197,7 @@ void BMP390_ManualTest_Run() {
     BMP390_SDK baro(cfg);
 
     if (!baro.init()) {
-        printf("[BARO] init failed: %s\r\n", baro.lastError());
+        app_printf("[BARO] init failed: %s\r\n", baro.lastError());
         return;
     }
 
@@ -204,9 +205,9 @@ void BMP390_ManualTest_Run() {
 
     BaroData d{};
     if (baro.readBlocking(d, 50000)) {
-        printf("[BARO] P=%.2f Pa  T=%.2f C\r\n",
+        app_printf("[BARO] P=%.2f Pa  T=%.2f C\r\n",
                (double)d.pressure_pa, (double)d.temperature_c);
     } else {
-        printf("[BARO] read failed: %s\r\n", baro.lastError());
+        app_printf("[BARO] read failed: %s\r\n", baro.lastError());
     }
 }

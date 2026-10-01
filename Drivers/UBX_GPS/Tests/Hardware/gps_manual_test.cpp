@@ -10,26 +10,27 @@
 #include "gps_manual_test.h"
 #include "stm32h7xx_hal.h"
 #include <cstdio>
+#include "Application/app_printf.h"
 
 extern UART_HandleTypeDef huart6;
 
 int manual_test_gps() {
 
 
-  printf("\r\n--- UBX GPS Interface Test ---\r\n");
+  app_printf("\r\n--- UBX GPS Interface Test ---\r\n");
 
   UbxGpsInterface gps(&huart6, 1000); // 1Hz update rate
 
-  printf("Initializing GPS...\r\n");
+  app_printf("Initializing GPS...\r\n");
   GpsStatus status = gps.init();
 
   if (status != GpsStatus::OK) {
-    printf("GPS init failed! Status = %d\r\n", static_cast<int>(status));
+    app_printf("GPS init failed! Status = %d\r\n", static_cast<int>(status));
     while (1)
       ;
   }
 
-  printf("GPS initialized successfully.\r\n");
+  app_printf("GPS initialized successfully.\r\n");
 
   // Main loop: read data every second
   GpsBasicFixData fixData;
@@ -41,16 +42,16 @@ int manual_test_gps() {
       // double lat_deg = fixData.lat * UBX_SCALE_LAT_LON;
       // double lon_deg = fixData.lon * UBX_SCALE_LAT_LON;
 
-      printf("Fix OK | Type: %d | Sats: %2d | Lat: %ld | Lon: %ld | hAcc: %u cm\r\n",
+      app_printf("Fix OK | Type: %d | Sats: %2d | Lat: %ld | Lon: %ld | hAcc: %u cm\r\n",
              static_cast<int>(fixData.fixType),
              fixData.numSV,
 			 fixData.lat,
 			 fixData.lon,
              (int)fixData.hAcc);
     } else if (status == GpsStatus::ERROR_TIMEOUT) {
-      printf("No GPS fix received (timeout)\r\n");
+      app_printf("No GPS fix received (timeout)\r\n");
     } else {
-      printf("GPS read error: %d\r\n", static_cast<int>(status));
+      app_printf("GPS read error: %d\r\n", static_cast<int>(status));
     }
 
     HAL_Delay(1000);

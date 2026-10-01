@@ -5,6 +5,7 @@
 #include "Application/FlightControl/threshold.h"
 #include "Application/Kalman/kalman_lifecycle.h"
 #include "Drivers/STM32HAL/stm32hal.h"
+#include "Application/app_printf.h"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 
 extern "C" {
@@ -255,7 +256,7 @@ void AvState::update(const DataDump &dump) {
   } // end if (currentState == previous_state)
 
   if (currentState != previous_state) {
-    printf("[FSM] %s -> %s\r\n",
+    app_printf("[FSM] %s -> %s\r\n",
            stateToString(previous_state).c_str(),
            stateToString(currentState).c_str());
     kalman_on_state_change(static_cast<uint32_t>(currentState));

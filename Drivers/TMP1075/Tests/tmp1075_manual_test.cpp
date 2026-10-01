@@ -31,6 +31,7 @@
 #include "main.h"
 #include "tmp1075_manual_test.h"
 #include "../TMP1075.hpp"
+#include "../../../Application/app_printf.h"
 
 #include <cstdio>
 
@@ -43,7 +44,7 @@ static constexpr bool    TMP1075_HAS_DIE_ID = true;  // TMP1075DSG has the die-I
 
 using namespace Drivers::TMP1075;
 
-#define TEMP_LOG(fmt, ...) printf("[TEMP] " fmt "\r\n", ##__VA_ARGS__)
+#define TEMP_LOG(fmt, ...) app_printf("[TEMP] " fmt "\r\n", ##__VA_ARGS__)
 
 static int g_pass = 0;
 static int g_fail = 0;

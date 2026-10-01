@@ -5,6 +5,7 @@
 #include "Drivers/InvIMU/InvIMU.h"
 #include "Drivers/STM32HAL/stm32hal.h"
 #include "Application/Data/data.hpp"
+#include "Application/app_printf.h"
 #include <cstdio>
 
 using namespace Drivers::InvIMU;
@@ -77,12 +78,12 @@ public:
     bool master_set = false;
     for (size_t i = 0; i < kNumSensors; ++i) {
       if (!drivers_[i]->init()) {
-        printf("Error starting imu %u\r\n", (unsigned)i);
+        app_printf("Error starting imu %u\r\n", (unsigned)i);
         sensor_state_[i].failed = true;
         continue;
       }
       if (!drivers_[i]->ping()) {
-        printf("Error pinging imu %u\r\n", (unsigned)i);
+        app_printf("Error pinging imu %u\r\n", (unsigned)i);
         sensor_state_[i].failed = true;
         continue;
       }
@@ -97,10 +98,10 @@ public:
         master_set = true;
       }
       ++ok_count;
-      printf("IMU %u init OK\r\n", (unsigned)i);
+      app_printf("IMU %u init OK\r\n", (unsigned)i);
     }
     last_master_irq_ms_ = HAL_GetTick();
-    printf("[IMU] %u/%u sensors initialized\r\n", (unsigned)ok_count, (unsigned)kNumSensors);
+    app_printf("[IMU] %u/%u sensors initialized\r\n", (unsigned)ok_count, (unsigned)kNumSensors);
     return ok_count > 0;
   }
 
@@ -141,7 +142,7 @@ public:
       master_irq_pending_ = false;
       last_master_irq_ms_ = tick_ms;
       failover_occurred_ = true;
-      printf("ImuModule: master failover to imu %lu\r\n", static_cast<unsigned long>(master_index_));
+      app_printf("ImuModule: master failover to imu %lu\r\n", static_cast<unsigned long>(master_index_));
     }
 #endif
 
@@ -279,7 +280,7 @@ private:
       raw_log_callback_(sensor_index, log_batch, log_count);
     }
 
-    // printf("Produces %d new record\n",produced);
+    // app_printf("Produces %d new record\n",produced);
     sensor_state_[sensor_index].status_flags = drivers_[sensor_index]->statusFlags();
     sensor_state_[sensor_index].drop_count = drivers_[sensor_index]->dropCount();
     if (produced > 0u) {

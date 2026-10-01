@@ -8,6 +8,8 @@
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 #include <cstdio>
 
+#include "Application/app_printf.h"
+
 extern RingBuffer<GpsBasicFixData, 100> gpsData;
 
 #ifndef APP_GPS_POLL_TIMEOUT_MS
@@ -31,7 +33,7 @@ public:
 	  	av_uplink_size);
 
 	  if (! drivers_[0]->receive(1000)) {
-	  		printf("Failed to enter in reception mode\r\n");
+	  		app_printf("Failed to enter in reception mode\r\n");
 	  		return false;
 	  }
 

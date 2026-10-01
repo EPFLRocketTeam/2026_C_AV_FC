@@ -1,6 +1,7 @@
 
 #include "Application/Data/data.hpp"
 #include "Application/app_timebase.h"
+#include "Application/app_printf.h"
 #include "Drivers/STM32HAL/stm32hal.h"
 #include <cstdio>
 
@@ -239,14 +240,14 @@ extern "C" uint32_t app_timebase_now_ms(void) {
 
 extern "C" void app_timebase_print_init_diag(void) {
 #if !defined(UNIT_TEST_ENV)
-  printf("[TIMEBASE-INIT] pre: HAL=%lu DWT=0x%08lX CTRL=0x%08lX  "
+  app_printf("[TIMEBASE-INIT] pre: HAL=%lu DWT=0x%08lX CTRL=0x%08lX  "
          "post: last_cycle=0x%08lX acc_us=%lu\r\n",
          static_cast<unsigned long>(g_timebase_init_hal_ms),
          static_cast<unsigned long>(g_timebase_init_dwt_pre),
          static_cast<unsigned long>(g_timebase_init_dwt_ctrl_pre),
          static_cast<unsigned long>(g_timebase_init_last_cycle),
          static_cast<unsigned long>(g_timebase_init_acc_us));
-  printf("[TIMEBASE-FIRST] delta=0x%08lX (%lu us)  now=0x%08lX  last=0x%08lX  calls=%lu\r\n",
+  app_printf("[TIMEBASE-FIRST] delta=0x%08lX (%lu us)  now=0x%08lX  last=0x%08lX  calls=%lu\r\n",
          static_cast<unsigned long>(g_timebase_first_call_delta),
          static_cast<unsigned long>(g_timebase_first_call_delta / (SystemCoreClock / 1000000u)),
          static_cast<unsigned long>(g_timebase_first_call_now_cycle),

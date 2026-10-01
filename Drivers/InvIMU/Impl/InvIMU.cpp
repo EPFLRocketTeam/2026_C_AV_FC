@@ -1,6 +1,7 @@
 #include "InvIMU.hpp"
 #include "Application/app_timebase.h"
 #include <stdio.h>
+#include "app_printf.h"
 
 // Registers used for manual SPI access
 static constexpr uint8_t REG_BANK_SEL       = 0x76; 
@@ -319,13 +320,13 @@ void InvIMU_STM32::configure(AccelRange ar, GyroRange gr, ODR odr) {
     {
         uint8_t pwr = 0xFF;
         spi_read(0x10, &pwr, 1);
-        printf("PWR_MGMT0 readback=0x%02X (expect 0x0F: accel=LN gyro=LN)\r\n", pwr);
+        app_printf("PWR_MGMT0 readback=0x%02X (expect 0x0F: accel=LN gyro=LN)\r\n", pwr);
     }
 
     // Disable the EDMP engine so it stops writing 0xF0 EDMP-output frames into
     // the FIFO. EDMP_APEX_EN1 is an MREG register and likewise requires MCLK.
     int edmp_rc = inv_imu_edmp_disable(&_dev);
-    printf("EDMP disable rc=%d\r\n", edmp_rc);
+    app_printf("EDMP disable rc=%d\r\n", edmp_rc);
     // Read back EDMP registers to confirm the disable took effect.
     // EDMP_APEX_EN0=0x29 (direct), EDMP_APEX_EN1=0x2a (direct, bit6=edmp_enable).
     // Both should be 0x00 after reset + disable.
@@ -333,8 +334,8 @@ void InvIMU_STM32::configure(AccelRange ar, GyroRange gr, ODR odr) {
         uint8_t en0 = 0xFF, en1 = 0xFF;
         spi_read(0x29, &en0, 1);
         spi_read(0x2a, &en1, 1);
-        printf("EDMP readback: EN0=0x%02X (expect 0x00) EN1=0x%02X (expect 0x00, bit6=edmp_enable)\r\n", en0, en1);
-        if (en1 & 0x40u) printf("WARNING: edmp_enable(bit6) still SET in EN1!\r\n");
+        app_printf("EDMP readback: EN0=0x%02X (expect 0x00) EN1=0x%02X (expect 0x00, bit6=edmp_enable)\r\n", en0, en1);
+        if (en1 & 0x40u) app_printf("WARNING: edmp_enable(bit6) still SET in EN1!\r\n");
     }
 
     float final_g = 16.0f;
@@ -382,19 +383,19 @@ void InvIMU_STM32::configureFifo() {
     {
         uint8_t r22 = 0;
         spi_read(0x22, &r22, 1);
-        printf("FIFO_CONFIG4 (0x22) BEFORE clear: 0x%02X  (bit2=comp_en bit1=tmst_fsync_en bit0=es0_6b_9b)\r\n", r22);
+        app_printf("FIFO_CONFIG4 (0x22) BEFORE clear: 0x%02X  (bit2=comp_en bit1=tmst_fsync_en bit0=es0_6b_9b)\r\n", r22);
         r22 &= ~(uint8_t)0x04;  // clear fifo_comp_en (bit2) only; keep fifo_tmst_fsync_en (bit1) — it enables timestamps in FIFO frames
         spi_write(0x22, r22);
         uint8_t r22_rb = 0;
         spi_read(0x22, &r22_rb, 1);
-        printf("FIFO_CONFIG4 (0x22) AFTER  clear: intended=0x%02X readback=0x%02X (bit1=tmst_fsync_en)\r\n", r22, r22_rb);
+        app_printf("FIFO_CONFIG4 (0x22) AFTER  clear: intended=0x%02X readback=0x%02X (bit1=tmst_fsync_en)\r\n", r22, r22_rb);
         // Verify bit1 is set — if not, force it
         if (!(r22_rb & 0x02)) {
-            printf("WARNING: fifo_tmst_fsync_en NOT set, forcing...\r\n");
+            app_printf("WARNING: fifo_tmst_fsync_en NOT set, forcing...\r\n");
             r22_rb |= 0x02;
             spi_write(0x22, r22_rb);
             spi_read(0x22, &r22_rb, 1);
-            printf("FIFO_CONFIG4 forced readback=0x%02X\r\n", r22_rb);
+            app_printf("FIFO_CONFIG4 forced readback=0x%02X\r\n", r22_rb);
         }
     }
 
@@ -409,7 +410,7 @@ void InvIMU_STM32::configureFifo() {
         // Readback verify
         smc_control_0_t smc_rb;
         inv_imu_read_reg(&_dev, SMC_CONTROL_0, 1, (uint8_t *)&smc_rb);
-        printf("SMC_CONTROL_0 tmst_en readback=%u (expect 1)\r\n", (unsigned)smc_rb.tmst_en);
+        app_printf("SMC_CONTROL_0 tmst_en readback=%u (expect 1)\r\n", (unsigned)smc_rb.tmst_en);
     }
 
     // INT1 pin: push-pull, PULSE mode, active-high.
@@ -581,7 +582,7 @@ bool InvIMU_STM32::parseFrameInto(IMUData& out, const uint8_t* p, uint8_t /*fram
     {
         static uint32_t ts_diag_count = 0;
         if (ts_diag_count < 10) {
-            printf("[FIFO-TS] #%u  hdr=0x%02X  raw_ts=%u  p[14..16]=%02X %02X %02X  p[0..3]=%02X %02X %02X %02X\r\n",
+            app_printf("[FIFO-TS] #%u  hdr=0x%02X  raw_ts=%u  p[14..16]=%02X %02X %02X  p[0..3]=%02X %02X %02X %02X\r\n",
                 (unsigned)ts_diag_count, (unsigned)header,
                 (unsigned)raw_ts,
                 (unsigned)p[14], (unsigned)p[15], (unsigned)p[16],
@@ -845,7 +846,7 @@ void InvIMU_STM32::tick() {
             _spi_fifo_read_fail_count++;
             static uint32_t _spi_fail_cnt = 0;
             if ((_spi_fail_cnt++ % 1000u) == 0u) {
-                printf("[IMU] SPI blocking read FAIL #%lu  count=%u  "
+                app_printf("[IMU] SPI blocking read FAIL #%lu  count=%u  "
                        "HAL_State=%u  HAL_ErrCode=0x%lX  hdmarx=%s\r\n",
                        (unsigned long)_spi_fail_cnt, (unsigned)count,
                        (unsigned)(_hw.hspi ? _hw.hspi->State : 0),
@@ -876,7 +877,7 @@ void InvIMU_STM32::tick() {
         _dma_busy = false;
         _status_flags |= IMU_STATUS_SPI_ERROR;
         static uint32_t _dma_fail_cnt = 0;
-        printf("DMA_START_FAIL #%lu count=%u\r\n", (unsigned long)++_dma_fail_cnt, (unsigned)count);
+        app_printf("DMA_START_FAIL #%lu count=%u\r\n", (unsigned long)++_dma_fail_cnt, (unsigned)count);
         return;
     }
 }
@@ -898,7 +899,7 @@ bool InvIMU_STM32::ping() {
         _status_flags |= IMU_STATUS_SPI_ERROR;
         return false;
     }
-    printf("DEBUG: IMU WHO_AM_I Read = 0x%02X\r\n", who_am_i);
+    app_printf("DEBUG: IMU WHO_AM_I Read = 0x%02X\r\n", who_am_i);
     const bool ok = (who_am_i == INV_IMU_WHO_AM_I_VAL);
     if (!ok) _status_flags |= IMU_STATUS_WHOAMI_MISMATCH;
     return ok;

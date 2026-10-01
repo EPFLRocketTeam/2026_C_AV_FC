@@ -1,5 +1,6 @@
 #include "../ubx_gps_interface.h"
 #include "../../Application/app_timebase.h"
+#include "../../Application/app_printf.h"
 #include <cstring>
 #include <cstdlib>
 #include <stdio.h>
@@ -75,18 +76,18 @@ GpsStatus UbxGpsInterface::setRate(uint16_t period_ms) {
 }
 
 void printPayload(const uint8_t *payload, size_t payloadLen) {
-  printf("Payload (%zu bytes):\n\r", payloadLen);
+  app_printf("Payload (%zu bytes):\n\r", payloadLen);
 
   for (size_t i = 0; i < payloadLen; ++i) {
-    printf("%02X ", payload[i]);
-    //printf("%c ", payload[i]);
+    app_printf("%02X ", payload[i]);
+    //app_printf("%c ", payload[i]);
     if ((i + 1) % 16 == 0) {
-      printf("\r\n");
+      app_printf("\r\n");
     }
   }
 
   if (payloadLen % 16 != 0) {
-    printf("\n\r");
+    app_printf("\n\r");
   }
 }
 
