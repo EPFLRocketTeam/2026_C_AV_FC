@@ -3,6 +3,16 @@
 #include "Application/app_printf.h"
 #include <cstring>
 
+uint32_t CameraInformation::lastPacketTime () {
+    return lastPacketReceived_;
+}
+camera::State CameraInformation::getState () {
+    return lastHealthPacket_.cameraState;
+}
+camera::AvionicsStateMachine CameraInformation::getImposedState () {
+    return lastHealthPacket_.avState;
+}
+
 bool CameraInformation::isDownlinkOn (uint32_t currentTimeMs) {
     return (currentTimeMs - lastPacketReceived_) <= CameraMsgTimeoutMs && lastPacketReceived_ != 0;
 }
