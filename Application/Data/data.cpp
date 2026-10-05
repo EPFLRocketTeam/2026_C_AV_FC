@@ -324,3 +324,6 @@ void GOATStore::set(const DataDump &value) {
 }
 
 DataDump *GOATStore::get_ref() { return &data_; }
+
+float GOATStore::getFcTemperature () {  return data_.av_fc_temp; }
+void GOATStore::setFcTemperature (float value) { data_.av_fc_temp = value; }

@@ -8,6 +8,7 @@
 #include "Modules/gps_module.hpp"
 #include "plume_driver.hpp"
 #include "Modules/sd_logger.hpp"
+#include "Modules/fc_temp_module.hpp"
 #include "Drivers/Buzzer/buzzer.hpp"
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Config/config.hpp"
@@ -95,6 +96,8 @@ AppImuRingBuffer imuData3;
 AppImuRingBuffer imuData4;
 
 RingBuffer<GpsBasicFixData, 100> gpsData;
+
+FCTemperatureModule fcTemperatureModule;
 
 // ── Fake GNSS injection for pipeline testing ──────────────────────────────────
 // Enable with -DFAKE_GNSS_ENABLE=1.  Injects synthetic 3D-fix data at 16 Hz
@@ -563,6 +566,8 @@ extern "C" void app_super_loop_setup(void) {
 
     cameraSetup();
 
+    fcTemperatureModule.init();
+
     // ── FSYNC: lock IMU timestamps to MCU crystal ──────────────────────────
     // Start 6400 Hz PWM on PD14 → ICM-45686 INT2 (FSYNC input), then tell
     // the IMU to use it. Order matters: clock must be running before the IMU
@@ -688,6 +693,8 @@ extern "C" void app_super_loop_iterate(void) {
         config::internal::tick();
 
     cameraTick();
+
+    fcTemperatureModule.tick();
 
 	//app_printf("Buzzer advancing ---------------------------------------------\r\n");
 	g_superloop.buzzer.tick(HAL_GetTick());

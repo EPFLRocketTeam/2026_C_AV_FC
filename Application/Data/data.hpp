@@ -689,6 +689,9 @@ public:
     return instance;
   }
 
+  float getFcTemperature ();
+  void setFcTemperature (float value);
+
 private:
   mutable DataDump data_;
 };
