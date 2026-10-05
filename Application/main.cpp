@@ -12,6 +12,7 @@
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Config/config.hpp"
 #include "Application/FlightControl/fc_shell.hpp"
+#include "Drivers/Camera/CameraPlatform.hpp"
 
 
 // Forward-declared — defined in av_state.cpp to avoid BMP390 header clash.
@@ -560,6 +561,8 @@ extern "C" void app_super_loop_setup(void) {
     }
     g_imu_module = &g_superloop.imuModule;
 
+    cameraSetup();
+
     // ── FSYNC: lock IMU timestamps to MCU crystal ──────────────────────────
     // Start 6400 Hz PWM on PD14 → ICM-45686 INT2 (FSYNC input), then tell
     // the IMU to use it. Order matters: clock must be running before the IMU
@@ -683,6 +686,8 @@ extern "C" void app_super_loop_iterate(void) {
 	FC_Shell_Tick();
     RUN_EVERY(100)
         config::internal::tick();
+
+    cameraTick();
 
 	//app_printf("Buzzer advancing ---------------------------------------------\r\n");
 	g_superloop.buzzer.tick(HAL_GetTick());

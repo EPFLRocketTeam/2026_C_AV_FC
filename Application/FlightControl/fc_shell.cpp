@@ -10,6 +10,7 @@
 #include "fc_commands_generated.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 #include "Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET/include/prc_intranet/payload.hpp"
+#include "Drivers/Camera/Camera.hpp"
 
 namespace {
 
@@ -316,6 +317,31 @@ void config_pressurize_stable_opening_lox (void* ctx, float value) {
   config::internal::write().Pressurization.StableBVOpeningLox = value;
 }
 
+void cameras_abort (void* ctx) {
+  cameraDriver.abort();
+}
+void cameras_display_aero_bot (void* ctx) {
+  cameraDriver.display(Camera::CAM_AERO_BOT);
+}
+void cameras_display_aero_top (void* ctx) {
+  cameraDriver.display(Camera::CAM_AERO_TOP);
+}
+void cameras_display_all (void* ctx) {
+  cameraDriver.displayAll();
+}
+void cameras_display_sepmech (void* ctx) {
+  cameraDriver.display(Camera::CAM_SEPMECH);
+}
+void cameras_recover (void* ctx) {
+  cameraDriver.recover();
+}
+void cameras_start (void* ctx) {
+  cameraDriver.start();
+}
+void cameras_stop (void* ctx) {
+  cameraDriver.stop();
+}
+
 void FillDriver(driver& drv) {
     drv.av_calibrate = OnAvCalibrate;
     drv.av_arm = OnAvArm;
@@ -346,6 +372,14 @@ void FillDriver(driver& drv) {
     drv.dpr_eth_passivate = OnDprEthPassivate;
     drv.dpr_eth_reset = OnDprEthReset;
     drv.dpr_broadcast_abort = OnDprBroadcastAbort;
+    drv.cameras_abort = cameras_abort;
+    drv.cameras_display_aero_bot = cameras_display_aero_bot;
+    drv.cameras_display_aero_top = cameras_display_aero_top;
+    drv.cameras_display_all = cameras_display_all;
+    drv.cameras_display_sepmech = cameras_display_sepmech;
+    drv.cameras_recover = cameras_recover;
+    drv.cameras_start = cameras_start;
+    drv.cameras_stop = cameras_stop;
     drv.coldflow_rearm = coldflow_ream;
     drv.config_burn_cutoff_delay = config_burn_cutoff_delay;
     drv.config_burn_impulse = config_burn_impulse;
