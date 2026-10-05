@@ -143,4 +143,4 @@ const char* camera_to_string          (Camera camera);
 const char* camera_state_to_string    (camera::State state);
 const char* camera_av_state_to_string (camera::AvionicsStateMachine avState);
 
-static CameraDriver cameraDriver;
+extern CameraDriver cameraDriver;

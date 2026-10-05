@@ -1,6 +1,7 @@
 
 #include "Drivers/Camera/Camera.hpp"
 #include "Drivers/Camera/CameraPlatform.hpp"
+#include "Application/app_printf.h"
 #include "Application/app_timebase.h"
 #include "stm32h7xx_hal.h"
 
@@ -41,8 +42,17 @@ void cameraSendMessage(uint16_t messageId, uint8_t length, const uint8_t* data) 
     header.TxEventFifoControl  = FDCAN_NO_TX_EVENTS;
     header.MessageMarker       = 0;
 
-    (void)HAL_FDCAN_AddMessageToTxFifoQ(
-        &hfdcan2, &header, const_cast<uint8_t*>(data));
+    HAL_StatusTypeDef status = HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan2, &header, const_cast<uint8_t*>(data));
+
+    if (status != HAL_OK) {
+        uint32_t error_code = HAL_FDCAN_GetError(&hfdcan2);
+        uint32_t state      = HAL_FDCAN_GetState(&hfdcan2);
+        uint32_t fifo_fill  = HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan2);
+
+        app_printf("[PL CAN] TX failed (Status: %d, State: 0x%X, Error: 0x%X, Free FIFO: %d)\r\n",
+              status, state, error_code, fifo_fill);
+        app_printf("[PL CAN] Message Id = %d\n", (int) messageId);
+    } else app_printf("[PL CAN] TX Sent to queue.\r\n");
 }
 
 bool cameraPollMessage() {
@@ -72,10 +82,14 @@ uint32_t cameraGetTick () {
     return HAL_GetTick();
 }
 
+CameraDriver cameraDriver;
+
 void cameraSetup () {
     cameraDriver.init(cameraPollMessage, cameraSendMessage, cameraGetTick);
 }
 void cameraTick () {
+    RUN_EVERY(1000)
+        app_printf("Hello, CAN\n");
     cameraPollMessage();
     
     RUN_EVERY(1000) {

@@ -50,11 +50,13 @@ void CameraInformation::ingest (
 
     if (lastHealthPacket_.avState != packet.avState && lastPacketReceived_ != 0) {
         app_printf("[%s] imposed state %s -> %s\n", 
+            camera_to_string(whoAmI),
             camera_av_state_to_string(lastHealthPacket_.avState), 
             camera_av_state_to_string(packet.avState));
     }
     if (lastHealthPacket_.cameraState != packet.cameraState && lastPacketReceived_ != 0) {
         app_printf("[%s] camera state %s -> %s\n", 
+            camera_to_string(whoAmI),
             camera_state_to_string(lastHealthPacket_.cameraState), 
             camera_state_to_string(packet.cameraState));
     }
@@ -128,9 +130,15 @@ void CameraDriver::init (
     camera::SendMessage sendMessage,
     camera::GetTickMs   getTick
 ) {
+    app_printf("%p %p %p\n", pollMessage, sendMessage, getTick);
     if (!pollMessage || !sendMessage || !getTick) {
+        app_printf("Failed init.\n");
+        while (1) {
+            continue ;
+        }
         return;
     }
+    app_printf("Did init .\n");
 
     did_init_ = true;
 
@@ -139,6 +147,7 @@ void CameraDriver::init (
     getTick_     = getTick;
 }
 void CameraDriver::tick () {
+    app_printf("Did init %d\n", (int) did_init_);
     if (!did_init_) return ;
 
     uint32_t numberPolls = 0;
@@ -146,6 +155,7 @@ void CameraDriver::tick () {
         numberPolls ++;
     }
 
+    app_printf("Is synchronized: %d\n", (int) isSynchronized());
     if (isSynchronized()) return ;
 
     switch (stateImposed_) {
@@ -250,6 +260,11 @@ const char* camera_av_state_to_string (camera::AvionicsStateMachine avState) {
 }
 
 void CameraDriver::display (Camera camera, bool displayGlobalHeader) {
+    if (!did_init_) {
+        app_printf("Forgot to init camera driver.\n");
+        return ;
+    }
+
     if (displayGlobalHeader) {
         app_printf("Camera Driver Status\n");
         app_printf(" Target State = %s\n", camera_av_state_to_string(stateImposed_));

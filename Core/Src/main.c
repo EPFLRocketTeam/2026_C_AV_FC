@@ -180,9 +180,9 @@ int main(void)
   MX_SPI4_Init();
   MX_SPI5_Init();
   MX_USART6_UART_Init();
-  sd_pre_init();
-  MX_SDMMC1_SD_Init();
-  sd_post_init(&hsd1);
+  //sd_pre_init();
+  //MX_SDMMC1_SD_Init();
+  //sd_post_init(&hsd1);
   MX_SPI2_Init();
   MX_SPI1_Init();
   MX_I2C4_Init();
@@ -587,7 +587,7 @@ static void MX_FDCAN2_Init(void)
   hfdcan2.Init.RxBufferSize = FDCAN_DATA_BYTES_8;
   hfdcan2.Init.TxEventsNbr = 0;
   hfdcan2.Init.TxBuffersNbr = 0;
-  hfdcan2.Init.TxFifoQueueElmtsNbr = 0;
+  hfdcan2.Init.TxFifoQueueElmtsNbr = 8;
   hfdcan2.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
   hfdcan2.Init.TxElmtSize = FDCAN_DATA_BYTES_8;
   if (HAL_FDCAN_Init(&hfdcan2) != HAL_OK)
@@ -595,7 +595,17 @@ static void MX_FDCAN2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN FDCAN2_Init 2 */
+  /* Route all non-matching messages to RX FIFO 0 */
+  HAL_FDCAN_ConfigGlobalFilter(
+    &hfdcan2, 
+    FDCAN_ACCEPT_IN_RX_FIFO0, // Non-matching Standard ID
+    FDCAN_ACCEPT_IN_RX_FIFO0, // Non-matching Extended ID
+    FDCAN_REJECT_REMOTE,      // Reject remote frames
+    FDCAN_REJECT_REMOTE);     // Reject remote frames
 
+  if (HAL_FDCAN_Start(&hfdcan2) != HAL_OK) {
+    Error_Handler();
+  }
   /* USER CODE END FDCAN2_Init 2 */
 
 }
