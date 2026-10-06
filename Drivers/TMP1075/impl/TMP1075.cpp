@@ -1,6 +1,7 @@
 #include "../TMP1075.hpp"
 #include <cstring>
 #include <cstdio>
+#include "../../../Application/app_printf.h"
 
 namespace Drivers { namespace TMP1075 {
 
@@ -153,25 +154,25 @@ uint8_t TMP1075_Driver::buildConfig() const {
 bool TMP1075_Driver::init() {
     tmp1075_enable_dwt();
 
-    printf("[TMP1075] init: hi2c=%p addr7=0x%02X mode=%s\r\n",
+    app_printf("[TMP1075] init: hi2c=%p addr7=0x%02X mode=%s\r\n",
            (void*)cfg_.hi2c, cfg_.address7,
            cfg_.opMode == OpMode::OneShot ? "one-shot" : "continuous");
 
     if (!cfg_.hi2c) {
-        printf("[TMP1075] ERROR: hi2c is NULL!\r\n");
+        app_printf("[TMP1075] ERROR: hi2c is NULL!\r\n");
         snprintf(lastErr_, sizeof(lastErr_), "hi2c=NULL");
         return false;
     }
 
     if (!ping()) {
-        printf("[TMP1075] INIT FAILED: %s\r\n", lastErr_);
+        app_printf("[TMP1075] INIT FAILED: %s\r\n", lastErr_);
         return false;
     }
 
     // Apply defaults from config
     configure(cfg_.rate, cfg_.faults, cfg_.polarity, cfg_.alertMode);
     if (statusFlags_ & TMP1075_STATUS_CONFIG_ERROR) {
-        printf("[TMP1075] INIT FAILED: %s\r\n", lastErr_);
+        app_printf("[TMP1075] INIT FAILED: %s\r\n", lastErr_);
         return false;
     }
 
@@ -185,16 +186,16 @@ bool TMP1075_Driver::init() {
             if (!cfg_.checkDeviceId) mask &= static_cast<uint8_t>(~CFG_R_MSK);
             uint8_t expect = buildConfig() & mask;
             uint8_t got    = rb & mask;
-            printf("[TMP1075] CFGR readback: 0x%02X (expect masked 0x%02X)\r\n", rb, expect);
+            app_printf("[TMP1075] CFGR readback: 0x%02X (expect masked 0x%02X)\r\n", rb, expect);
             if (got != expect) {
-                printf("[TMP1075] WARNING: CFGR mismatch, rewriting\r\n");
+                app_printf("[TMP1075] WARNING: CFGR mismatch, rewriting\r\n");
                 writeCfgr(buildConfig());
             }
         }
     }
 
     healthy_ = true;
-    printf("[TMP1075] init complete, healthy=true\r\n");
+    app_printf("[TMP1075] init complete, healthy=true\r\n");
     return true;
 }
 

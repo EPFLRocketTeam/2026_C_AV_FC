@@ -37,6 +37,7 @@
 #include "../../Application/FlightControl/prc_can.hpp"
 #include "../../Application/main.h"
 #include "../../Application/app_timebase.h"
+#include "../../Application/app_printf.h"
 #include "SX127X.h"
 /* USER CODE END Includes */
 
@@ -68,6 +69,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 FDCAN_HandleTypeDef hfdcan1;
+FDCAN_HandleTypeDef hfdcan2;
 
 I2C_HandleTypeDef hi2c2;
 I2C_HandleTypeDef hi2c4;
@@ -102,6 +104,7 @@ static void MX_SPI1_Init(void);
 static void MX_I2C4_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_FDCAN1_Init(void);
+static void MX_FDCAN2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -114,6 +117,8 @@ int _write(int file, char *ptr, int len) {
     // Wait until USB is ready, but never wedge: if the CDC endpoint stays
     // busy (host not draining, missed completion), drop the output instead
     // of spinning forever.
+    if (!app_printf_is_enabled()) return len;
+
     uint32_t start = HAL_GetTick();
     while (CDC_Transmit_HS((uint8_t*)ptr, len) == USBD_BUSY) {
         if (HAL_GetTick() - start > 100) {
@@ -175,12 +180,15 @@ int main(void)
   MX_SPI4_Init();
   MX_SPI5_Init();
   MX_USART6_UART_Init();
-  //MX_SDMMC1_SD_Init();
+  sd_pre_init();
+  MX_SDMMC1_SD_Init();
+  sd_post_init(&hsd1);
   MX_SPI2_Init();
   MX_SPI1_Init();
   MX_I2C4_Init();
   MX_I2C2_Init();
   MX_FDCAN1_Init();
+  MX_FDCAN2_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -188,14 +196,14 @@ int main(void)
 
   /* Small delay to let USB enumerate -- but drain (and discard) FIFO0 while
    * waiting instead of a blind HAL_Delay(5000). Just removing the delay
-   * wasn't enough on its own: printf()/_write() blocks up to 100 ms
+   * wasn't enough on its own: app_printf()/_write() blocks up to 100 ms
    * retrying CDC_Transmit_HS while USB isn't ready yet, and every
-   * reassembled CAN log line triggers a printf -- each one of those early
+   * reassembled CAN log line triggers a app_printf -- each one of those early
    * blocked calls freezes this same loop's CAN drain for up to 100 ms,
    * during which frames from all 3 boards keep piling up. Draining and
-   * discarding FIFO0 here (no printf involved) keeps the FIFO empty
+   * discarding FIFO0 here (no app_printf involved) keeps the FIFO empty
    * through the whole USB enumeration window regardless of how long any
-   * individual printf would have blocked. */
+   * individual app_printf would have blocked. */
   /* TEMPORARY: disabled to test whether this 5s busy-wait (added for the
    * PRC-CAN work, doesn't exist on the known-working plume branch) is
    * delaying app_super_loop_setup()/iterate() long enough that IMU
@@ -222,8 +230,8 @@ int main(void)
   //    * loop iteration below. */
   //   __HAL_FDCAN_CLEAR_FLAG(&hfdcan1, FDCAN_FLAG_RX_FIFO0_MESSAGE_LOST);
   // }
-  printf("USB on\r\n");
-  printf("[FC] idle\r\n"); // one-shot: confirms the serial link works even before any CAN traffic or shell input arrives
+  app_printf("USB on\r\n");
+  app_printf("[FC] idle\r\n"); // one-shot: confirms the serial link works even before any CAN traffic or shell input arrives
   /* SPI2_MISO is on PC2_C (analog-direct dual pad). The digital path only works
    * with the PC2 analog switch closed. Force it closed so reads aren't dead. */
   //__HAL_RCC_SYSCFG_CLK_ENABLE();
@@ -236,13 +244,12 @@ int main(void)
   //manual_test_buzzer();
 
   simple_radio_init();
-  printf("Out of init.\n");
+  app_printf("Out of init.\n");
 
   app_super_loop_setup();
 
 
   /* USER CODE END 2 */
-
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -252,23 +259,23 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  //HAL_Delay(1000);
-	  //printf("In tick.\n");
-	  simple_radio_tick();
+	  //app_printf("In tick.\n");
+	  // simple_radio_tick();
 	  /*
-	  	  printf("flag: %i\r\n", flag);
+	  	  app_printf("flag: %i\r\n", flag);
 	  	  if (!flag) {
-	  		  printf("Scanning the i2c: \r\n");
+	  		  app_printf("Scanning the i2c: \r\n");
 	  		  for (addr = 0x39; addr < 0x78; ++addr) {
 	  			 status = HAL_I2C_IsDeviceReady(&hi2c2, addr << 1, 1, 10);
 	  			  if ( status == HAL_OK) {
-	  				  printf("Found device at 0x%02X\r\n", addr);
+	  				  app_printf("Found device at 0x%02X\r\n", addr);
 	  			  }
 	  		  }
 	  		  flag = 1;
-	  		  printf("flag: %i\r\n", flag);
+	  		  app_printf("flag: %i\r\n", flag);
 	  	  }
-	  	  printf("loop\r\n");*/
-	  //printf("In loop \r\n");
+	  	  app_printf("loop\r\n");*/
+	  //app_printf("In loop \r\n");
 	  app_super_loop_iterate();
 
 	  {
@@ -307,12 +314,12 @@ int main(void)
 	      uint8_t txData[4] = { cmdByte, magicByte, 0, 0 };
 	      if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &txHeader, txData) == HAL_OK)
 	      {
-	        printf("[CAN] TX id=0x211 data=[0x%02X,0x%02X]\r\n", cmdByte, magicByte);
+	        app_printf("[CAN] TX id=0x211 data=[0x%02X,0x%02X]\r\n", cmdByte, magicByte);
 	        step = (step + 1) % (sizeof(kValveCmdSequence) / sizeof(kValveCmdSequence[0]));
 	      }
 	      else
 	      {
-	        printf("[CAN] TX failed\r\n");
+	        app_printf("[CAN] TX failed\r\n");
 	      }
 	    }
 	    */
@@ -348,18 +355,18 @@ int main(void)
 	      __HAL_FDCAN_CLEAR_FLAG(&hfdcan1, FDCAN_FLAG_RX_FIFO0_MESSAGE_LOST);
 	      static uint32_t rf0l_count = 0;
 	      rf0l_count++;
-	      printf("[CAN] WARNING: RX FIFO0 overflow, frame(s) rejected (count=%lu)\r\n",
+	      app_printf("[CAN] WARNING: RX FIFO0 overflow, frame(s) rejected (count=%lu)\r\n",
 	             (unsigned long)rf0l_count);
 	    }
 
 	  }
 
-	  //printf("Pyros Test \r\n");
+	  //app_printf("Pyros Test \r\n");
 	  //HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_14);
 	  //HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_15);
 	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_0);
 	  //HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_1);
-	  //printf("End\r\n");
+	  //app_printf("End\r\n");
   }
   /* USER CODE END 3 */
 }
@@ -485,7 +492,7 @@ static void MX_FDCAN1_Init(void)
   hfdcan1.Init.MessageRAMOffset = 0;
   hfdcan1.Init.StdFiltersNbr = 1;
   hfdcan1.Init.ExtFiltersNbr = 0;
-  hfdcan1.Init.RxFifo0ElmtsNbr = 64;
+  hfdcan1.Init.RxFifo0ElmtsNbr = 16;
   hfdcan1.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
   hfdcan1.Init.RxFifo1ElmtsNbr = 0;
   hfdcan1.Init.RxFifo1ElmtSize = FDCAN_DATA_BYTES_8;
@@ -537,6 +544,69 @@ static void MX_FDCAN1_Init(void)
   }
 
   /* USER CODE END FDCAN1_Init 2 */
+
+}
+
+/**
+  * @brief FDCAN2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_FDCAN2_Init(void)
+{
+
+  /* USER CODE BEGIN FDCAN2_Init 0 */
+
+  /* USER CODE END FDCAN2_Init 0 */
+
+  /* USER CODE BEGIN FDCAN2_Init 1 */
+
+  /* USER CODE END FDCAN2_Init 1 */
+  hfdcan2.Instance = FDCAN2;
+  hfdcan2.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan2.Init.Mode = FDCAN_MODE_NORMAL;
+  hfdcan2.Init.AutoRetransmission = ENABLE;
+  hfdcan2.Init.TransmitPause = DISABLE;
+  hfdcan2.Init.ProtocolException = ENABLE;
+  hfdcan2.Init.NominalPrescaler = 2;
+  hfdcan2.Init.NominalSyncJumpWidth = 3;
+  hfdcan2.Init.NominalTimeSeg1 = 12;
+  hfdcan2.Init.NominalTimeSeg2 = 3;
+  hfdcan2.Init.DataPrescaler = 1;
+  hfdcan2.Init.DataSyncJumpWidth = 1;
+  hfdcan2.Init.DataTimeSeg1 = 1;
+  hfdcan2.Init.DataTimeSeg2 = 1;
+  hfdcan2.Init.MessageRAMOffset = 0;
+  hfdcan2.Init.StdFiltersNbr = 0;
+  hfdcan2.Init.ExtFiltersNbr = 0;
+  hfdcan2.Init.RxFifo0ElmtsNbr = 8;
+  hfdcan2.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan2.Init.RxFifo1ElmtsNbr = 0;
+  hfdcan2.Init.RxFifo1ElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan2.Init.RxBuffersNbr = 0;
+  hfdcan2.Init.RxBufferSize = FDCAN_DATA_BYTES_8;
+  hfdcan2.Init.TxEventsNbr = 0;
+  hfdcan2.Init.TxBuffersNbr = 0;
+  hfdcan2.Init.TxFifoQueueElmtsNbr = 8;
+  hfdcan2.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
+  hfdcan2.Init.TxElmtSize = FDCAN_DATA_BYTES_8;
+  if (HAL_FDCAN_Init(&hfdcan2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN FDCAN2_Init 2 */
+  /* Route all non-matching messages to RX FIFO 0 */
+  HAL_FDCAN_ConfigGlobalFilter(
+    &hfdcan2, 
+    FDCAN_ACCEPT_IN_RX_FIFO0, // Non-matching Standard ID
+    FDCAN_ACCEPT_IN_RX_FIFO0, // Non-matching Extended ID
+    FDCAN_REJECT_REMOTE,      // Reject remote frames
+    FDCAN_REJECT_REMOTE);     // Reject remote frames
+
+  if (HAL_FDCAN_Start(&hfdcan2) != HAL_OK) {
+    Error_Handler();
+  }
+  /* USER CODE END FDCAN2_Init 2 */
 
 }
 
@@ -1101,7 +1171,7 @@ void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+     ex: app_printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

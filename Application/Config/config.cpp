@@ -1,5 +1,6 @@
 
 #include "Application/Config/config.hpp"
+#include "Application/app_printf.h"
 #include <cstdio>
 
 struct FCDispatch {
@@ -24,13 +25,13 @@ public:
 
         switch (true_id) {
             case BoardIds::FP_ENGINE:
-                printf("Config[Engine] : %u => %u\n", crc_buffer, crc_commited);
+                app_printf("Config[Engine] : %u => %u\n", crc_buffer, crc_commited);
                 break ;
             case BoardIds::FP_PRC_ETH:
-                printf("Config[Eth] : %u => %u\n", crc_buffer, crc_commited);
+                app_printf("Config[Eth] : %u => %u\n", crc_buffer, crc_commited);
                 break ;
             case BoardIds::FP_PRC_LOX:
-                printf("Config[Lox] : %u => %u\n", crc_buffer, crc_commited);
+                app_printf("Config[Lox] : %u => %u\n", crc_buffer, crc_commited);
                 break ;
         }
     }
@@ -64,6 +65,6 @@ void config::internal::On_Crc (BoardIds ids, uint32_t crc_buffer, uint32_t crc_c
 }
 
 void config::internal::print_status () {
-    printf("Config[FC] : %u => %u\n", manager.get_buffer_crc(), manager.get_commited_crc());
+    app_printf("Config[FC] : %u => %u\n", manager.get_buffer_crc(), manager.get_commited_crc());
     manager.print_status();
 }

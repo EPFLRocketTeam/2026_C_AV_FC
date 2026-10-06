@@ -3,6 +3,11 @@
 #include <stdio.h>
 #include <string.h>
 #include "app_timebase.h"
+#include "app_printf.h"
+#define __STDC_FORMAT_MACROS
+#include <cinttypes>
+#include <cstdint>
+#include <cstdio>
 
 extern "C" {
     #include "plume/writer.h"
@@ -14,9 +19,9 @@ extern "C" {
 /* SDMMC1 IDMA can only access AXI SRAM (RAM_D1, 0x24000000).
  * The Plume arena lives in RAM_D2 (0x30000000) which IDMA cannot reach.
  * We memcpy into this bounce buffer before every DMA write.
- * Size = PLUME_MAX_BATCH_SIZE blocks × 512 B = 32 KB.                     */
-static uint8_t s_dma_bounce[PLUME_MAX_BATCH_SIZE * 512]
-    __attribute__((aligned(32)));
+ * Size = PLUME_MAX_BATCH_SIZE blocks × 512 B = 32 KB. */
+__attribute__((section(".axi_sram.s_dma_bounce"), aligned(32)))
+static uint8_t s_dma_bounce[PLUME_MAX_BATCH_SIZE * 512];
 
 /* ── DMA completion flags (set from IRQ context) ─────────────────────────── */
 volatile uint8_t g_sd_dma_complete = 1;   /* 1 = idle/done */
@@ -56,7 +61,7 @@ extern "C" void HAL_SD_ErrorCallback(SD_HandleTypeDef *hsd) {
     g_sd_dma_complete = 1;       /* unblock the ready check */
 }
 
-#define DBG(...) printf(" - " #__VA_ARGS__ ": %lu \r\n", (uint32_t) __VA_ARGS__);
+#define DBG(...) app_printf(" - " #__VA_ARGS__ ": %lu \r\n", (uint32_t) __VA_ARGS__);
 uint8_t plume_stm32_disk_information (SD_HandleTypeDef* hsd, struct plume_disk* disk_info) {
     if (hsd->State != HAL_SD_STATE_READY) {
         return -50;
@@ -64,9 +69,9 @@ uint8_t plume_stm32_disk_information (SD_HandleTypeDef* hsd, struct plume_disk* 
 
     disk_info->number_blocks = hsd->SdCard.LogBlockNbr;
     disk_info->block_size    = hsd->SdCard.LogBlockSize;
-    printf("Information on disk: \r\n");
-    printf(" - number blocks : %lu\r\n", (uint32_t) disk_info->number_blocks);
-    printf(" - block size    : %lu\r\n", (uint32_t) disk_info->block_size);
+    app_printf("Information on disk: \r\n");
+    app_printf(" - number blocks : %lu\r\n", (uint32_t) disk_info->number_blocks);
+    app_printf(" - block size    : %lu\r\n", (uint32_t) disk_info->block_size);
     DBG(hsd->SdCard.BlockNbr);
     DBG(hsd->SdCard.BlockSize);
     DBG(hsd->SdCard.CardSpeed);
@@ -79,16 +84,124 @@ uint8_t plume_stm32_disk_information (SD_HandleTypeDef* hsd, struct plume_disk* 
 
     return PLUME_OK;
 }
-uint8_t plume_stm32_read_block (SD_HandleTypeDef* hsd, struct plume_context* context, uint8_t* buffer, uint64_t block_id) {
-    /* HAL_SD_ReadBlocks() on STM32H7 reads SDMMC FIFO via CPU → data goes
-     * into D-cache naturally. No cache maintenance needed for the read path.
-     * (IDMA is only used by HAL_SD_ReadBlocks_DMA.) */
-    HAL_StatusTypeDef status = HAL_SD_ReadBlocks(hsd, buffer, (uint32_t) block_id, 1, HAL_MAX_DELAY);
-    if (status == HAL_OK) {
-        return PLUME_OK;
+// uint8_t plume_stm32_read_block (SD_HandleTypeDef* hsd, struct plume_context* context, uint8_t* buffer, uint64_t block_id) {
+//     /* HAL_SD_ReadBlocks() on STM32H7 reads SDMMC FIFO via CPU → data goes
+//      * into D-cache naturally. No cache maintenance needed for the read path.
+//      * (IDMA is only used by HAL_SD_ReadBlocks_DMA.) */
+//     HAL_StatusTypeDef status = HAL_SD_ReadBlocks(hsd, buffer, (uint32_t) block_id, 1, HAL_MAX_DELAY);
+//     if (status == HAL_OK) {
+//         return PLUME_OK;
+//     }
+// 
+//     return -45;
+// }
+
+uint8_t plume_stm32_read_block(SD_HandleTypeDef* hsd, struct plume_context* context, uint8_t* buffer, uint64_t block_id) {
+    (void)context;
+    uint32_t start_tick = HAL_GetTick();
+
+    app_printf("PUPD C[8..11]=0x%02X (want 0x55)  D2=%u (want 1)\r\n",
+           (unsigned)((GPIOC->PUPDR >> 16) & 0xFF), (unsigned)((GPIOD->PUPDR >> 4) & 3));
+
+    app_printf("[PLUME SD] [INFO] === Starting Blocking DMA Read Operation ===\r\n");
+    app_printf("[PLUME SD] [DEBUG] Target Block ID : %lu (0x%lX)\r\n", (uint32_t) block_id, (uint32_t) block_id);
+    app_printf("[PLUME SD] [DEBUG] Destination Buf : 0x%08lX | Bounce Buf: 0x%08lX\r\n", 
+               (uint32_t)buffer, (uint32_t)s_dma_bounce);
+
+    if (buffer == NULL) {
+        app_printf("[PLUME SD] [ERR] Destination buffer pointer is NULL!\r\n");
+        return -45;
     }
 
-    return -45;
+    /* 1. Ensure card is in TRANSFER state before issuing read */
+    uint32_t t0 = HAL_GetTick();
+    while (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {
+        if ((HAL_GetTick() - t0) > 500) {
+            app_printf("[PLUME SD] [ERR] Pre-read card state check timed out!\r\n");
+            HAL_SD_Abort(hsd);
+            return -45;
+        }
+    }
+
+    /* 2. Reset DMA flags & pre-clear static status register flags */
+    g_sd_dma_complete = 0;
+    g_sd_dma_error    = 0;
+    __HAL_SD_CLEAR_FLAG(hsd, SDMMC_STATIC_FLAGS);
+
+    /* 3. Launch non-blocking IDMA read into AXI SRAM bounce buffer */
+    HAL_StatusTypeDef status = HAL_SD_ReadBlocks_DMA(hsd, s_dma_bounce, (uint32_t)block_id, 1);
+    if (status != HAL_OK) {
+        app_printf("[PLUME SD] [ERR] HAL_SD_ReadBlocks_DMA launch failed! Status: %d\r\n", status);
+        g_sd_dma_complete = 1;
+        return -45;
+    }
+
+    /* 4. BLOCKING WAIT PHASE 1: Wait for HAL Driver & ISR to signal completion */
+    uint32_t dma_wait_t0 = HAL_GetTick();
+    while (hsd->State != HAL_SD_STATE_READY && g_sd_dma_complete == 0) {
+        /* Timeout check (1000 ms) */
+        if ((HAL_GetTick() - dma_wait_t0) > 1000) {
+            
+            /* SAFETY RECOVERY: Manually trigger IRQ handler if 25.6 kHz IMU EXTI preempted SDMMC1_IRQn */
+            if (__HAL_SD_GET_FLAG(hsd, SDMMC_FLAG_DATAEND | SDMMC_FLAG_DCRCFAIL | SDMMC_FLAG_DTIMEOUT | SDMMC_FLAG_RXOVERR)) {
+                HAL_SD_IRQHandler(hsd);
+                if (hsd->State == HAL_SD_STATE_READY) {
+                    app_printf("[PLUME SD] [WARN] SDMMC1 ISR was preempted! Manually processed in polling loop.\r\n");
+                    break;
+                }
+            }
+
+            app_printf("[PLUME SD] [ERR] DMA Transfer Timeout! HAL State: %u | SDMMC_STA: 0x%08lX\r\n", 
+                       (uint32_t)hsd->State, hsd->Instance->STA);
+            app_printf("State=%u Ctx=0x%lX Err=0x%lX MASK=0x%08lX DCOUNT=%u IDMACTRL=0x%lX\r\n",
+                (unsigned long)hsd->State, (unsigned long)hsd->Context, (unsigned long)hsd->ErrorCode,
+                (unsigned long)hsd->Instance->MASK, (unsigned long)hsd->Instance->DCOUNT,
+                (unsigned long)hsd->Instance->IDMACTRL);
+            app_printf("NVIC en=%u pend=%u prio=%u BASEPRI=0x%lX PRIMASK=%u IPSR=%u\r\n",
+                    (unsigned long)NVIC_GetEnableIRQ(SDMMC1_IRQn), (unsigned long)NVIC_GetPendingIRQ(SDMMC1_IRQn),
+                    (unsigned long)NVIC_GetPriority(SDMMC1_IRQn), (unsigned long)__get_BASEPRI(),
+                    (unsigned long)__get_PRIMASK(), (unsigned long)(__get_IPSR() & 0x1FF));
+            HAL_SD_Abort(hsd);
+            __HAL_SD_CLEAR_FLAG(hsd, SDMMC_STATIC_FLAGS);
+            return -45;
+        }
+    }
+
+    /* 5. Check if an interrupt error flag fired */
+    if (g_sd_dma_error != 0 || hsd->ErrorCode != HAL_SD_ERROR_NONE) {
+        app_printf("[PLUME SD] [ERR] DMA read failed during ISR! ErrorCode: 0x%08lX\r\n", hsd->ErrorCode);
+        __HAL_SD_CLEAR_FLAG(hsd, SDMMC_STATIC_FLAGS);
+        return -45;
+    }
+
+    /* 6. BLOCKING WAIT PHASE 2: Ensure physical SD card finishes bus transfer */
+    uint32_t card_wait_t0 = HAL_GetTick();
+    while (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {
+        if ((HAL_GetTick() - card_wait_t0) > 500) {
+            app_printf("[PLUME SD] [ERR] Card failed to return to TRANSFER state after DMA!\r\n");
+            return -45;
+        }
+    }
+
+    /* 7. Invalidate D-Cache for bounce buffer ONLY IF D-Cache is enabled in SCB->CCR */
+    if (SCB->CCR & SCB_CCR_DC_Msk) {
+        SCB_InvalidateDCache_by_Addr((uint32_t*)s_dma_bounce, 512);
+    }
+
+    /* 8. Copy validated data from AXI SRAM bounce buffer to caller destination buffer */
+    memcpy(buffer, s_dma_bounce, 512);
+
+    uint32_t total_elapsed = HAL_GetTick() - start_tick;
+    app_printf("[PLUME SD] [INFO] Block %llu successfully read in %lu ms!\r\n", block_id, total_elapsed);
+
+    /* 9. Data Header Preview */
+    app_printf("[PLUME SD] [DEBUG] Data Header Preview (First 16 bytes):\r\n  └─ HEX: ");
+    for (int i = 0; i < 16; i++) {
+        app_printf("%02X ", buffer[i]);
+    }
+    app_printf("\r\n");
+
+    return PLUME_OK;
 }
 uint8_t plume_stm32_write_block (SD_HandleTypeDef* hsd, struct plume_context* context, const uint8_t* buffer, uint64_t block_id) {
     /* Wait for card to reach TRANSFER state (previous write programming done). */
@@ -104,7 +217,7 @@ uint8_t plume_stm32_write_block (SD_HandleTypeDef* hsd, struct plume_context* co
     memcpy(s_dma_bounce, buffer, 512);
 
     /* Flush D-cache so IDMA reads committed data from AXI SRAM. */
-    SCB_CleanDCache_by_Addr((uint32_t*)s_dma_bounce, 512);
+    // SCB_CleanDCache_by_Addr((uint32_t*)s_dma_bounce, 512);
 
     s_sd_timing.last_batch_size = 1;
     s_sd_timing.total_blocks += 1;
@@ -149,7 +262,7 @@ uint8_t plume_stm32_write_blocks (SD_HandleTypeDef* hsd, struct plume_context* c
     memcpy(s_dma_bounce, buffer, num_blocks * 512);
 
     /* Flush D-cache for the entire batch so IDMA sees committed data. */
-    SCB_CleanDCache_by_Addr((uint32_t*)s_dma_bounce, num_blocks * 512);
+    // SCB_CleanDCache_by_Addr((uint32_t*)s_dma_bounce, num_blocks * 512);
 
     /* ── Record batch size and DMA start timestamp ── */
     s_sd_timing.last_batch_size = num_blocks;
@@ -246,12 +359,12 @@ bool SDCardInterface::init_sd_card (
             }
         }
         if (!block0_blank) {
-            printf("[SD] Block 0 has non-blank data (not 0x00/0xFF) — refusing auto-format.\r\n");
-            printf("[SD] If this card needs reformatting, clear it manually first.\r\n");
+            app_printf("[SD] Block 0 has non-blank data (not 0x00/0xFF) — refusing auto-format.\r\n");
+            app_printf("[SD] If this card needs reformatting, clear it manually first.\r\n");
             return false;
         }
 
-        printf("[SD] Card not formatted (block 0 blank), performing quick format...\r\n");
+        app_printf("[SD] Card not formatted (block 0 blank), performing quick format...\r\n");
         /* Quick format: write settings page (block 0) + clear FAT region.
          * Use blocking (polling) HAL writes — no DMA complexity for one-time init. */
         constexpr uint64_t fat_size = 64;
@@ -265,7 +378,7 @@ bool SDCardInterface::init_sd_card (
         SCB_CleanDCache_by_Addr((uint32_t*)arena_buffer, 512);
         HAL_StatusTypeDef hal_rc = HAL_SD_WriteBlocks(hsd, arena_buffer, 0, 1, 1000);
         if (hal_rc != HAL_OK) {
-            printf("[SD] Quick format: failed to write settings block (HAL=%d)\r\n", (int)hal_rc);
+            app_printf("[SD] Quick format: failed to write settings block (HAL=%d)\r\n", (int)hal_rc);
             return false;
         }
         /* Wait for card programming */
@@ -278,21 +391,27 @@ bool SDCardInterface::init_sd_card (
         for (uint64_t blk = 1; blk < fat_size; ++blk) {
             hal_rc = HAL_SD_WriteBlocks(hsd, arena_buffer, (uint32_t)blk, 1, 1000);
             if (hal_rc != HAL_OK) {
-                printf("[SD] Quick format: failed at FAT block %u (HAL=%d)\r\n",
+                app_printf("[SD] Quick format: failed at FAT block %u (HAL=%d)\r\n",
                        (unsigned)blk, (int)hal_rc);
                 return false;
             }
             while (HAL_SD_GetCardState(hsd) != HAL_SD_CARD_TRANSFER) {}
         }
-        printf("[SD] Quick format done (%u FAT blocks written)\r\n", (unsigned)fat_size);
+        app_printf("[SD] Quick format done (%u FAT blocks written)\r\n", (unsigned)fat_size);
 
         /* Retry init */
         err_code = plume_init(&context, &driver);
     }
 
     if (err_code != PLUME_OK) {
-    	printf("Failure of init: %u\r\n", err_code);
+    	app_printf("Failure of init: %u\r\n", err_code);
     }
+
+    app_printf("Finished Init of SD Card. \n");
+    app_printf("  Total Number of Blocks: %llu\n", context.disk_info.number_blocks);
+    app_printf("  Next valid Block: %llu\n", context.next_valid_block);
+    app_printf("  Block Size: %llu\n", context.disk_info.block_size);
+    app_printf("  Remaining disk size: %llu\n", disk_size_remaining());
 
     return err_code == PLUME_OK;
 }
@@ -303,7 +422,7 @@ bool SDCardInterface::open_file () {
 size_t SDCardInterface::number_files_remaining () {
     return context.fat_size - context.next_file_block;
 }
-size_t SDCardInterface::disk_size_remaining () {
+uint64_t SDCardInterface::disk_size_remaining () {
     return (context.disk_info.number_blocks - context.next_valid_block) * context.disk_info.block_size;
 }
 

@@ -124,11 +124,6 @@ public:
 
         setup_post(block_duration, block_on, offset);
 
-        /*printf("Number elements: %d\r\n", number_steps(N_els));
-        for (int i = 0; i < number_steps(N_els); i ++) {
-        	printf("%d %d\r\n", block_duration[i], block_on[i]);
-        }*/
-
         block_start_time = current_time;
         enable_buzzer(block_on[0]);
     }

@@ -5,6 +5,7 @@
 #include "Application/app_timebase.h"
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
 #include "Application/Data/data.hpp"
+#include "Application/app_printf.h"
 #include <cstdio>
 
 extern RingBuffer<GpsBasicFixData, 100> gpsData;
@@ -27,7 +28,7 @@ public:
   bool init() override {
     GpsStatus status = drivers_[0]->init();
     if (status != GpsStatus::OK) {
-      printf("Error starting GPS : got %d \n", (int)status);
+      app_printf("Error starting GPS : got %d \n", (int)status);
       return false;
     }
     return true;
@@ -39,14 +40,14 @@ public:
       drivers_[0]->getPvt(&gpsFix, APP_GPS_POLL_TIMEOUT_MS);
     if (status == GpsStatus::ERROR_TIMEOUT) {
       publishStaleNoFixIfNeeded(tick_ms, g);
-      // printf("We timed out");
+      // app_printf("We timed out");
       return;
     }
     if (status != GpsStatus::OK) {
-      printf("Error with GPS data fetch : got %d \n", (int)status);
+      app_printf("Error with GPS data fetch : got %d \n", (int)status);
       return;
     }
-    printf("\nWe got something from the gps\n");
+    app_printf("\nWe got something from the gps\n");
     if (gpsFix.timestamp_us == 0u) {
       gpsFix.timestamp_us = app_timebase_now_us();
     }

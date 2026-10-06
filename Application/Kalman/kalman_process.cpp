@@ -25,6 +25,7 @@ extern "C" {
 #include "Drivers/InvIMU/InvIMU.h"
 #include "Application/FlightControl/uart_cmd.h"
 }
+#include "Application/app_printf.h"
 #include "Drivers/InvIMU/InvIMU.hpp"
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
 
@@ -209,14 +210,14 @@ struct KalmanRuntime {
 
 #if KALMAN_DEBUG_PRINT
 		// Print compile-time configuration at first init
-		printf("[KAL-CFG] ESKF_FORCE_FLOAT32=%d  sizeof(eskf_scalar)=%lu  "
+		app_printf("[KAL-CFG] ESKF_FORCE_FLOAT32=%d  sizeof(eskf_scalar)=%lu  "
 		       "COV_DECIM=%d  IMU_ODR=%d  BARO_ODR=%d\r\n",
 		       ESKF_FORCE_FLOAT32,
 		       static_cast<unsigned long>(sizeof(eskf_scalar)),
 		       ESKF_COVARIANCE_DECIMATION,
 		       ESKF_IMU_PRIMARY_ODR_HZ,
 		       ESKF_BARO_ODR_HZ);
-		printf("[KAL-CFG] activeBaroSources=%lu  "
+		app_printf("[KAL-CFG] activeBaroSources=%lu  "
 		       "FORCE_FLIGHT=%d  PRINT_DECIM=%d  "
 		       "FORCE_FLIGHT_DELAY_MS=%u\r\n",
 		       static_cast<unsigned long>(kActiveBaroSources),
@@ -224,15 +225,15 @@ struct KalmanRuntime {
 		       KALMAN_DEBUG_PRINT_DECIMATION,
 		       (unsigned)KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS);
 #ifdef COMPILE_OPT_LEVEL
-		printf("[KAL-CFG] Optimization: -O%d", COMPILE_OPT_LEVEL);
+		app_printf("[KAL-CFG] Optimization: -O%d", COMPILE_OPT_LEVEL);
 #elif defined(__OPTIMIZE__)
-		printf("[KAL-CFG] Optimization: ON (unknown level)");
+		app_printf("[KAL-CFG] Optimization: ON (unknown level)");
 #else
-		printf("[KAL-CFG] Optimization: OFF (-O0)");
+		app_printf("[KAL-CFG] Optimization: OFF (-O0)");
 #endif
-		printf("  SYSCLK=%luMHz\r\n", SystemCoreClock / 1000000UL);
+		app_printf("  SYSCLK=%luMHz\r\n", SystemCoreClock / 1000000UL);
 		app_timebase_print_init_diag();
-		printf("[KAL-CFG] timebase_now: HAL=%lu  app=%lu  cycles_per_us=%lu\r\n",
+		app_printf("[KAL-CFG] timebase_now: HAL=%lu  app=%lu  cycles_per_us=%lu\r\n",
 		       static_cast<unsigned long>(HAL_GetTick()),
 		       static_cast<unsigned long>(app_timebase_now_ms()),
 		       SystemCoreClock / 1000000UL);
@@ -404,17 +405,17 @@ struct KalmanRuntime {
 		{
 			static uint32_t ingest_diag_counter = 0;
 			if (ingest_diag_counter < 5) {
-				printf("[INGEST-IMU] src=%u count=%u ts[0]=%u:%u",
+				app_printf("[INGEST-IMU] src=%u count=%u ts[0]=%u:%u",
 					(unsigned)source_index, (unsigned)count,
 					(unsigned)(samples[0].timestamp_us >> 32),
 					(unsigned)samples[0].timestamp_us);
 				if (count >= 2) {
-					printf("  ts[1]=%u:%u  dt=%u",
+					app_printf("  ts[1]=%u:%u  dt=%u",
 						(unsigned)(samples[1].timestamp_us >> 32),
 						(unsigned)samples[1].timestamp_us,
 						(unsigned)(uint32_t)(samples[1].timestamp_us - samples[0].timestamp_us));
 				}
-				printf("  ts[last]=%u:%u\r\n",
+				app_printf("  ts[last]=%u:%u\r\n",
 					(unsigned)(samples[count-1].timestamp_us >> 32),
 					(unsigned)samples[count-1].timestamp_us);
 				ingest_diag_counter++;
@@ -464,7 +465,7 @@ struct KalmanRuntime {
 			{
 				static uint32_t batch_diag_counter = 0;
 				if (batch_diag_counter < 10) {
-					printf("[BATCH-DT] #%u  t0=%u:%u  dt_us=%u  count=%u  "
+					app_printf("[BATCH-DT] #%u  t0=%u:%u  dt_us=%u  count=%u  "
 						"slice0_ts=%u:%u  slice1_ts=%u:%u\r\n",
 						(unsigned)batch_diag_counter,
 						(unsigned)(batch.t0_us >> 32), (unsigned)batch.t0_us,
@@ -492,10 +493,10 @@ struct KalmanRuntime {
 						gate);
 				}
 				if (!was_armed && liftoff_detector.isArmed()) {
-					printf("[LIFTOFF] Detector ARMED (pad stable for ~2s)\r\n");
+					app_printf("[LIFTOFF] Detector ARMED (pad stable for ~2s)\r\n");
 				}
 				if (liftoff_detector.isDetected()) {
-					printf("[LIFTOFF] IMU liftoff DETECTED!\r\n");
+					app_printf("[LIFTOFF] IMU liftoff DETECTED!\r\n");
 				}
 			}
 
@@ -589,7 +590,7 @@ struct KalmanRuntime {
 			if (decision.triggered) {
 				apogee_detected = true;
 				set_apogee_detected = true;
-				printf("[APOGEE] Detected at t=%lu ms (liftoff+%lu ms)\r\n",
+				app_printf("[APOGEE] Detected at t=%lu ms (liftoff+%lu ms)\r\n",
 				       (unsigned long)now_ms,
 				       (unsigned long)(now_ms - liftoff_ms));
 			}
@@ -917,7 +918,7 @@ int kalman_loop() {
 			kalman.force_flight_start_ms_ = now_ms;
 		}
 		if ((now_ms - kalman.force_flight_start_ms_) >= KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS) {
-			printf("[KAL-DBG] Force-flight: triggering liftoff via FSM  "
+			app_printf("[KAL-DBG] Force-flight: triggering liftoff via FSM  "
 			       "(waited %lu ms, HAL_ms=%lu)\r\n",
 			       (unsigned long)(now_ms - kalman.force_flight_start_ms_),
 			       (unsigned long)HAL_GetTick());

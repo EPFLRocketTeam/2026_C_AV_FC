@@ -14,9 +14,11 @@
 #if APP_TARGET_STM32
 extern "C" {
 #include "Application/app_timebase.h"
+#include "Application/app_printf.h"
 }
 #elif APP_TARGET_NATIVE
 #include <chrono>
+#define app_printf(...) printf(__VA_ARGS__)
 #endif
 
 namespace eskf {
@@ -686,7 +688,7 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
     static uint32_t ahead_counter = 0;
     if (++ahead_counter >= 500) {
       ahead_counter = 0;
-      printf("[CATCHUP] AHEAD: kalTs=%u:%u > targetTs=%u:%u  diff=%uus  "
+      app_printf("[CATCHUP] AHEAD: kalTs=%u:%u > targetTs=%u:%u  diff=%uus  "
              "rewind=%d hiber=%d\r\n",
              (unsigned)(kalman_timestamp_us_ >> 32), (unsigned)kalman_timestamp_us_,
              (unsigned)(target_timestamp_us >> 32), (unsigned)target_timestamp_us,
@@ -726,7 +728,7 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       static uint32_t catchup_diag_counter = 0;
       if (++catchup_diag_counter >= 500) {
         catchup_diag_counter = 0;
-        printf("[CATCHUP] exhausted: kalTs=%u:%u targetTs=%u:%u "
+        app_printf("[CATCHUP] exhausted: kalTs=%u:%u targetTs=%u:%u "
                "imuPending=%u imuPushSeq=%u imuReadSeq=%u\r\n",
                (unsigned)(kalman_timestamp_us_ >> 32), (unsigned)kalman_timestamp_us_,
                (unsigned)(target_timestamp_us >> 32), (unsigned)target_timestamp_us,
@@ -743,7 +745,7 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       static uint32_t catchup_future_counter = 0;
       if (++catchup_future_counter >= 500) {
         catchup_future_counter = 0;
-        printf("[CATCHUP] future: earliest=%u:%u target=%u:%u "
+        app_printf("[CATCHUP] future: earliest=%u:%u target=%u:%u "
                "kalTs=%u:%u imuPending=%u imuPushSeq=%u\r\n",
                (unsigned)(earliest >> 32), (unsigned)earliest,
                (unsigned)(target_timestamp_us >> 32), (unsigned)target_timestamp_us,
@@ -778,7 +780,7 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
       // Only print STALE-SKIP summary every 3000 skips
       if (++stale_log_counter >= 3000) {
         stale_log_counter = 0;
-        printf("[CATCHUP] STALE-SKIP: ts=%u:%u  kalTs=%u:%u  "
+        app_printf("[CATCHUP] STALE-SKIP: ts=%u:%u  kalTs=%u:%u  "
                "staleSkips=%u  imuPending=%u\r\n",
                (unsigned)(earliest >> 32), (unsigned)earliest,
                (unsigned)(kalman_timestamp_us_ >> 32),
@@ -1039,22 +1041,22 @@ void EskfYieldable::rewindTo(uint64_t timestamp_us, bool liftoff_rewind) {
     const uint64_t oldest_ts = imu_buffer_[oldest_slot].imu.timestamp_us;
     const size_t newest_slot = (imu_push_seq_ - 1) % ESKF_IMU_BUFFER_SIZE;
     const uint64_t newest_ts = imu_buffer_[newest_slot].imu.timestamp_us;
-    printf("[REWIND-DBG] replay_from=%u:%u  imu_replay_from=%u:%u  "
+    app_printf("[REWIND-DBG] replay_from=%u:%u  imu_replay_from=%u:%u  "
            "liftoff_direct=%d\r\n",
            (unsigned)(replay_from >> 32), (unsigned)replay_from,
            (unsigned)(imu_replay_from >> 32), (unsigned)imu_replay_from,
            (int)liftoff_direct_replay);
-    printf("[REWIND-DBG] pushSeq=%u  readSeq=%u  oldestSeq=%u  "
+    app_printf("[REWIND-DBG] pushSeq=%u  readSeq=%u  oldestSeq=%u  "
            "rel=%u  bufCount=%u\r\n",
            (unsigned)imu_push_seq_, (unsigned)imu_read_seq_,
            (unsigned)oldest_seq, (unsigned)rel, (unsigned)imu_count);
-    printf("[REWIND-DBG] oldestTs=%u:%u  readTs=%u:%u  "
+    app_printf("[REWIND-DBG] oldestTs=%u:%u  readTs=%u:%u  "
            "newestTs=%u:%u  span=%ums\r\n",
            (unsigned)(oldest_ts >> 32), (unsigned)oldest_ts,
            (unsigned)(read_ts >> 32), (unsigned)read_ts,
            (unsigned)(newest_ts >> 32), (unsigned)newest_ts,
            (unsigned)((newest_ts - oldest_ts) / 1000));
-    printf("[REWIND-DBG] kalTs=%u:%u  hibernating=%d\r\n",
+    app_printf("[REWIND-DBG] kalTs=%u:%u  hibernating=%d\r\n",
            (unsigned)(kalman_timestamp_us_ >> 32),
            (unsigned)kalman_timestamp_us_,
            (int)hibernating_);
@@ -1331,7 +1333,7 @@ void EskfYieldable::processNextImu() {
   {
     static uint32_t imu_proc_diag_count = 0;
     if (imu_proc_diag_count < 30) {
-      printf("[IMU-PROC] #%u  seq=%u  slot=%u  ts=%u:%u  dt=%.6f  "
+      app_printf("[IMU-PROC] #%u  seq=%u  slot=%u  ts=%u:%u  dt=%.6f  "
              "kalTs=%u:%u  stale=%u\r\n",
              (unsigned)imu_proc_diag_count,
              (unsigned)imu_read_seq_,

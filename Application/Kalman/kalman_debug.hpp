@@ -49,6 +49,7 @@
 #include <cmath>
 
 #include "Application/app_timebase.h"
+#include "Application/app_printf.h"
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Kalman/AppLayer/eskf_estimator.hpp"
 #include "Application/Data/fsm.hpp"
@@ -199,7 +200,7 @@ inline void printDebugLine(
     // ── Print block ──────────────────────────────────────────────────
 
     // Line 1: Attitude — tilt the board, pitch/roll should follow.
-    printf("[KAL] FSM=%-5s  "
+    app_printf("[KAL] FSM=%-5s  "
            "Rail(p=%+6.1f r=%+6.1f)  "
            "ESKF(p=%+6.1f r=%+6.1f y=%+6.1f)  "
            "alt=%+.1fm vD=%+.1f\r\n",
@@ -210,7 +211,7 @@ inline void printDebugLine(
            static_cast<double>(output.velocity_ned[2]));
 
     // Line 2: Health + timing
-    printf("[KAL] hlth=0x%02X  "
+    app_printf("[KAL] hlth=0x%02X  "
            "loop=%luus(max %lu)  "
            "mainLoop=%luus(max %lu)  "
            "NIS=%.1f  hiNIS=%u  div=%d  "
@@ -230,7 +231,7 @@ inline void printDebugLine(
     {
         const uint32_t hal_ms  = HAL_GetTick();
         const uint32_t app_ms  = static_cast<uint32_t>(app_timebase_now_ms());
-        printf("[KAL] timebase: HAL=%lu  app=%lu  ratio=%.2f  DWT=0x%08lX\r\n",
+        app_printf("[KAL] timebase: HAL=%lu  app=%lu  ratio=%.2f  DWT=0x%08lX\r\n",
                static_cast<unsigned long>(hal_ms),
                static_cast<unsigned long>(app_ms),
                (hal_ms > 0) ? static_cast<double>(app_ms) / static_cast<double>(hal_ms) : 0.0,
@@ -239,7 +240,7 @@ inline void printDebugLine(
 #endif
 
     // Line 3: Buffer / overflow
-    printf("[KAL] IMU=%lu  baro=%lu  gps=%lu  "
+    app_printf("[KAL] IMU=%lu  baro=%lu  gps=%lu  "
            "imuDrop=%lu  baroDrop=%lu  evtDrop=%lu  staleSkip=%lu  "
            "imuBuf=%lu  baroBuf=%lu  evtBuf=%lu  "
            "rwd=%lu  drained=%lu\r\n",
@@ -257,7 +258,7 @@ inline void printDebugLine(
            static_cast<unsigned long>(drained_this_period));
 
     // Line 4: Ring HWMs
-    printf("[KAL] ring_hwm=[%lu,%lu,%lu,%lu]  imuPending=%lu  "
+    app_printf("[KAL] ring_hwm=[%lu,%lu,%lu,%lu]  imuPending=%lu  "
            "gate=%s  grnd=%s  hdg=%s\r\n",
            static_cast<unsigned long>(health.imu_ring_hwm[0]),
            static_cast<unsigned long>(health.imu_ring_hwm[1]),
@@ -269,7 +270,7 @@ inline void printDebugLine(
            rail.isHeadingInitialized() ? "OK" : "NO");
 
     // Line 4b: Grouping stats
-    printf("[KAL] grp: fired=%lu  soloFlush=%lu  staleFlush=%lu  "
+    app_printf("[KAL] grp: fired=%lu  soloFlush=%lu  staleFlush=%lu  "
            "alignDiscard=%lu  spreadMax=%luus  biasCalib=%s\r\n",
            static_cast<unsigned long>(estimator.imu_group_fire_count_),
            static_cast<unsigned long>(estimator.imu_solo_flush_count_),
@@ -283,7 +284,7 @@ inline void printDebugLine(
         static_cast<double>(raw.ax) * raw.ax +
         static_cast<double>(raw.ay) * raw.ay +
         static_cast<double>(raw.az) * raw.az);
-    printf("[KAL] raw: ax=%+7.2f ay=%+7.2f az=%+7.2f  "
+    app_printf("[KAL] raw: ax=%+7.2f ay=%+7.2f az=%+7.2f  "
            "gx=%+6.3f gy=%+6.3f gz=%+6.3f  "
            "|a|=%.2f  "
            "P=%.0fPa T=%.1fC\r\n",
@@ -296,40 +297,40 @@ inline void printDebugLine(
            static_cast<double>(raw.baro_tempC));
 
     // Line 5b: Per-sensor raw baro values
-    printf("[KAL] baroRaw:");
+    app_printf("[KAL] baroRaw:");
     for (int i = 0; i < 4; ++i) {
       if (raw.baro_per_sensor_alive & (1u << i)) {
-        printf(" [%d]=%.0fPa/%.1fC", i,
+        app_printf(" [%d]=%.0fPa/%.1fC", i,
                static_cast<double>(raw.baro_per_sensor_pa[i]),
                static_cast<double>(raw.baro_per_sensor_tempC[i]));
       } else {
-        printf(" [%d]=--", i);
+        app_printf(" [%d]=--", i);
       }
     }
-    printf("  alive=0x%X\r\n", raw.baro_per_sensor_alive);
+    app_printf("  alive=0x%X\r\n", raw.baro_per_sensor_alive);
 
     // Line 5c: Per-IMU raw accel (sensor frame, all axes)
-    printf("[KAL] imuRaw:");
+    app_printf("[KAL] imuRaw:");
     for (int i = 0; i < 4; ++i) {
       if (raw.imu_per_sensor_alive & (1u << i)) {
-        printf(" [%d]a=(%.2f,%.2f,%.2f)", i,
+        app_printf(" [%d]a=(%.2f,%.2f,%.2f)", i,
                static_cast<double>(raw.imu_per_sensor_ax[i]),
                static_cast<double>(raw.imu_per_sensor_ay[i]),
                static_cast<double>(raw.imu_per_sensor_az[i]));
       } else {
-        printf(" [%d]=--", i);
+        app_printf(" [%d]=--", i);
       }
     }
-    printf("  alive=0x%X\r\n", raw.imu_per_sensor_alive);
+    app_printf("  alive=0x%X\r\n", raw.imu_per_sensor_alive);
 
     // Line 6: Gyro bias from rail shadow (should converge to ~0 when still)
-    printf("[KAL] gyroBias: %+.5f %+.5f %+.5f (rad/s)\r\n",
+    app_printf("[KAL] gyroBias: %+.5f %+.5f %+.5f (rad/s)\r\n",
            static_cast<double>(gb[0]),
            static_cast<double>(gb[1]),
            static_cast<double>(gb[2]));
 
     // Line 7: IMU FIFO frame header statistics
-    printf("[KAL] fifoHdr: 0x78=%lu  0x7C=%lu  0xF0=%lu  other=%lu  "
+    app_printf("[KAL] fifoHdr: 0x78=%lu  0x7C=%lu  0xF0=%lu  other=%lu  "
            "imuFlags=0x%lX  imuDrvDrop=%lu\r\n",
            static_cast<unsigned long>(raw.frame_h78),
            static_cast<unsigned long>(raw.frame_h7C),
@@ -339,7 +340,7 @@ inline void printDebugLine(
            static_cast<unsigned long>(raw.imu_drop_count));
 
     // Line 7b: Timestamp estimator diagnostics
-    printf("[KAL] tsEst: monoRepairs=%lu  lastErr=%ld us  rejects=%lu  maxRejErr=%ld  spiFail=%lu/%lu  bursts=%lu  armed=%u\r\n",
+    app_printf("[KAL] tsEst: monoRepairs=%lu  lastErr=%ld us  rejects=%lu  maxRejErr=%ld  spiFail=%lu/%lu  bursts=%lu  armed=%u\r\n",
            static_cast<unsigned long>(raw.imu_monotonic_repairs),
            static_cast<long>(raw.imu_last_offset_err),
            static_cast<unsigned long>(raw.imu_offset_reject_count),
@@ -352,7 +353,7 @@ inline void printDebugLine(
     // Line 8: CatchUp budget details
     {
       const uint64_t te = estimator.totalCatchupEventsProcessed();
-      printf("[KAL] catchUp: budget=%luus  last=%luus  events=%lu  "
+      app_printf("[KAL] catchUp: budget=%luus  last=%luus  events=%lu  "
              "totalEv=%lu:%lu  dtClamp=%lu\r\n",
              static_cast<unsigned long>(estimator.catchupBudgetUs()),
              static_cast<unsigned long>(estimator.lastCatchupDurationUs()),
@@ -363,7 +364,7 @@ inline void printDebugLine(
     }
 
     // Line 9: Timing breakdown (where time is spent in kalman_loop)
-    printf("[KAL] timing: drain=%luus  imuProc=%luus  aiding=%luus  "
+    app_printf("[KAL] timing: drain=%luus  imuProc=%luus  aiding=%luus  "
            "tick=%luus  output=%luus\r\n",
            static_cast<unsigned long>(raw.t_imu_drain_us),
            static_cast<unsigned long>(raw.t_imu_process_us),
@@ -377,7 +378,7 @@ inline void printDebugLine(
         estimator.getImuProcBreakdown(vimu_us, post_us, vimu_samples);
         const uint32_t vimu_per = vimu_samples > 0 ? vimu_us / vimu_samples : 0;
         const uint32_t post_per = vimu_samples > 0 ? post_us / vimu_samples : 0;
-        printf("[KAL] imuBreak: vimu=%luus  post=%luus  n=%lu  "
+        app_printf("[KAL] imuBreak: vimu=%luus  post=%luus  n=%lu  "
                "vimu/s=%luus  post/s=%luus\r\n",
                static_cast<unsigned long>(vimu_us),
                static_cast<unsigned long>(post_us),
@@ -392,7 +393,7 @@ inline void printDebugLine(
         const uint32_t rwd_n = stats.rewind_count;
         const uint64_t rwd_tot = stats.rewind_total_depth_us;
         const uint32_t avg_depth = rwd_n > 0 ? static_cast<uint32_t>(rwd_tot / rwd_n) : 0;
-        printf("[KAL] GPS-rwd: n=%lu  avgDepth=%luus  noChk=%lu  gap=%lu  "
+        app_printf("[KAL] GPS-rwd: n=%lu  avgDepth=%luus  noChk=%lu  gap=%lu  "
                "velRej=%lu  posRej=%lu  covRst=%lu\r\n",
                static_cast<unsigned long>(rwd_n),
                static_cast<unsigned long>(avg_depth),
@@ -413,7 +414,7 @@ inline void printDebugLine(
         const bool aero_blind = estimator.flightShadow().isAeroBlind();
 
         // Position and velocity covariance diagonal (σ in meters)
-        printf("[KAL] Pcov: σp=%.2f,%.2f,%.2f  σv=%.2f,%.2f,%.2f  "
+        app_printf("[KAL] Pcov: σp=%.2f,%.2f,%.2f  σv=%.2f,%.2f,%.2f  "
                "σθ=%.3f  σba=%.4f  σbg=%.6f  σbb=%.2f\r\n",
                std::sqrt(static_cast<double>(P.diag(0))),
                std::sqrt(static_cast<double>(P.diag(1))),
@@ -427,7 +428,7 @@ inline void printDebugLine(
                std::sqrt(static_cast<double>(P.diag(15))));
 
         // ESKF position (NED), velocity, and baro bias
-        printf("[KAL] eskf: pN=%+.2f pE=%+.2f pD=%+.2f  "
+        app_printf("[KAL] eskf: pN=%+.2f pE=%+.2f pD=%+.2f  "
                "vN=%+.2f vE=%+.2f vD=%+.2f  bBaro=%+.2f  "
                "aeroBlind=%d  inn=%.2f  NIS=%.2f\r\n",
                static_cast<double>(st.p[0]),
@@ -448,7 +449,7 @@ inline void printDebugLine(
     raw.imu_per_sensor_alive = 0;
 
     // Separator for readability
-    printf("---\r\n");
+    app_printf("---\r\n");
 }
 
 } // namespace kalman_debug

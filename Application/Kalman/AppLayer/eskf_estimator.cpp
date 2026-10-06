@@ -8,6 +8,7 @@
 #include "Application/Kalman/kalman/eskf_math.hpp"
 #include "Application/Kalman/kalman/preprocessor/pressure_altitude.hpp"
 #include "Application/app_timebase.h"
+#include "Application/app_printf.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -851,16 +852,16 @@ void EskfEstimator::onLiftoff(uint32_t liftoff_ms) {
     const uint64_t oldestSeq = pushSeq - bufCount;
     const size_t oldestSlot = oldestSeq % ESKF_IMU_BUFFER_SIZE;
 
-    printf("[LIFTOFF-DBG] liftoff_us=%u:%u  rewind_to=%u:%u  "
+    app_printf("[LIFTOFF-DBG] liftoff_us=%u:%u  rewind_to=%u:%u  "
            "kalTs=%u:%u\r\n",
            (unsigned)(liftoff_us_ >> 32), (unsigned)liftoff_us_,
            (unsigned)(rewind_to >> 32), (unsigned)rewind_to,
            (unsigned)(kalTs >> 32), (unsigned)kalTs);
-    printf("[LIFTOFF-DBG] imuPushSeq=%u  imuReadSeq=%u  pending=%u  "
+    app_printf("[LIFTOFF-DBG] imuPushSeq=%u  imuReadSeq=%u  pending=%u  "
            "bufCount=%u  oldestSlot=%u\r\n",
            (unsigned)pushSeq, (unsigned)readSeq, (unsigned)pending,
            (unsigned)bufCount, (unsigned)oldestSlot);
-    printf("[LIFTOFF-DBG] nextImuTs=%u:%u  ground_ref=%d  "
+    app_printf("[LIFTOFF-DBG] nextImuTs=%u:%u  ground_ref=%d  "
            "grndP=%.0fPa  freshBaro=%d  freshP=%.0fPa\r\n",
            (unsigned)(nextImu >> 32), (unsigned)nextImu,
            (int)ground_ref.valid,
@@ -872,7 +873,7 @@ void EskfEstimator::onLiftoff(uint32_t liftoff_ms) {
       const uint64_t oldestTs = f.imuBufferTimestamp(oldestSlot);
       const size_t newestSlot = (pushSeq - 1) % ESKF_IMU_BUFFER_SIZE;
       const uint64_t newestTs = f.imuBufferTimestamp(newestSlot);
-      printf("[LIFTOFF-DBG] oldestBufTs=%u:%u  newestBufTs=%u:%u  "
+      app_printf("[LIFTOFF-DBG] oldestBufTs=%u:%u  newestBufTs=%u:%u  "
              "span=%ums\r\n",
              (unsigned)(oldestTs >> 32), (unsigned)oldestTs,
              (unsigned)(newestTs >> 32), (unsigned)newestTs,
@@ -993,7 +994,7 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
   if (pending_imu_[src].valid) {
     static uint32_t solo_flush_ctr = 0;
     if (solo_flush_ctr < 5) {
-      printf("[GRP-SOLO] src=%u overwrite-flush t0=%u:%u\r\n",
+      app_printf("[GRP-SOLO] src=%u overwrite-flush t0=%u:%u\r\n",
              (unsigned)src,
              (unsigned)(pending_imu_[src].t0_us >> 32),
              (unsigned)pending_imu_[src].t0_us);
@@ -1026,7 +1027,7 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
   {
     static uint32_t grp_diag_ctr = 0;
     if (grp_diag_ctr < 5) {
-      printf("[GRP-DIAG] #%u src=%u active=%u target=%u kMax=%u pending=[%d,%d,%d,%d]\r\n",
+      app_printf("[GRP-DIAG] #%u src=%u active=%u target=%u kMax=%u pending=[%d,%d,%d,%d]\r\n",
              (unsigned)grp_diag_ctr, (unsigned)src,
              (unsigned)active_imu_sources_, (unsigned)target_group_size,
              (unsigned)kMaxImuSources,
@@ -1086,7 +1087,7 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
   if (group_count >= target_group_size) {
     static uint32_t grp_fire_ctr = 0;
     if (grp_fire_ctr < 3) {
-      printf("[GRP-FIRE] grouped=%u target=%u anchor=%u:%u\r\n",
+      app_printf("[GRP-FIRE] grouped=%u target=%u anchor=%u:%u\r\n",
              (unsigned)group_count, (unsigned)target_group_size,
              (unsigned)(anchor_t0 >> 32), (unsigned)anchor_t0);
       grp_fire_ctr++;
@@ -1124,7 +1125,7 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
         imu_bias_calibrated_ = true;
         // Reset spread tracking now that calibration is active
         imu_group_spread_max_us_ = 0;
-        printf("[GRP-BIAS] calibrated: bias=[%ld, %ld, %ld, %ld] us\r\n",
+        app_printf("[GRP-BIAS] calibrated: bias=[%ld, %ld, %ld, %ld] us\r\n",
                (long)imu_ts_bias_[0], (long)imu_ts_bias_[1],
                (long)imu_ts_bias_[2], (long)imu_ts_bias_[3]);
       }
@@ -1150,7 +1151,7 @@ void EskfEstimator::processImuBatch(const ImuBatch &batch) {
     // Log why (limited)
     static uint32_t sync_fail_ctr = 0;
     if (sync_fail_ctr < 10) {
-      printf("[GRP-SYNC-FAIL] valid=%u grouped=%u target=%u anchor=%u:%u "
+      app_printf("[GRP-SYNC-FAIL] valid=%u grouped=%u target=%u anchor=%u:%u "
              "t0=[%u:%u, %u:%u, %u:%u, %u:%u] v=[%d,%d,%d,%d]\r\n",
              (unsigned)valid_count, (unsigned)group_count,
              (unsigned)target_group_size,
@@ -1729,7 +1730,7 @@ void EskfEstimator::processBaroObservation(uint8_t source,
             static uint16_t baro_fuse_log_count = 0;
             if (std::fabs(static_cast<double>(inn)) > 1.0 ||
                 baro_fuse_log_count < 20 || soft_div) {
-              printf("[KAL] baroFuse: meas=%+.2fm  eskfAlt=%+.2fm  "
+              app_printf("[KAL] baroFuse: meas=%+.2fm  eskfAlt=%+.2fm  "
                      "inn=%+.2fm  pD=%+.2f  bBaro=%+.2f  NIS=%.1f  "
                      "P_bb=%.4f  div=%d\r\n",
                      static_cast<double>(altitude_isa_m),
@@ -2135,7 +2136,7 @@ void EskfEstimator::processGpsSample(const sensors::gnss::GnssSample &sample) {
     const double innov_d = static_cast<double>(pos_ned[2]) - s.p[2];
     const double innov_h = std::sqrt(innov_n * innov_n + innov_e * innov_e);
     if (innov_h > 2.0 || std::abs(innov_d) > 2.0) {
-      printf("[GPS] LARGE innov N=%.2f E=%.2f D=%.2f |H|=%.2f  "
+      app_printf("[GPS] LARGE innov N=%.2f E=%.2f D=%.2f |H|=%.2f  "
              "gps_pos=[%.1f,%.1f,%.1f] eskf_pos=[%.1f,%.1f,%.1f]  "
              "hacc=%.2f vacc=%.2f\r\n",
              innov_n, innov_e, innov_d, innov_h,
@@ -2283,7 +2284,7 @@ void EskfEstimator::onTick(uint64_t now_us) {
         const uint64_t kalTs = filter_.kalmanTimestampUs();
         const uint64_t nextImu = filter_.peekNextImuTimestampPublic();
         const uint64_t pending = filter_.imuPushSeq() - filter_.imuReadSeq();
-        printf("[TICK-DBG] #%u  now=%u:%u  kalTs=%u:%u  "
+        app_printf("[TICK-DBG] #%u  now=%u:%u  kalTs=%u:%u  "
                "nextImu=%u:%u  pending=%u  lastEv=%u  totalEv=%u:%u\r\n",
                (unsigned)post_liftoff_tick,
                (unsigned)(now_us >> 32), (unsigned)now_us,

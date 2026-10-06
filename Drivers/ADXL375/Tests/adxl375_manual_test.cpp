@@ -5,7 +5,7 @@
  * ─── Setup ───────────────────────────────────────────────────────────────────
  *  1. Fill in the board-specific bindings below (I2C handle, address).
  *  2. Call ADXL375_ManualTest_Run() from main() after HAL_Init() and clock
- *     configuration, with printf retargeted to UART or SWO.
+ *     configuration, with  retargeted to UART or SWO.
  *
  * ─── Expected console output (passing) ───────────────────────────────────────
  *  [ACC] ===== ADXL375 Manual Test =====
@@ -27,6 +27,7 @@
 #include "main.h"
 #include "adxl375_manual_test.h"
 #include "../ADXL375.hpp"
+#include "app_printf.h"
 
 #include <cmath>
 #include <cstdio>
@@ -39,7 +40,7 @@ static constexpr uint8_t ADXL375_ADDR7 = 0x1D;  // ALT ADDRESS pin strapped high
 
 using namespace Drivers::ADXL375;
 
-#define ACC_LOG(fmt, ...) printf("[ACC] " fmt "\r\n", ##__VA_ARGS__)
+#define ACC_LOG(fmt, ...) app_printf("[ACC] " fmt "\r\n", ##__VA_ARGS__)
 
 static int g_pass = 0;
 static int g_fail = 0;

@@ -1,6 +1,7 @@
 #include "../ADXL375.hpp"
 #include <cstring>
 #include <cstdio>
+#include "app_printf.h"
 
 namespace Drivers { namespace ADXL375 {
 
@@ -147,23 +148,23 @@ bool ADXL375_Driver::readAxes(int16_t& x, int16_t& y, int16_t& z) {
 bool ADXL375_Driver::init() {
     adxl375_enable_dwt();
 
-    printf("[ADXL375] init: hi2c=%p addr7=0x%02X\r\n", (void*)cfg_.hi2c, cfg_.address7);
+    app_printf("[ADXL375] init: hi2c=%p addr7=0x%02X\r\n", (void*)cfg_.hi2c, cfg_.address7);
 
     if (!cfg_.hi2c) {
-        printf("[ADXL375] ERROR: hi2c is NULL!\r\n");
+        app_printf("[ADXL375] ERROR: hi2c is NULL!\r\n");
         snprintf(lastErr_, sizeof(lastErr_), "hi2c=NULL");
         return false;
     }
 
     if (!ping()) {
-        printf("[ADXL375] INIT FAILED: %s\r\n", lastErr_);
+        app_printf("[ADXL375] INIT FAILED: %s\r\n", lastErr_);
         return false;
     }
 
     // Bypass FIFO — the driver polls DATA_READY per-sample, no queuing needed.
     if (!writeReg(REG_FIFO_CTL, 0x00)) {
         statusFlags_ |= ADXL375_STATUS_CONFIG_ERROR;
-        printf("[ADXL375] INIT FAILED: %s\r\n", lastErr_);
+        app_printf("[ADXL375] INIT FAILED: %s\r\n", lastErr_);
         return false;
     }
 
@@ -171,25 +172,25 @@ bool ADXL375_Driver::init() {
     // per the datasheet's DATA_FORMAT bit table.
     if (!writeReg(REG_DATA_FORMAT, DATA_FORMAT_DEFAULT)) {
         statusFlags_ |= ADXL375_STATUS_CONFIG_ERROR;
-        printf("[ADXL375] INIT FAILED: %s\r\n", lastErr_);
+        app_printf("[ADXL375] INIT FAILED: %s\r\n", lastErr_);
         return false;
     }
 
     configure(cfg_.rate);
     if (statusFlags_ & ADXL375_STATUS_CONFIG_ERROR) {
-        printf("[ADXL375] INIT FAILED: %s\r\n", lastErr_);
+        app_printf("[ADXL375] INIT FAILED: %s\r\n", lastErr_);
         return false;
     }
 
     // Enter measurement mode (POR default is standby).
     if (!writeReg(REG_POWER_CTL, POWER_CTL_MEASURE)) {
         statusFlags_ |= ADXL375_STATUS_CONFIG_ERROR;
-        printf("[ADXL375] INIT FAILED: %s\r\n", lastErr_);
+        app_printf("[ADXL375] INIT FAILED: %s\r\n", lastErr_);
         return false;
     }
 
     healthy_ = true;
-    printf("[ADXL375] init complete, healthy=true\r\n");
+    app_printf("[ADXL375] init complete, healthy=true\r\n");
     return true;
 }
 
@@ -373,7 +374,7 @@ bool ADXL375_Driver::calibrate(float refX_g, float refY_g, float refZ_g, uint8_t
            && writeReg(REG_OFSY, static_cast<uint8_t>(codeY))
            && writeReg(REG_OFSZ, static_cast<uint8_t>(codeZ));
 
-    printf("[ADXL375] calibrate: measured=(%.3f,%.3f,%.3f)g target=(%.3f,%.3f,%.3f)g "
+    app_printf("[ADXL375] calibrate: measured=(%.3f,%.3f,%.3f)g target=(%.3f,%.3f,%.3f)g "
            "samples=%u/%u -> OFS=(%d,%d,%d) %s\r\n",
            (double)measX, (double)measY, (double)measZ,
            (double)refX_g, (double)refY_g, (double)refZ_g,

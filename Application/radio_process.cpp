@@ -1,5 +1,6 @@
 #include "Core/Inc/main.h"
 #include "Application/app_timebase.h"
+#include "Application/app_printf.h"
 #include "Modules/rx_radio_module.hpp"
 #include "Modules/tx_radio_module.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Common.h"
@@ -31,12 +32,12 @@ void handleRxCommand(void* data) noexcept {
 	// letting it fall through to the "close" case and move a valve.
 	if (packet->order_id == AV_CMD_DPR_LOX || packet->order_id == AV_CMD_DPR_FUEL) {
 		if (packet->order_value > 90) {
-			printf("[RADIO] bad order_value 0x%02X for id %u, ignored\r\n",
+			app_printf("[RADIO] bad order_value 0x%02X for id %u, ignored\r\n",
 					packet->order_value, packet->order_id);
 			return;
 		}
 	} else if (packet->order_value != 1 && packet->order_value != 0) {
-		printf("[RADIO] bad order_value 0x%02X for id %u, ignored\r\n",
+		app_printf("[RADIO] bad order_value 0x%02X for id %u, ignored\r\n",
 				packet->order_value, packet->order_id);
 		return;
 	}
@@ -97,20 +98,20 @@ void handleRxCommand(void* data) noexcept {
 		break ;
 
 	default:
-		printf("[RADIO] unhandled order_id %u\r\n", packet->order_id);
+		app_printf("[RADIO] unhandled order_id %u\r\n", packet->order_id);
 		break;
 	}
 }
 
 static void onPacketReceived(uint8_t packetId, uint8_t *payload, uint32_t length) {
-	printf("Decoded packet: id=0x%02X len=%lu payload=[%s]\r\n", packetId,
+	app_printf("Decoded packet: id=0x%02X len=%lu payload=[%s]\r\n", packetId,
 			(unsigned long) length, (char*) payload);
 
 
 	if (packetId == GSC_CMD && length == av_uplink_size) {
 		handleRxCommand((av_uplink_t*)payload);
 	} else {
-		printf("Decode Error: Wrong packet id");
+		app_printf("Decode Error: Wrong packet id");
 	}
 }
 
@@ -157,12 +158,12 @@ void simple_radio_init(void) {
 	SX127X_hw_init(&SX127X_RX_hw);
 	SX127X_hw_Reset(&SX127X_RX_hw);
 
-	printf("Rx module init.\n");
+	app_printf("Rx module init.\n");
 	rx_module.init();
-	printf("Tx module init.\n");
-	printf("driver: %p\n", &tx);
+	app_printf("Tx module init.\n");
+	app_printf("driver: %p\n", &tx);
 	tx_module.init();
-	printf("Done.\n");
+	app_printf("Done.\n");
 }
 
 void simple_radio_tick(void) {

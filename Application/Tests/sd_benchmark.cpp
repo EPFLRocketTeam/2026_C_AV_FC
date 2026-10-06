@@ -6,6 +6,7 @@ extern "C" {
 }
 
 #include "plume_driver.hpp"
+#include "app_printf.h"
 
 // ---------------------------------------------------------------------------
 // SD Card Benchmark — measures raw HAL_SD_WriteBlocks latency
@@ -81,8 +82,8 @@ static void report_percentiles(const char* label, const uint32_t* sorted, uint32
     uint32_t pmax = sorted[n - 1];
     uint32_t avg  = (uint32_t)(sum / n);
 
-    printf("[SD-BENCH] %s (n=%lu):\r\n", label, (unsigned long)n);
-    printf("  min=%lu  avg=%lu  p50=%lu  p95=%lu  p99=%lu  p99.9=%lu  max=%lu  (us)\r\n",
+    app_printf("[SD-BENCH] %s (n=%lu):\r\n", label, (unsigned long)n);
+    app_printf("  min=%lu  avg=%lu  p50=%lu  p95=%lu  p99=%lu  p99.9=%lu  max=%lu  (us)\r\n",
            (unsigned long)pmin, (unsigned long)avg,
            (unsigned long)p50, (unsigned long)p95,
            (unsigned long)p99, (unsigned long)p999,
@@ -124,7 +125,7 @@ static void fill_pattern(uint8_t* buf, uint32_t len, uint32_t seed) {
 // Phase 1: Single-block (512B) sequential writes
 // ---------------------------------------------------------------------------
 static void bench_single_block(SD_HandleTypeDef* hsd) {
-    printf("[SD-BENCH] Phase 1: %lu single-block (512B) sequential writes...\r\n",
+    app_printf("[SD-BENCH] Phase 1: %lu single-block (512B) sequential writes...\r\n",
            (unsigned long)kSingleBlockCount);
 
     fill_pattern(g_buf_512, 512, 0xDEADBEEF);
@@ -151,7 +152,7 @@ static void bench_single_block(SD_HandleTypeDef* hsd) {
             errors++;
             g_latencies[i] = 0;
             if (errors <= 5) {
-                printf("[SD-BENCH]   Write[%lu] err: HAL=%d state=%u err=0x%lX\r\n",
+                app_printf("[SD-BENCH]   Write[%lu] err: HAL=%d state=%u err=0x%lX\r\n",
                        (unsigned long)i, (int)st,
                        (unsigned)hsd->State, (unsigned long)hsd->ErrorCode);
             }
@@ -164,7 +165,7 @@ static void bench_single_block(SD_HandleTypeDef* hsd) {
     uint32_t total_us = cycles_to_us(total_end - total_start);
 
     if (errors > 0) {
-        printf("[SD-BENCH]   ERRORS: %lu / %lu writes failed!\r\n",
+        app_printf("[SD-BENCH]   ERRORS: %lu / %lu writes failed!\r\n",
                (unsigned long)errors, (unsigned long)kSingleBlockCount);
     }
 
@@ -174,7 +175,7 @@ static void bench_single_block(SD_HandleTypeDef* hsd) {
     if (total_us > 0) {
         throughput_kBs = (uint32_t)((uint64_t)total_bytes * 1000000ull / total_us / 1024ull);
     }
-    printf("[SD-BENCH]   Total: %lu us for %lu KB => %lu KB/s\r\n",
+    app_printf("[SD-BENCH]   Total: %lu us for %lu KB => %lu KB/s\r\n",
            (unsigned long)total_us,
            (unsigned long)(total_bytes / 1024),
            (unsigned long)throughput_kBs);
@@ -190,7 +191,7 @@ static void bench_multi_block_generic(SD_HandleTypeDef* hsd, uint8_t* buf,
                                        uint32_t blocks_per_write, uint32_t num_writes,
                                        uint32_t base_block, const char* label) {
     uint32_t buf_size = blocks_per_write * 512u;
-    printf("[SD-BENCH] %s: %lu × %lu-block (%lu KB) sequential writes...\r\n",
+    app_printf("[SD-BENCH] %s: %lu × %lu-block (%lu KB) sequential writes...\r\n",
            label, (unsigned long)num_writes,
            (unsigned long)blocks_per_write,
            (unsigned long)(buf_size / 1024));
@@ -228,7 +229,7 @@ static void bench_multi_block_generic(SD_HandleTypeDef* hsd, uint8_t* buf,
     uint32_t total_us = cycles_to_us(total_end - total_start);
 
     if (errors > 0) {
-        printf("[SD-BENCH]   ERRORS: %lu / %lu writes failed!\r\n",
+        app_printf("[SD-BENCH]   ERRORS: %lu / %lu writes failed!\r\n",
                (unsigned long)errors, (unsigned long)num_writes);
     }
 
@@ -237,7 +238,7 @@ static void bench_multi_block_generic(SD_HandleTypeDef* hsd, uint8_t* buf,
     if (total_us > 0) {
         throughput_kBs = (uint32_t)((uint64_t)total_bytes * 1000000ull / total_us / 1024ull);
     }
-    printf("[SD-BENCH]   Total: %lu us for %lu KB => %lu KB/s\r\n",
+    app_printf("[SD-BENCH]   Total: %lu us for %lu KB => %lu KB/s\r\n",
            (unsigned long)total_us,
            (unsigned long)(total_bytes / 1024),
            (unsigned long)throughput_kBs);
@@ -254,7 +255,7 @@ static void bench_multi_block_generic(SD_HandleTypeDef* hsd, uint8_t* buf,
 // Measures behavior over time to catch GC stalls
 // ---------------------------------------------------------------------------
 static void bench_sustained(SD_HandleTypeDef* hsd) {
-    printf("[SD-BENCH] Phase 3: Sustained single-block writes for ~10 seconds...\r\n");
+    app_printf("[SD-BENCH] Phase 3: Sustained single-block writes for ~10 seconds...\r\n");
 
     fill_pattern(g_buf_512, 512, 0xB00B1E55);
 
@@ -294,11 +295,11 @@ static void bench_sustained(SD_HandleTypeDef* hsd) {
     uint32_t total_end = dwt_cycles();
     uint32_t total_us = cycles_to_us(total_end - total_start);
 
-    printf("[SD-BENCH]   Wrote %lu blocks in %lu us\r\n",
+    app_printf("[SD-BENCH]   Wrote %lu blocks in %lu us\r\n",
            (unsigned long)count, (unsigned long)total_us);
 
     if (errors > 0) {
-        printf("[SD-BENCH]   ERRORS: %lu / %lu writes failed!\r\n",
+        app_printf("[SD-BENCH]   ERRORS: %lu / %lu writes failed!\r\n",
                (unsigned long)errors, (unsigned long)count);
     }
 
@@ -307,7 +308,7 @@ static void bench_sustained(SD_HandleTypeDef* hsd) {
     if (total_us > 0) {
         throughput_kBs = (uint32_t)((uint64_t)total_bytes * 1000000ull / total_us / 1024ull);
     }
-    printf("[SD-BENCH]   Throughput: %lu KB/s (%lu KB total)\r\n",
+    app_printf("[SD-BENCH]   Throughput: %lu KB/s (%lu KB total)\r\n",
            (unsigned long)throughput_kBs,
            (unsigned long)(total_bytes / 1024));
 
@@ -316,12 +317,12 @@ static void bench_sustained(SD_HandleTypeDef* hsd) {
         report_percentiles("Sustained 512B", g_latencies, count);
 
         // Also print worst-10 latencies
-        printf("[SD-BENCH]   Worst 10 latencies (us):");
+        app_printf("[SD-BENCH]   Worst 10 latencies (us):");
         uint32_t start = count > 10 ? count - 10 : 0;
         for (uint32_t i = start; i < count; i++) {
-            printf(" %lu", (unsigned long)g_latencies[i]);
+            app_printf(" %lu", (unsigned long)g_latencies[i]);
         }
-        printf("\r\n");
+        app_printf("\r\n");
     }
 }
 
@@ -334,22 +335,22 @@ static void bench_sustained(SD_HandleTypeDef* hsd) {
 static uint8_t g_plume_arena[64 * 1024] __attribute__((aligned(32)));
 
 static void bench_plume_e2e(SD_HandleTypeDef* hsd) {
-    printf("[SD-BENCH] Phase 5: Plume end-to-end write+tick test...\r\n");
+    app_printf("[SD-BENCH] Phase 5: Plume end-to-end write+tick test...\r\n");
 
     SDCardInterface plume;
     if (!plume.init_sd_card(hsd, g_plume_arena, sizeof(g_plume_arena))) {
-        printf("[SD-BENCH]   Plume init FAILED!\r\n");
+        app_printf("[SD-BENCH]   Plume init FAILED!\r\n");
         return;
     }
-    printf("[SD-BENCH]   Plume init OK. Files remaining=%lu, Disk remaining=%lu bytes\r\n",
+    app_printf("[SD-BENCH]   Plume init OK. Files remaining=%lu, Disk remaining=%lu bytes\r\n",
            (unsigned long)plume.number_files_remaining(),
            (unsigned long)plume.disk_size_remaining());
 
     if (!plume.open_file()) {
-        printf("[SD-BENCH]   Plume open_file FAILED!\r\n");
+        app_printf("[SD-BENCH]   Plume open_file FAILED!\r\n");
         return;
     }
-    printf("[SD-BENCH]   Plume file opened.\r\n");
+    app_printf("[SD-BENCH]   Plume file opened.\r\n");
 
     // Write test data: simulate flight DataDump writes
     // Each write is 504 bytes (512 - 8 byte header) per block usable
@@ -396,12 +397,12 @@ static void bench_plume_e2e(SD_HandleTypeDef* hsd) {
                 total_bytes_written += sizeof(payload);
                 writes_retry++;
             } else {
-                printf("[SD-BENCH]   Write %lu failed after retries: %u\r\n",
+                app_printf("[SD-BENCH]   Write %lu failed after retries: %u\r\n",
                        (unsigned long)i, wr);
                 break;
             }
         } else {
-            printf("[SD-BENCH]   Write %lu failed: %u\r\n", (unsigned long)i, wr);
+            app_printf("[SD-BENCH]   Write %lu failed: %u\r\n", (unsigned long)i, wr);
             break;
         }
 
@@ -437,22 +438,22 @@ static void bench_plume_e2e(SD_HandleTypeDef* hsd) {
         throughput_kBs = (uint32_t)((uint64_t)total_bytes_written * 1000000ull / total_us / 1024ull);
     }
 
-    printf("[SD-BENCH]   Writes: %lu OK (%lu retried), %lu bytes total\r\n",
+    app_printf("[SD-BENCH]   Writes: %lu OK (%lu retried), %lu bytes total\r\n",
            (unsigned long)writes_ok, (unsigned long)writes_retry,
            (unsigned long)total_bytes_written);
-    printf("[SD-BENCH]   Ticks: %lu total, %lu flushed\r\n",
+    app_printf("[SD-BENCH]   Ticks: %lu total, %lu flushed\r\n",
            (unsigned long)tick_calls, (unsigned long)tick_flushed);
-    printf("[SD-BENCH]   Time: %lu us => %lu KB/s\r\n",
+    app_printf("[SD-BENCH]   Time: %lu us => %lu KB/s\r\n",
            (unsigned long)total_us, (unsigned long)throughput_kBs);
 
     if (drain_limit == 0) {
-        printf("[SD-BENCH]   WARNING: drain did not complete! status=%u\r\n", drain_status);
+        app_printf("[SD-BENCH]   WARNING: drain did not complete! status=%u\r\n", drain_status);
     } else {
-        printf("[SD-BENCH]   Ring buffer fully drained.\r\n");
+        app_printf("[SD-BENCH]   Ring buffer fully drained.\r\n");
     }
 
     // Phase 5b: Measure tick latency (time per tick call)
-    printf("[SD-BENCH] Phase 5b: Plume tick latency profile...\r\n");
+    app_printf("[SD-BENCH] Phase 5b: Plume tick latency profile...\r\n");
     constexpr uint32_t kTickLatencyWrites = 2048;
     uint32_t tick_latency_count = 0;
 
@@ -500,7 +501,7 @@ static void bench_dma_multi_block(SD_HandleTypeDef* hsd, uint8_t* buf,
                                    uint32_t blocks_per_write, uint32_t num_writes,
                                    uint32_t base_block, const char* label) {
     uint32_t buf_size = blocks_per_write * 512u;
-    printf("[SD-BENCH] %s (DMA): %lu × %lu-block (%lu KB) writes...\r\n",
+    app_printf("[SD-BENCH] %s (DMA): %lu × %lu-block (%lu KB) writes...\r\n",
            label, (unsigned long)num_writes,
            (unsigned long)blocks_per_write,
            (unsigned long)(buf_size / 1024));
@@ -543,7 +544,7 @@ static void bench_dma_multi_block(SD_HandleTypeDef* hsd, uint8_t* buf,
         while (!g_sd_dma_complete && !g_sd_dma_error) {
             if (HAL_GetTick() > timeout_tick) {
                 g_sd_dma_error = 1;
-                printf("[SD-BENCH]   DMA timeout! state=%u err=0x%lX\r\n",
+                app_printf("[SD-BENCH]   DMA timeout! state=%u err=0x%lX\r\n",
                        (unsigned)hsd->State, (unsigned long)hsd->ErrorCode);
                 break;
             }
@@ -565,7 +566,7 @@ static void bench_dma_multi_block(SD_HandleTypeDef* hsd, uint8_t* buf,
     uint32_t cpu_free_us = cycles_to_us(total_cpu_free_cycles);
 
     if (errors > 0) {
-        printf("[SD-BENCH]   ERRORS: %lu / %lu writes failed!\r\n",
+        app_printf("[SD-BENCH]   ERRORS: %lu / %lu writes failed!\r\n",
                (unsigned long)errors, (unsigned long)num_writes);
     }
 
@@ -574,11 +575,11 @@ static void bench_dma_multi_block(SD_HandleTypeDef* hsd, uint8_t* buf,
     if (total_us > 0) {
         throughput_kBs = (uint32_t)((uint64_t)total_bytes * 1000000ull / total_us / 1024ull);
     }
-    printf("[SD-BENCH]   Total: %lu us for %lu KB => %lu KB/s\r\n",
+    app_printf("[SD-BENCH]   Total: %lu us for %lu KB => %lu KB/s\r\n",
            (unsigned long)total_us,
            (unsigned long)(total_bytes / 1024),
            (unsigned long)throughput_kBs);
-    printf("[SD-BENCH]   CPU free: %lu us / %lu us total (%lu%%)\r\n",
+    app_printf("[SD-BENCH]   CPU free: %lu us / %lu us total (%lu%%)\r\n",
            (unsigned long)cpu_free_us, (unsigned long)total_us,
            (unsigned long)(total_us > 0 ? cpu_free_us * 100 / total_us : 0));
 
@@ -592,40 +593,40 @@ static void bench_dma_multi_block(SD_HandleTypeDef* hsd, uint8_t* buf,
 // Entry point
 // ---------------------------------------------------------------------------
 extern "C" void sd_benchmark_run(SD_HandleTypeDef* hsd) {
-    printf("\r\n");
-    printf("========================================\r\n");
-    printf("  SD Card Write Benchmark\r\n");
-    printf("========================================\r\n");
+    app_printf("\r\n");
+    app_printf("========================================\r\n");
+    app_printf("  SD Card Write Benchmark\r\n");
+    app_printf("========================================\r\n");
 
     if (hsd == NULL || hsd->Instance == NULL) {
-        printf("[SD-BENCH] ERROR: NULL SD handle!\r\n");
+        app_printf("[SD-BENCH] ERROR: NULL SD handle!\r\n");
         return;
     }
 
     if (hsd->State != HAL_SD_STATE_READY) {
-        printf("[SD-BENCH] ERROR: SD not ready (state=%u)\r\n", (unsigned)hsd->State);
+        app_printf("[SD-BENCH] ERROR: SD not ready (state=%u)\r\n", (unsigned)hsd->State);
         return;
     }
 
     // Print card info
-    printf("[SD-BENCH] Card info:\r\n");
-    printf("  BlockNbr    = %lu\r\n", (unsigned long)hsd->SdCard.BlockNbr);
-    printf("  BlockSize   = %lu\r\n", (unsigned long)hsd->SdCard.BlockSize);
-    printf("  LogBlockNbr = %lu\r\n", (unsigned long)hsd->SdCard.LogBlockNbr);
-    printf("  LogBlockSz  = %lu\r\n", (unsigned long)hsd->SdCard.LogBlockSize);
-    printf("  CardType    = %lu\r\n", (unsigned long)hsd->SdCard.CardType);
-    printf("  CardSpeed   = %lu\r\n", (unsigned long)hsd->SdCard.CardSpeed);
-    printf("  Class       = %lu\r\n", (unsigned long)hsd->SdCard.Class);
+    app_printf("[SD-BENCH] Card info:\r\n");
+    app_printf("  BlockNbr    = %lu\r\n", (unsigned long)hsd->SdCard.BlockNbr);
+    app_printf("  BlockSize   = %lu\r\n", (unsigned long)hsd->SdCard.BlockSize);
+    app_printf("  LogBlockNbr = %lu\r\n", (unsigned long)hsd->SdCard.LogBlockNbr);
+    app_printf("  LogBlockSz  = %lu\r\n", (unsigned long)hsd->SdCard.LogBlockSize);
+    app_printf("  CardType    = %lu\r\n", (unsigned long)hsd->SdCard.CardType);
+    app_printf("  CardSpeed   = %lu\r\n", (unsigned long)hsd->SdCard.CardSpeed);
+    app_printf("  Class       = %lu\r\n", (unsigned long)hsd->SdCard.Class);
     uint32_t cap_mb = (uint32_t)((uint64_t)hsd->SdCard.LogBlockNbr *
                                   hsd->SdCard.LogBlockSize / (1024 * 1024));
-    printf("  Capacity    = %lu MB\r\n", (unsigned long)cap_mb);
-    printf("  ClockDiv    = %lu\r\n", (unsigned long)hsd->Init.ClockDiv);
-    printf("  BusWide     = %s\r\n",
+    app_printf("  Capacity    = %lu MB\r\n", (unsigned long)cap_mb);
+    app_printf("  ClockDiv    = %lu\r\n", (unsigned long)hsd->Init.ClockDiv);
+    app_printf("  BusWide     = %s\r\n",
            hsd->Init.BusWide == SDMMC_BUS_WIDE_4B ? "4-bit" :
            hsd->Init.BusWide == SDMMC_BUS_WIDE_1B ? "1-bit" : "8-bit");
-    printf("  SDMMC clock ~ %lu MHz\r\n",
+    app_printf("  SDMMC clock ~ %lu MHz\r\n",
            (unsigned long)(200 / (hsd->Init.ClockDiv * 2)));
-    printf("  SD State    = %u\r\n", (unsigned)hsd->State);
+    app_printf("  SD State    = %u\r\n", (unsigned)hsd->State);
 
     // Check clock configuration
     {
@@ -634,15 +635,15 @@ extern "C" void sd_benchmark_run(SD_HandleTypeDef* hsd) {
         uint32_t pll2rdy = (rcc_cr >> 27) & 1;
         uint32_t d1ccipr = RCC->D1CCIPR;
         uint32_t sdmmcsel = (d1ccipr >> 16) & 1;
-        printf("  PLL2 ON=%lu RDY=%lu  SDMMCSEL=%lu (0=PLL1q, 1=PLL2r)\r\n",
+        app_printf("  PLL2 ON=%lu RDY=%lu  SDMMCSEL=%lu (0=PLL1q, 1=PLL2r)\r\n",
                (unsigned long)pll2on, (unsigned long)pll2rdy, (unsigned long)sdmmcsel);
 
         // Check SDMMC1 peripheral clock
         uint32_t ahb3enr = RCC->AHB3ENR;
         uint32_t sdmmc1en = (ahb3enr >> 16) & 1;
-        printf("  SDMMC1 CLK EN=%lu\r\n", (unsigned long)sdmmc1en);
+        app_printf("  SDMMC1 CLK EN=%lu\r\n", (unsigned long)sdmmc1en);
     }
-    printf("\r\n");
+    app_printf("\r\n");
 
     // Init DWT
     dwt_init();
@@ -650,84 +651,84 @@ extern "C" void sd_benchmark_run(SD_HandleTypeDef* hsd) {
     // Pre-flight: single test write to verify SD card is writable
     {
         fill_pattern(g_buf_512, 512, 0x12345678);
-        printf("[SD-BENCH] Pre-flight: writing 1 block to block %lu...\r\n",
+        app_printf("[SD-BENCH] Pre-flight: writing 1 block to block %lu...\r\n",
                (unsigned long)kStartBlock);
-        printf("[SD-BENCH]   buf addr=0x%08lX (should be 0x24xxxxxx for AXI SRAM)\r\n",
+        app_printf("[SD-BENCH]   buf addr=0x%08lX (should be 0x24xxxxxx for AXI SRAM)\r\n",
                (unsigned long)(uintptr_t)g_buf_512);
 
         // Wait for card to be ready
         HAL_SD_CardStateTypeDef cardState = HAL_SD_GetCardState(hsd);
-        printf("[SD-BENCH]   Card state before write: %lu\r\n", (unsigned long)cardState);
+        app_printf("[SD-BENCH]   Card state before write: %lu\r\n", (unsigned long)cardState);
 
         HAL_StatusTypeDef st = HAL_SD_WriteBlocks(hsd, g_buf_512, kStartBlock, 1, 5000);
-        printf("[SD-BENCH]   Result: HAL=%d state=%u err=0x%lX\r\n",
+        app_printf("[SD-BENCH]   Result: HAL=%d state=%u err=0x%lX\r\n",
                (int)st, (unsigned)hsd->State, (unsigned long)hsd->ErrorCode);
-        printf("[SD-BENCH]   Result: HAL=%d state=%u err=0x%lX\r\n",
+        app_printf("[SD-BENCH]   Result: HAL=%d state=%u err=0x%lX\r\n",
                (int)st, (unsigned)hsd->State, (unsigned long)hsd->ErrorCode);
         if (st != HAL_OK) {
-            printf("[SD-BENCH]   Write failed! Aborting benchmark.\r\n");
+            app_printf("[SD-BENCH]   Write failed! Aborting benchmark.\r\n");
             // Try to read-back the state
             HAL_SD_CardStatusTypeDef cardStatus;
             HAL_StatusTypeDef st2 = HAL_SD_GetCardStatus(hsd, &cardStatus);
             if (st2 == HAL_OK) {
-                printf("[SD-BENCH]   CardStatus: DataBusWidth=%u SpeedClass=%u\r\n",
+                app_printf("[SD-BENCH]   CardStatus: DataBusWidth=%u SpeedClass=%u\r\n",
                        cardStatus.DataBusWidth, cardStatus.SpeedClass);
             }
             return;
         }
-        printf("[SD-BENCH]   Pre-flight write OK!\r\n");
+        app_printf("[SD-BENCH]   Pre-flight write OK!\r\n");
 
         // Verify: read it back
         uint8_t readback[512] __attribute__((aligned(32)));
         st = HAL_SD_ReadBlocks(hsd, readback, kStartBlock, 1, 5000);
-        printf("[SD-BENCH]   Read-back: HAL=%d first4=[%02X %02X %02X %02X]\r\n",
+        app_printf("[SD-BENCH]   Read-back: HAL=%d first4=[%02X %02X %02X %02X]\r\n",
                (int)st, readback[0], readback[1], readback[2], readback[3]);
     }
-    printf("\r\n");
+    app_printf("\r\n");
 
     // Run phases
 #if 1  // Set to 1 to run raw SD phases, 0 to only run Plume test
     bench_single_block(hsd);
-    printf("\r\n");
+    app_printf("\r\n");
 
     // Phase 2: 8-block (4KB) writes
     uint32_t mb_base = kStartBlock + kSingleBlockCount + 100;
     bench_multi_block_generic(hsd, g_buf_4k, 8, 512, mb_base, "Phase 2");
-    printf("\r\n");
+    app_printf("\r\n");
 
     // Phase 2b: 16-block (8KB) writes
     mb_base += 512 * 8 + 100;
     bench_multi_block_generic(hsd, g_buf_8k, 16, 256, mb_base, "Phase 2b");
-    printf("\r\n");
+    app_printf("\r\n");
 
     // Phase 2c: 32-block (16KB) writes
     mb_base += 256 * 16 + 100;
     bench_multi_block_generic(hsd, g_buf_16k, 32, 128, mb_base, "Phase 2c");
-    printf("\r\n");
+    app_printf("\r\n");
 
     bench_sustained(hsd);
-    printf("\r\n");
+    app_printf("\r\n");
 
     // Phase 4: DMA multi-block writes
-    printf("[SD-BENCH] Starting DMA phases...\r\n");
+    app_printf("[SD-BENCH] Starting DMA phases...\r\n");
     uint32_t dma_base = mb_base + 256 * 32 + 100;
     bench_dma_multi_block(hsd, g_buf_4k, 8, 512, dma_base, "Phase 4a");
-    printf("\r\n");
+    app_printf("\r\n");
 
     dma_base += 512 * 8 + 100;
     bench_dma_multi_block(hsd, g_buf_8k, 16, 256, dma_base, "Phase 4b");
-    printf("\r\n");
+    app_printf("\r\n");
 
     dma_base += 256 * 16 + 100;
     bench_dma_multi_block(hsd, g_buf_16k, 32, 128, dma_base, "Phase 4c");
 
-    printf("\r\n");
+    app_printf("\r\n");
 #endif
 
     // Phase 5: Plume end-to-end test
     bench_plume_e2e(hsd);
 
-    printf("\r\n========================================\r\n");
-    printf("  Benchmark complete\r\n");
-    printf("========================================\r\n");
+    app_printf("\r\n========================================\r\n");
+    app_printf("  Benchmark complete\r\n");
+    app_printf("========================================\r\n");
 }

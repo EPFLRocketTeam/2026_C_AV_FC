@@ -6,11 +6,12 @@ extern "C" {
 }
 
 #include "../../buzzer.hpp"
+#include "app_printf.h"
 
 void manual_test_buzzer_set_buzzer (bool status) {
     HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, status ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
-    printf("[BUZZER] Set at time %lu: %d\r\n", HAL_GetTick(), (int) status);
+    app_printf("[BUZZER] Set at time %lu: %d\r\n", HAL_GetTick(), (int) status);
 }
 void manual_test_buzzer () {
     bool started = false;
