@@ -911,3 +911,10 @@ extern "C" void app_super_loop_iterate(void) {
     kalman_note_main_loop_iteration_us(static_cast<uint32_t>(elapsed_us));
     g_metrics_tracker.recordLoop(static_cast<uint32_t>(elapsed_us));
 }
+
+extern "C" void app_on_state_becomes_init () {
+    g_sd_logger.setLogRate(false);
+}
+extern "C" void app_on_state_becomes_armed () {
+    g_sd_logger.setLogRate(true);
+}

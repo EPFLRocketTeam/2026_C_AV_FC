@@ -73,8 +73,12 @@ public:
     void logImuPipeline(const eskf::ImuPipelineSnapshot& snapshot) override;
     void logImuDynamics(const eskf::ImuDynamicsSnapshot& snapshot) override;
 
+    void setLogRate (bool high_rate_enabled_);
+
 private:
     SDCardInterface* sd_ = nullptr;
+
+    bool high_rate_enabled_ = false;
 
     // SD health tracking
     uint32_t bytes_written_ = 0;
