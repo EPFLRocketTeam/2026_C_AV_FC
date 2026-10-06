@@ -100,8 +100,11 @@ uint8_t plume_stm32_read_block(SD_HandleTypeDef* hsd, struct plume_context* cont
     (void)context;
     uint32_t start_tick = HAL_GetTick();
 
+    app_printf("PUPD C[8..11]=0x%02X (want 0x55)  D2=%u (want 1)\r\n",
+           (unsigned)((GPIOC->PUPDR >> 16) & 0xFF), (unsigned)((GPIOD->PUPDR >> 4) & 3));
+
     app_printf("[PLUME SD] [INFO] === Starting Blocking DMA Read Operation ===\r\n");
-    app_printf("[PLUME SD] [DEBUG] Target Block ID : %llu (0x%llX)\r\n", block_id, block_id);
+    app_printf("[PLUME SD] [DEBUG] Target Block ID : %lu (0x%lX)\r\n", (uint32_t) block_id, (uint32_t) block_id);
     app_printf("[PLUME SD] [DEBUG] Destination Buf : 0x%08lX | Bounce Buf: 0x%08lX\r\n", 
                (uint32_t)buffer, (uint32_t)s_dma_bounce);
 
@@ -148,8 +151,16 @@ uint8_t plume_stm32_read_block(SD_HandleTypeDef* hsd, struct plume_context* cont
                 }
             }
 
-            app_printf("[PLUME SD] [ERR] DMA Transfer Timeout! HAL State: %lu | SDMMC_STA: 0x%08lX\r\n", 
+            app_printf("[PLUME SD] [ERR] DMA Transfer Timeout! HAL State: %u | SDMMC_STA: 0x%08lX\r\n", 
                        (uint32_t)hsd->State, hsd->Instance->STA);
+            app_printf("State=%u Ctx=0x%lX Err=0x%lX MASK=0x%08lX DCOUNT=%u IDMACTRL=0x%lX\r\n",
+                (unsigned long)hsd->State, (unsigned long)hsd->Context, (unsigned long)hsd->ErrorCode,
+                (unsigned long)hsd->Instance->MASK, (unsigned long)hsd->Instance->DCOUNT,
+                (unsigned long)hsd->Instance->IDMACTRL);
+            app_printf("NVIC en=%u pend=%u prio=%u BASEPRI=0x%lX PRIMASK=%u IPSR=%u\r\n",
+                    (unsigned long)NVIC_GetEnableIRQ(SDMMC1_IRQn), (unsigned long)NVIC_GetPendingIRQ(SDMMC1_IRQn),
+                    (unsigned long)NVIC_GetPriority(SDMMC1_IRQn), (unsigned long)__get_BASEPRI(),
+                    (unsigned long)__get_PRIMASK(), (unsigned long)(__get_IPSR() & 0x1FF));
             HAL_SD_Abort(hsd);
             __HAL_SD_CLEAR_FLAG(hsd, SDMMC_STATIC_FLAGS);
             return -45;
@@ -396,6 +407,12 @@ bool SDCardInterface::init_sd_card (
     	app_printf("Failure of init: %u\r\n", err_code);
     }
 
+    app_printf("Finished Init of SD Card. \n");
+    app_printf("  Total Number of Blocks: %llu\n", context.disk_info.number_blocks);
+    app_printf("  Next valid Block: %llu\n", context.next_valid_block);
+    app_printf("  Block Size: %llu\n", context.disk_info.block_size);
+    app_printf("  Remaining disk size: %llu\n", disk_size_remaining());
+
     return err_code == PLUME_OK;
 }
 bool SDCardInterface::open_file () {
@@ -405,7 +422,7 @@ bool SDCardInterface::open_file () {
 size_t SDCardInterface::number_files_remaining () {
     return context.fat_size - context.next_file_block;
 }
-size_t SDCardInterface::disk_size_remaining () {
+uint64_t SDCardInterface::disk_size_remaining () {
     return (context.disk_info.number_blocks - context.next_valid_block) * context.disk_info.block_size;
 }
 

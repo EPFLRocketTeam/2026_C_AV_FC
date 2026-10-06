@@ -49,10 +49,10 @@ void cameraSendMessage(uint16_t messageId, uint8_t length, const uint8_t* data) 
         uint32_t state      = HAL_FDCAN_GetState(&hfdcan2);
         uint32_t fifo_fill  = HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan2);
 
-        app_printf("[PL CAN] TX failed (Status: %d, State: 0x%X, Error: 0x%X, Free FIFO: %d)\r\n",
+        /*app_printf("[PL CAN] TX failed (Status: %d, State: 0x%X, Error: 0x%X, Free FIFO: %d)\r\n",
               status, state, error_code, fifo_fill);
-        app_printf("[PL CAN] Message Id = %d\n", (int) messageId);
-    } else app_printf("[PL CAN] TX Sent to queue.\r\n");
+        app_printf("[PL CAN] Message Id = %d\n", (int) messageId);*/
+    }// else app_printf("[PL CAN] TX Sent to queue.\r\n");
 }
 
 bool cameraPollMessage() {

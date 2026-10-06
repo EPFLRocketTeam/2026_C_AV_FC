@@ -130,15 +130,15 @@ void CameraDriver::init (
     camera::SendMessage sendMessage,
     camera::GetTickMs   getTick
 ) {
-    app_printf("%p %p %p\n", pollMessage, sendMessage, getTick);
+    //app_printf("%p %p %p\n", pollMessage, sendMessage, getTick);
     if (!pollMessage || !sendMessage || !getTick) {
-        app_printf("Failed init.\n");
+        //app_printf("Failed init.\n");
         while (1) {
             continue ;
         }
         return;
     }
-    app_printf("Did init .\n");
+    //app_printf("Did init .\n");
 
     did_init_ = true;
 
@@ -147,7 +147,7 @@ void CameraDriver::init (
     getTick_     = getTick;
 }
 void CameraDriver::tick () {
-    app_printf("Did init %d\n", (int) did_init_);
+    // app_printf("Did init %d\n", (int) did_init_);
     if (!did_init_) return ;
 
     uint32_t numberPolls = 0;
@@ -155,7 +155,7 @@ void CameraDriver::tick () {
         numberPolls ++;
     }
 
-    app_printf("Is synchronized: %d\n", (int) isSynchronized());
+    // app_printf("Is synchronized: %d\n", (int) isSynchronized());
     if (isSynchronized()) return ;
 
     switch (stateImposed_) {

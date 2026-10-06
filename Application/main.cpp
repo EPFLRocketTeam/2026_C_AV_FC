@@ -103,9 +103,9 @@ FCTemperatureModule fcTemperatureModule;
 // Enable with -DFAKE_GNSS_ENABLE=1.  Injects synthetic 3D-fix data at 16 Hz
 // directly into the gpsData ring buffer, exercising the full GNSS→ESKF→rewind
 // pipeline without a real GPS receiver.
-#ifndef FAKE_GNSS_ENABLE
-#define FAKE_GNSS_ENABLE 1
-#endif
+// #ifndef FAKE_GNSS_ENABLE
+// #define FAKE_GNSS_ENABLE 1
+// #endif
 
 #if FAKE_GNSS_ENABLE
 namespace {
@@ -694,7 +694,7 @@ extern "C" void app_super_loop_iterate(void) {
 
     cameraTick();
 
-    // fcTemperatureModule.tick();
+    fcTemperatureModule.tick();
 
 	//app_printf("Buzzer advancing ---------------------------------------------\r\n");
 	g_superloop.buzzer.tick(HAL_GetTick());
@@ -720,14 +720,14 @@ extern "C" void app_super_loop_iterate(void) {
     // tick() is always called to drain the ring buffer via DMA.
     if (g_sd_logging_active) {
         RUN_EVERY(100) {
-            app_printf("[SD] wr=%lu fail=%lu arena=%lu/%lu maxWr=%luus ticks=%lu disk=%luKB imu=%lu/%lu(%luKB)\r\n",
+            app_printf("[SD] wr=%lu fail=%lu arena=%lu/%lu maxWr=%luus ticks=%lu disk=%lluKB imu=%lu/%lu(%luKB)\r\n",
                    (unsigned long)g_sd_logger.writeCount(),
                    (unsigned long)g_sd_logger.writeFailCount(),
                    (unsigned long)g_sd_interface.arena_used_bytes(),
                    (unsigned long)g_sd_interface.arena_total_bytes(),
                    (unsigned long)g_sd_logger.maxWriteTimeUs(),
                    (unsigned long)g_sd_logger.tickCount(),
-                   (unsigned long)(g_sd_interface.disk_size_remaining() / 1024),
+                   (uint64_t)(g_sd_interface.disk_size_remaining() / 1024),
                    (unsigned long)g_sd_logger.imuBatchCount(),
                    (unsigned long)g_sd_logger.imuBatchFail(),
                    (unsigned long)(g_sd_logger.imuBytesOk() / 1024));
@@ -863,7 +863,7 @@ extern "C" void app_super_loop_iterate(void) {
     }
 
     nb_superloops ++;
-    /*RUN_EVERY(1000) {
+    RUN_EVERY(1000) {
     	app_printf("[IMU STATUS] \n");
     	for (size_t i = 0; i < 4; i ++) {
     		printf(" IMU %d: healthy=%d status=%d\n", (int) i, (int) g_imu_healthy[i], (int) g_imu_status_flags[i]);
@@ -876,7 +876,7 @@ extern "C" void app_super_loop_iterate(void) {
     	}
         nb_superloops = 0;
         nb_consumed = 0;
-    }*/
+    }
 
     nb_consumed += g_superloop.imuModule.takeProducedCount();
     g_superloop.baroModule.update(iter_now_ms);

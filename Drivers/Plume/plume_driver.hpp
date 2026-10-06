@@ -46,8 +46,8 @@ public:
     );
     bool open_file ();
 
-    size_t number_files_remaining ();
-    size_t disk_size_remaining ();
+    size_t   number_files_remaining ();
+    uint64_t disk_size_remaining ();
 
     void beginTransaction ();
     void endTransaction ();

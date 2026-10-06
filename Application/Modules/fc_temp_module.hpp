@@ -58,7 +58,7 @@ public:
     }
     void tick () {
         if (!did_init_) {
-            RUN_EVERY(10'000) app_printf("[TMP1075] Failure to init, did not attemp read.\n");
+            // RUN_EVERY(10'000) app_printf("[TMP1075] Failure to init, did not attemp read.\n");
             return ;
         } 
 
@@ -69,7 +69,7 @@ public:
                 TempData dump;
 
                 if (!driver.getFrame(dump)) {
-                    RUN_EVERY(10'000) app_printf("[TMP1075] Get frame has failed.\n");
+                    // RUN_EVERY(10'000) app_printf("[TMP1075] Get frame has failed.\n");
                     return ;
                 }
 
@@ -77,7 +77,7 @@ public:
                 RUN_EVERY(1'000) app_printf("[TMP1075] fc_temperature = %f\n", dump.temperature_c);
             } else {
                 if (!driver.triggerConversion()) {
-                    RUN_EVERY(10'000) app_printf("[TMP1075] Trigger has failed.\n");
+                    // RUN_EVERY(10'000) app_printf("[TMP1075] Trigger has failed.\n");
                     return ;
                 }
                 is_preparing_ = true;

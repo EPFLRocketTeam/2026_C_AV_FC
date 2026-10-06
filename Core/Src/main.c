@@ -180,9 +180,9 @@ int main(void)
   MX_SPI4_Init();
   MX_SPI5_Init();
   MX_USART6_UART_Init();
-  //sd_pre_init();
-  //MX_SDMMC1_SD_Init();
-  //sd_post_init(&hsd1);
+  sd_pre_init();
+  MX_SDMMC1_SD_Init();
+  sd_post_init(&hsd1);
   MX_SPI2_Init();
   MX_SPI1_Init();
   MX_I2C4_Init();
@@ -260,7 +260,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  //HAL_Delay(1000);
 	  //app_printf("In tick.\n");
-	  //simple_radio_tick();
+	  // simple_radio_tick();
 	  /*
 	  	  app_printf("flag: %i\r\n", flag);
 	  	  if (!flag) {
