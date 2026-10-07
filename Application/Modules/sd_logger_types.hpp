@@ -1,5 +1,6 @@
 
 #include "Application/Kalman/kalman/eskf_logger.hpp"
+#include "Drivers/Camera/CameraDump.hpp"
 #include <stdint.h>
 
 // ============================================================
@@ -25,6 +26,8 @@ enum SdLogRecordType : uint8_t {
     SD_LOG_SD_HEALTH          = 0x31,  // SD card write health metrics
     SD_LOG_APP_METRICS        = 0x32,  // Application performance metrics
     SD_LOG_UBX_RAW            = 0x33,  // Raw UBX GPS packet
+    
+    SD_LOG_CAMERA             = 0x40,
 };
 
 // ============================================================

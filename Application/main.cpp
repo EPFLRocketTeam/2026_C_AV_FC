@@ -13,6 +13,7 @@
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Config/config.hpp"
 #include "Application/FlightControl/fc_shell.hpp"
+#include "Application/app_logger.hpp"
 #include "Drivers/Camera/CameraPlatform.hpp"
 
 
@@ -547,6 +548,10 @@ static void baro_raw_spi_test() {
                (rx[2] == 0x60) ? "OK" : "MISMATCH!");
     }
     app_printf("[RAW-BARO-TEST] Done.\r\n");
+}
+
+SdLogger& app_get_sd_logger () {
+    return g_sd_logger;   
 }
 
 extern "C" void app_super_loop_setup(void) {

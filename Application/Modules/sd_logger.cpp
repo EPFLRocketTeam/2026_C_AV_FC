@@ -237,3 +237,8 @@ void SdLogger::logUbxRaw(const uint8_t* ubx_packet, uint16_t length) {
     if (sd_ == nullptr || ubx_packet == nullptr || length == 0) return;
     writeRecord(SD_LOG_UBX_RAW, ubx_packet, length);
 }
+
+void SdLogger::logCameraDump (const CameraDump& dump) {
+    if (sd_ == nullptr) return;
+    writeRecord(SD_LOG_CAMERA, &dump, sizeof(dump));
+}

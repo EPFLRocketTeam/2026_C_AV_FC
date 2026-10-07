@@ -203,9 +203,9 @@ struct Batteries {
 };
 
 struct CamsRecording {
-  bool cam_sep;
-  bool cam_up;
-  bool cam_down;
+  bool cam_sepmech;
+  bool cam_aero_top;
+  bool cam_aero_bot;
 
   CamsRecording();
 };
@@ -334,14 +334,14 @@ class CamsRecordingStore : public IStore<CamsRecording> {
 public:
   CamsRecordingStore();
 
-  bool get_cam_sep() const;
-  void set_cam_sep(bool value);
+  bool get_cam_sepmech() const;
+  void set_cam_sepmech(bool value);
 
-  bool get_cam_up() const;
-  void set_cam_up(bool value);
+  bool get_cam_aero_top() const;
+  void set_cam_aero_top(bool value);
 
-  bool get_cam_down() const;
-  void set_cam_down(bool value);
+  bool get_cam_aero_bot() const;
+  void set_cam_aero_bot(bool value);
 };
 
 class UplinkCmdStore : public IStore<UplinkCmd> {
