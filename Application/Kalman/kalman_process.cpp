@@ -206,6 +206,7 @@ struct KalmanRuntime {
 	static constexpr size_t kActiveBaroSources = 4u;
 	LiftoffAccHold acc_hold;  ///< Liftoff acceleration-hold evaluator
 	LiftoffDetector liftoff_detector;  ///< IMU dual-window liftoff detector
+	uint32_t imu_liftoff_detect_ms = 0;  ///< Timestamp of the detecting sample
 
 #if KALMAN_DEBUG_PRINT
 	kalman_debug::RawSensorSnapshot debug_raw_sensor_{};
@@ -288,6 +289,7 @@ struct KalmanRuntime {
 		last_body_accel_mps2 = {};
 		acc_hold.reset();
 		liftoff_detector.reset();
+		imu_liftoff_detect_ms = 0;
 		KalmanHealthStore::instance().reset();
 	}
 
@@ -312,11 +314,49 @@ struct KalmanRuntime {
 		// Start liftoff acceleration-hold evaluation on IGNITION entry.
 		if (state == flight_computer::State::IGNITION) {
 			acc_hold.onIgnitionEnter(app_timebase_now_us());
+
+			// A detection latched before IGNITION (e.g. the rocket was
+			// bumped during FILLING) is not a launch. Discard it so only
+			// detections after ignition can start the flight estimator.
+			if (liftoff_detector.isDetected()) {
+				app_printf("[LIFTOFF] Discarding pre-ignition IMU detection\r\n");
+				liftoff_detector.reset();
+				imu_liftoff_detect_ms = 0;
+				auto &goat = flight_computer::GOATStore::get_instance();
+				auto event = goat.eventStore.get();
+				event.imu_liftoff_detected = false;
+				goat.eventStore.set(event);
+			}
 		}
+	}
+
+	/// Kalman-side liftoff epoch. While the FSM is in IGNITION, the
+	/// dual-window detector fires within tens of ms of motion onset, while
+	/// the FSM may only declare BURN later (cable or end of the
+	/// acceleration-hold window). The estimator freezes its preflight state
+	/// at the liftoff epoch, so a late epoch degrades it; use the detection
+	/// time instead. The FSM remains the authority on flight states, and its
+	/// later BURN is then ignored by onLiftoff().
+	void selfLatchLiftoffIfDetected() {
+		if (liftoff_ms != 0 ||
+			last_state != flight_computer::State::IGNITION ||
+			!liftoff_detector.isDetected() || imu_liftoff_detect_ms == 0) {
+			return;
+		}
+		app_printf("[LIFTOFF] Kalman liftoff epoch from IMU detection: t=%lu ms\r\n",
+		       static_cast<unsigned long>(imu_liftoff_detect_ms));
+		onLiftoff(imu_liftoff_detect_ms);
 	}
 
 	void onLiftoff(uint32_t liftoff_ms) {
 		initIfNeeded();
+		if (this->liftoff_ms != 0) {
+			// Already in flight from an earlier (IMU) epoch: keep it.
+			app_printf("[LIFTOFF] FSM liftoff at t=%lu ms ignored, epoch already t=%lu ms\r\n",
+			       static_cast<unsigned long>(liftoff_ms),
+			       static_cast<unsigned long>(this->liftoff_ms));
+			return;
+		}
 		this->liftoff_ms = liftoff_ms;
 		estimator.onLiftoff(liftoff_ms);
 		apogee_hub.arm(liftoff_ms);
@@ -525,12 +565,18 @@ struct KalmanRuntime {
 						slice[i].accel_y,
 						slice[i].accel_z,
 						gate);
+					if (liftoff_detector.isDetected()) {
+						imu_liftoff_detect_ms = static_cast<uint32_t>(
+							slice[i].timestamp_us / 1000ULL);
+						break;
+					}
 				}
 				if (!was_armed && liftoff_detector.isArmed()) {
 					app_printf("[LIFTOFF] Detector ARMED (pad stable for ~2s)\r\n");
 				}
 				if (liftoff_detector.isDetected()) {
-					app_printf("[LIFTOFF] IMU liftoff DETECTED!\r\n");
+					app_printf("[LIFTOFF] IMU liftoff DETECTED! t=%lu ms\r\n",
+					       static_cast<unsigned long>(imu_liftoff_detect_ms));
 				}
 			}
 
@@ -911,6 +957,7 @@ int kalman_loop() {
 	// Liftoff must be consumed before aiding ingestion so that GPS
 	// samples arriving in the same tick see in_flight_==true and
 	// can anchor the NED origin immediately, matching ktp-soft ordering.
+	kalman.selfLatchLiftoffIfDetected();
 	uint32_t liftoff_ms = 0;
 	if (kalman_take_pending_liftoff(&liftoff_ms) != 0U) {
 		kalman.onLiftoff(liftoff_ms);
