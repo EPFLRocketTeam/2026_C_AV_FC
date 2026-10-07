@@ -1,6 +1,8 @@
 
 #include "Drivers/Camera/Camera.hpp"
+#include "Application/Data/data.hpp"
 #include "Application/app_printf.h"
+#include "Application/app_logger.hpp"
 #include <cstring>
 
 uint32_t CameraInformation::lastPacketTime () {
@@ -31,6 +33,20 @@ bool CameraInformation::isNominal (uint32_t currentTime) {
     return isDownlinkOn(currentTime) && isUplinkOn(currentTime) && isPoweredOn() && isRecording();
 }
 
+SingleCameraDump CameraInformation::makeDump (uint32_t currentTime) {
+    SingleCameraDump dump;
+    dump.cameraState  = lastHealthPacket_.cameraState;
+    dump.imposedState = lastHealthPacket_.avState;
+
+    dump.timeSinceLastPacket = currentTime - lastPacketReceived_;
+    dump.isPowerOn    = isPoweredOn();
+    dump.isRecording  = isRecording();
+    dump.isDownlinkOn = isDownlinkOn(currentTime);
+    dump.isUplinkOn   = isUplinkOn(currentTime);
+    dump.isNominal    = isNominal(currentTime);
+
+    return dump;
+}
 void CameraInformation::ingest (
     uint32_t timeSinceImposed,
     camera::AvionicsStateMachine stateImposed,
@@ -149,6 +165,21 @@ void CameraDriver::init (
 void CameraDriver::tick () {
     // app_printf("Did init %d\n", (int) did_init_);
     if (!did_init_) return ;
+
+    CameraDump dump;
+    dump.globalImposedState = stateImposed_;
+    dump.imposedSince = getTick_() - stateImposedTickMs_;
+
+    dump.aero_bot = getInformation(CAM_AERO_BOT).makeDump(getTick_());
+    dump.aero_top = getInformation(CAM_AERO_TOP).makeDump(getTick_());
+    dump.sepmech  = getInformation(CAM_SEPMECH).makeDump(getTick_());
+
+    auto &storage = flight_computer::GOATStore::get_instance().camsRecordingStore;
+    storage.set_cam_aero_bot(dump.aero_bot.isNominal);
+    storage.set_cam_aero_top(dump.aero_top.isNominal);
+    storage.set_cam_sepmech (dump.sepmech.isNominal);
+
+    app_get_sd_logger().logCameraDump(dump);
 
     uint32_t numberPolls = 0;
     while (numberPolls < MaxCameraNumberPolls && pollMessage_()) {

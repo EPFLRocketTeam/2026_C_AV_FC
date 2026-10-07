@@ -89,9 +89,9 @@ PREPARE_DOWNLINK(flight_computer::Batteries) {
 PREPARE_DOWNLINK(flight_computer::CamsRecording) {
     packet.cam_rec = 0;
     
-    if (dump.cam_down) packet.cam_rec |= AV_CAMERA_AERO_BOT;
-    if (dump.cam_up)   packet.cam_rec |= AV_CAMERA_AERO_TOP;
-    if (dump.cam_sep)  packet.cam_rec |= AV_CAMERA_SEPMEC;
+    if (dump.cam_aero_bot) packet.cam_rec |= AV_CAMERA_AERO_BOT;
+    if (dump.cam_aero_top)   packet.cam_rec |= AV_CAMERA_AERO_TOP;
+    if (dump.cam_sepmech)  packet.cam_rec |= AV_CAMERA_SEPMEC;
 }
 PREPARE_DOWNLINK(flight_computer::UplinkCmd) {
     (void) packet; (void) dump;

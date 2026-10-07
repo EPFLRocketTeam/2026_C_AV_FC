@@ -22,6 +22,8 @@ public:
 
     /// Write a framed DataDump record.
     void logDataDump(const void* data, uint16_t size);
+    
+    void logCameraDump (const CameraDump& dump);
 
     /// Write a framed FSM transition record.
     void logFsmTransition(flight_computer::State prev, flight_computer::State next);
