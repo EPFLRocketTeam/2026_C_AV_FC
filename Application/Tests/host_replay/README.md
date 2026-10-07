@@ -41,6 +41,7 @@ build/harness imu=imu.csv baro=baro.csv out=run.csv [key=value ...]
 | `mode=flown` | INIT → BURN at `t_burn` (what the test flight did) |
 | `mode=ignition` | INIT → IGNITION at `t_ign`. Then BURN on cable loss (`t_cable`) or `vertical_acc_hold == DID_HOLD`, and ABORT_ON_GROUND on `DID_NOT_HOLD` without cable (FSM spec, no valve bypass) |
 | `burn_to_ascent_ms` | BURN → ASCENT delay (default 2000). ASCENT → DESCENT on `apogee_detected` |
+| `descent_max_ms` | DESCENT → LANDED once `touchdown_detected` and this long in DESCENT (default 60000, as `Descent.MaxDurationMs`) |
 | `detector=0` | never enable the IMU liftoff detector |
 | `reset_at`, `reset_at2` | call `kalman_request_reset()` at these times |
 | `fake_gps=1` | inject bogus GNSS fixes (5 km away, 50 m/s) at 5 Hz |
@@ -50,6 +51,21 @@ build/harness imu=imu.csv baro=baro.csv out=run.csv [key=value ...]
 All times are absolute microseconds on the log timebase. The output CSV holds, at 100 Hz, the FSM state, navigation output, the ESKF and Flight Shadow altitude and vertical speed (positive up), and the event flags. The log holds the FSM transitions and the firmware prints (`[LIFTOFF]`, `[ACC-HOLD]`, `[APOGEE]`, `[KAL]`).
 
 `scenarios.sh imu.csv baro.csv [harness]` runs the standard set below in parallel; `summary.py runs <names...>` prints apogee and peak values.
+
+## Synthetic flight from an engine log
+
+`make_engine_flight.py` turns an engine `Chamber.csv` log (chamber pressure in bar) into IMU/baro CSVs in the same format. It models a vertical 1-D flight:
+- **Thrust:** proportional to chamber pressure, peak `--peak-thrust` (default 7.5 kN). Mass 130 kg, decreasing with an Isp of 230 s.
+- **Hold-down:** released at `--release-us`.
+- **Drag:** Cd 0.5 on a 0.2 m diameter.
+- **Recovery:** a parachute at 7 m/s, then landing and lying on the ground.
+
+The sensors use the firmware mounting, with per-IMU biases, noise and engine vibration. The vehicle constants are rough assumptions, so use it to exercise the liftoff/apogee/touchdown logic with a real thrust profile, not to predict the trajectory. Attitude changes under the parachute and at landing are not modelled consistently (accelerometer only), so the ESKF output after apogee is not meaningful in that data.
+
+```sh
+python3 make_engine_flight.py Chamber.csv <out_dir> --release-us <Burn state + 50 ms>
+build/harness imu=<out_dir>/imu.csv baro=<out_dir>/baro.csv mode=ignition t_ign=<IgnitionPrechill time> ...
+```
 
 ## Limitations
 
@@ -72,3 +88,14 @@ Window from 240 s before to 20 s after liftoff. Motion onset is about 1350.280 s
 | `kalman_request_reset()` 20 s before liftoff | — | accepted; apogee 1356.34 s |
 | `kalman_request_reset()` during IGNITION | — | refused |
 | Bogus GNSS injected | — | output identical (GNSS not fused) |
+| Real parachute descent (log ends at landing impact) | — | no false touchdown |
+
+## Results on the VSFT 1 engine log (synthetic flight)
+
+IGNITION is entered at the engine's IgnitionPrechill (2832.272 s); hold-down release is at Burn + 50 ms (2837.260 s). Model: burnout at 2839.15 s (66 m/s), apogee at 2846.140 s (305.8 m), landing at 2888.65 s.
+
+| Scenario | Before the liftoff-epoch fixes | After |
+|---|---|---|
+| Accel hold, no cable | ABORT_ON_GROUND at 2835.37 s (igniter phase) | Kalman epoch at 2837.264 s; DID_HOLD (median 52.4 m/s²) → BURN at 2838.216 s; ESKF max 306.1 m @ 2846.140 s; apogee 2846.146 s; touchdown 2893.82 s → LANDED 2906.15 s |
+| Cable 30 ms after release | same abort (before the cable) | same as above, BURN at 2837.290 s |
+| Accel hold, IMU detector off | — | ESKF degraded (max 123 m); apogee via the Shadow fallback at 2846.142 s |
