@@ -198,6 +198,7 @@ private:
         sample.timestamp_us = trigger_ts_us_;
         buffers_[i]->append(sample);
         g.navSensorStore.set_bmp(i, {sample.temperature_c, sample.pressure_pa});
+        g.setAmbientTemperature(sample.temperature_c);
         state.pending = false;
         state.last_timestamp_us = sample.timestamp_us;
         state.last_data_tick_ms = tick_ms;

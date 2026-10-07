@@ -640,6 +640,7 @@ struct DataDump {
   // AV monotonic timebase in milliseconds before AvState::update consumes it.
   uint32_t av_timestamp; // Y
   float av_fc_temp; // X
+  float ambient_temperature;
   GpsBasicFixData gps_state; // X
   SensStatus sensStatus; // X
   VehiculeOverview vehiculeOverview; // X
@@ -708,6 +709,9 @@ public:
 
   float getFcTemperature ();
   void setFcTemperature (float value);
+  
+  float getAmbientTemperature ();
+  void setAmbientTemperature (float value);
 
 private:
   mutable DataDump data_;
