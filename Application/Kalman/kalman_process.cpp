@@ -6,6 +6,7 @@
 #include "Application/Kalman/AppLayer/apogee_hub.hpp"
 #include "Application/Kalman/AppLayer/apogee_factory.hpp"
 #include "Application/Kalman/AppLayer/hw_config.hpp"
+#include "Application/Kalman/AppLayer/hw_calibration_data.hpp"
 #include "Application/Kalman/AppLayer/output_bridge.hpp"
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Kalman/kalman_debug.hpp"
@@ -28,6 +29,9 @@ extern "C" {
 #include "Application/app_printf.h"
 #include "Drivers/InvIMU/InvIMU.hpp"
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
+// After ubx_gps_interface.h: FlightParams.hpp defines a FIXED macro that
+// collides with GpsCarrierPhaseStatus::FIXED.
+#include "Application/Config/config.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -99,94 +103,103 @@ std::atomic<uint32_t> g_max_main_loop_iteration_us{0u};
 volatile uint64_t g_pending_baro_trigger_us = 0u;
 
 // ---------------------------------------------------------------
-// Liftoff acceleration-hold evaluator.
+// Liftoff acceleration-hold evaluator (FSM IGNITION -> BURN/ABORT).
 //
-// After the FSM enters IGNITION, this waits RAMP_UP_DURATION seconds
-// (motor spin-up), then evaluates whether the mean vertical
-// acceleration exceeds ACCEL_LIFTOFF for at least
-// ACCEL_LIFTOFF_DURATION_MS milliseconds.  The result is written
-// as a tri-state AccHoldStatus into the GOATStore eventStore so
-// that the FSM can decide between BURN and ABORT_ON_GROUND.
+// After the FSM enters IGNITION, this waits
+// Ignition.TotalTimeUntilHoldDownMs() (prechill + igniter + delay +
+// ramp-up + hold-down), then averages the thrust-axis acceleration over
+// Ignition.LiftoffAccelDurationMs and compares the mean to
+// Ignition.LiftoffAccelThreshold. The result is written as a tri-state
+// AccHoldStatus into the GOATStore eventStore so that the FSM can decide
+// between BURN and ABORT_ON_GROUND.
+//
+// Input is every raw IMU sample (independent of the estimator's
+// preprocessing) rotated by the fixed sensor-to-body mounting matrix,
+// body +X = nose. It is specific force, so it reads ~+9.81 m/s^2 on the
+// pad and the threshold applies to that value. Samples are selected by
+// their own timestamps; the decision uses the median of the per-IMU
+// means so that a single failed IMU cannot flip it.
 // ---------------------------------------------------------------
 struct LiftoffAccHold {
-	bool active = false;         ///< Evaluation in progress
-	uint64_t ignition_enter_us = 0;  ///< Timestamp when IGNITION was entered
+	static constexpr size_t kMaxSources = 4u;
+	/// Grace period after the window end for samples still in the rings.
+	static constexpr uint64_t kLateSampleMarginUs = 10000u;
 
-	// Accumulator for the evaluation window.
-	double accel_sum = 0.0;
-	uint32_t accel_count = 0;
-	uint64_t window_start_us = 0;  ///< Timestamp when the evaluation window began
-	bool in_window = false;        ///< True once ramp-up has elapsed
+	bool active = false;             ///< Evaluation in progress
+	uint64_t window_start_us = 0;    ///< Evaluation window [start, end)
+	uint64_t window_end_us = 0;
+	double accel_sum[kMaxSources] = {};
+	uint32_t accel_count[kMaxSources] = {};
 
 	void reset() {
 		active = false;
-		ignition_enter_us = 0;
-		accel_sum = 0.0;
-		accel_count = 0;
 		window_start_us = 0;
-		in_window = false;
+		window_end_us = 0;
+		for (size_t i = 0; i < kMaxSources; ++i) {
+			accel_sum[i] = 0.0;
+			accel_count[i] = 0;
+		}
 	}
 
 	void onIgnitionEnter(uint64_t now_us) {
 		reset();
+		const auto &ignition = config::get().Ignition;
+		const uint64_t hold_down_us = static_cast<uint64_t>(
+			ignition.TotalTimeUntilHoldDownMs() * 1000.0f);
+		const uint64_t window_us =
+			static_cast<uint64_t>(ignition.LiftoffAccelDurationMs) * 1000ULL;
 		active = true;
-		ignition_enter_us = now_us;
+		window_start_us = now_us + hold_down_us;
+		window_end_us = window_start_us + window_us;
 	}
 
-	/// Call every Kalman tick while in IGNITION.
-	/// @param vertical_accel_mps2  Kalman-filtered vertical acceleration
-	///                             (positive = upward / away from ground).
-	/// @param now_us               Current wall-clock time in microseconds.
+	/// Feed one raw IMU sample.
+	/// @param thrust_axis_accel_mps2  Body +X specific force (m/s^2).
+	void addSample(size_t source, float thrust_axis_accel_mps2,
+				   uint64_t sample_ts_us) {
+		if (!active || source >= kMaxSources ||
+			sample_ts_us < window_start_us || sample_ts_us >= window_end_us) {
+			return;
+		}
+		accel_sum[source] += static_cast<double>(thrust_axis_accel_mps2);
+		accel_count[source]++;
+	}
+
+	/// Call every Kalman tick while active.
 	/// @return ACC_HOLD_NOT_ELAPSED while still evaluating,
 	///         ACC_HOLD_DID_HOLD / ACC_HOLD_DID_NOT_HOLD when done.
-	flight_computer::AccHoldStatus evaluate(
-		double vertical_accel_mps2, uint64_t now_us)
-	{
-		using flight_computer::AccHoldStatus;
+	flight_computer::AccHoldStatus evaluate(uint64_t now_us) {
 		using flight_computer::ACC_HOLD_NOT_ELAPSED;
 		using flight_computer::ACC_HOLD_DID_HOLD;
 		using flight_computer::ACC_HOLD_DID_NOT_HOLD;
 
-		if (!active) {
+		if (!active || now_us < window_end_us + kLateSampleMarginUs) {
 			return ACC_HOLD_NOT_ELAPSED;
 		}
-
-		constexpr uint64_t ramp_up_us =
-			static_cast<uint64_t>(RAMP_UP_DURATION * 1000000.0f);
-		constexpr uint64_t window_us =
-			static_cast<uint64_t>(ACCEL_LIFTOFF_DURATION_MS * 1000.0f);
-
-		// Phase 1: wait for motor ramp-up to complete.
-		if (!in_window) {
-			if ((now_us - ignition_enter_us) < ramp_up_us) {
-				return ACC_HOLD_NOT_ELAPSED;
-			}
-			in_window = true;
-			window_start_us = now_us;
-			accel_sum = 0.0;
-			accel_count = 0;
-		}
-
-		// Phase 2: accumulate vertical acceleration samples.
-		accel_sum += vertical_accel_mps2;
-		accel_count++;
-
-		// Phase 3: has the evaluation window elapsed?
-		if ((now_us - window_start_us) < window_us) {
-			return ACC_HOLD_NOT_ELAPSED;
-		}
-
-		// Window complete — compute mean and decide.
 		active = false;
-		if (accel_count == 0) {
+
+		double means[kMaxSources] = {};
+		size_t n = 0;
+		for (size_t i = 0; i < kMaxSources; ++i) {
+			if (accel_count[i] > 0) {
+				means[n++] = accel_sum[i] / static_cast<double>(accel_count[i]);
+			}
+		}
+		if (n == 0) {
+			app_printf("[ACC-HOLD] No IMU samples in window -> DID_NOT_HOLD\r\n");
 			return ACC_HOLD_DID_NOT_HOLD;
 		}
-
-		const double mean_accel = accel_sum / static_cast<double>(accel_count);
-		if (mean_accel > static_cast<double>(ACCEL_LIFTOFF)) {
-			return ACC_HOLD_DID_HOLD;
-		}
-		return ACC_HOLD_DID_NOT_HOLD;
+		std::sort(means, means + n);
+		const double median = (n % 2u == 1u)
+			? means[n / 2u]
+			: 0.5 * (means[n / 2u - 1u] + means[n / 2u]);
+		const double threshold =
+			static_cast<double>(config::get().Ignition.LiftoffAccelThreshold);
+		const bool held = median > threshold;
+		app_printf("[ACC-HOLD] median=%.2f m/s2 (n_imu=%u) threshold=%.2f -> %s\r\n",
+		       median, static_cast<unsigned>(n), threshold,
+		       held ? "DID_HOLD" : "DID_NOT_HOLD");
+		return held ? ACC_HOLD_DID_HOLD : ACC_HOLD_DID_NOT_HOLD;
 	}
 };
 
@@ -580,9 +593,24 @@ struct KalmanRuntime {
 				}
 			}
 
-			last_body_accel_mps2.x = slice[slice_count - 1u].accel_x;
-			last_body_accel_mps2.y = slice[slice_count - 1u].accel_y;
-			last_body_accel_mps2.z = slice[slice_count - 1u].accel_z;
+			// Raw samples rotated by the fixed mounting matrix only (no
+			// estimator preprocessing), body +X = nose.
+			const eskf_scalar (*to_body)[3] = eskf::getImuSensorToBody(source_index);
+			flight_computer::Vector3 body_accel{};
+			for (size_t i = 0; i < slice_count; ++i) {
+				const float s[3] = {slice[i].accel_x, slice[i].accel_y, slice[i].accel_z};
+				float b[3];
+				for (int r = 0; r < 3; ++r) {
+					b[r] = static_cast<float>(to_body[r][0] * s[0] +
+					                          to_body[r][1] * s[1] +
+					                          to_body[r][2] * s[2]);
+				}
+				acc_hold.addSample(source_index, b[0], slice[i].timestamp_us);
+				body_accel.x = b[0];
+				body_accel.y = b[1];
+				body_accel.z = b[2];
+			}
+			last_body_accel_mps2 = body_accel;
 			health.imu_samples_consumed += static_cast<uint32_t>(slice_count);
 
 #if KALMAN_DEBUG_PRINT
@@ -637,18 +665,14 @@ struct KalmanRuntime {
 //			osMutexRelease(navigationDataMutexHandle);
 //		}
 
-		// --- Liftoff acceleration-hold evaluation (DONE) ---
-		// While in IGNITION, feed the evaluator with the latest body-X
-		// acceleration (thrust axis ≈ vertical on the pad).  When the
-		// evaluation window completes, write the result to eventStore.
+		// --- Liftoff acceleration-hold evaluation ---
+		// Samples are fed in ingestImuChunk(). When the evaluation window
+		// completes, write the result to eventStore.
 		flight_computer::AccHoldStatus acc_hold_result =
 			flight_computer::ACC_HOLD_NOT_ELAPSED;
 		bool acc_hold_terminal = false;
 		if (acc_hold.active) {
-			// body_accel_mps2.x is the thrust-axis (body-X) accel from the
-			// latest IMU sample — positive along thrust direction.
-			const double vertical_accel = last_body_accel_mps2.x;
-			acc_hold_result = acc_hold.evaluate(vertical_accel, now_us);
+			acc_hold_result = acc_hold.evaluate(now_us);
 			acc_hold_terminal =
 				(acc_hold_result != flight_computer::ACC_HOLD_NOT_ELAPSED);
 		}
