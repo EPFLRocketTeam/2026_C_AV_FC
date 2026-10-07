@@ -15,6 +15,10 @@ void simple_radio_tick(void);
 void app_super_loop_setup(void);
 void app_super_loop_iterate(void);
 
+uint64_t app_get_remaining_disk_size (void);
+uint64_t app_get_sd_fail_count (void);
+float app_get_current_imu_rate (void);
+
 // Bridge functions called from HAL callbacks in Core/Src/main.c.
 void app_on_imu_exti(uint16_t gpio_pin);
 void app_on_imu_spi_rx_complete(SPI_HandleTypeDef* hspi);

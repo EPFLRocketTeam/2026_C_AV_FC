@@ -3,8 +3,10 @@
 using namespace flight_computer;
 
 Batteries::Batteries()
-: lpb_voltage(0.0f),
-  lpb_current(0.0f),
+: lpb1_voltage(0.0f),
+  lpb1_current(0.0f),
+  lpb2_voltage(0.0f),
+  lpb2_current(0.0f),
   vout_5v_voltage(0.0f),
   vout_5v_current(0.0f),
   hpb_main_voltage(0.0f),
@@ -17,18 +19,32 @@ Batteries::Batteries()
 
 BatteriesStore::BatteriesStore() {}
 
-float BatteriesStore::get_lpb_voltage () const {
-    return data_.lpb_voltage;
+float BatteriesStore::get_lpb1_voltage () const {
+    return data_.lpb1_voltage;
 }
-void BatteriesStore::set_lpb_voltage (float value) {
-    data_.lpb_voltage = value;
+void BatteriesStore::set_lpb1_voltage (float value) {
+    data_.lpb1_voltage = value;
 }
 
-float BatteriesStore::get_lpb_current () const {
-    return data_.lpb_current;
+float BatteriesStore::get_lpb2_voltage () const {
+    return data_.lpb2_voltage;
 }
-void BatteriesStore::set_lpb_current (float value) {
-    data_.lpb_current = value;
+void BatteriesStore::set_lpb2_voltage (float value) {
+    data_.lpb2_voltage = value;
+}
+
+float BatteriesStore::get_lpb1_current () const {
+    return data_.lpb1_current;
+}
+void BatteriesStore::set_lpb1_current (float value) {
+    data_.lpb1_current = value;
+}
+
+float BatteriesStore::get_lpb2_current () const {
+    return data_.lpb2_current;
+}
+void BatteriesStore::set_lpb2_current (float value) {
+    data_.lpb2_current = value;
 }
 
 float BatteriesStore::get_vout_5v_voltage () const {

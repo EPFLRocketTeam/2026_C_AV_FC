@@ -62,6 +62,8 @@ struct SensStatus {
   bmp3_status bmp_status;
   bmp3_status bmp_aux_status;
 
+  float imu_data_rate;
+
   // uint8_t no_cable_continuity; // TODO: Properly update the store
   // uint8_t flight_duration;     // TODO: Properly update the store
   // uint8_t descent_duration;    // TODO: Properly update the store
@@ -184,8 +186,10 @@ struct NavigationData {
 };
 
 struct Batteries {
-  float lpb_voltage;
-	float lpb_current;
+  float lpb1_voltage;
+	float lpb1_current;
+  float lpb2_voltage;
+	float lpb2_current;
 	float vout_5v_voltage;
 	float vout_5v_current;
 	float hpb_main_voltage;
@@ -257,11 +261,17 @@ class BatteriesStore : public IStore<Batteries> {
 public:
   BatteriesStore();
 
-  float get_lpb_voltage () const;
-  void set_lpb_voltage (float value);
+  float get_lpb1_voltage () const;
+  void set_lpb1_voltage (float value);
+  
+  float get_lpb2_voltage () const;
+  void set_lpb2_voltage (float value);
 
-  float get_lpb_current () const;
-  void set_lpb_current (float value);
+  float get_lpb1_current () const;
+  void set_lpb1_current (float value);
+  
+  float get_lpb2_current () const;
+  void set_lpb2_current (float value);
 
   float get_vout_5v_voltage () const;
   void set_vout_5v_voltage (float value);
@@ -372,6 +382,9 @@ public:
 
   bmp3_status get_bmp_aux_status() const;
   void set_bmp_aux_status(const bmp3_status &value);
+
+  float get_imu_rate () const;
+  void set_imu_rate (float value);
 };
 
 class NavSensorsStore : public IStore<NavSensors> {
