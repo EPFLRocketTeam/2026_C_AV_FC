@@ -14,6 +14,7 @@ None of this has been run on the board yet. Everything builds (CubeIDE Debug, cl
 | `feat/rekalman` | `origin/main` | GNSS log-only in the Kalman; `imu_liftoff_detected` cleared on INIT; `kalman_request_reset()` | Kalman-only, low risk |
 | `feat/kalman-liftoff-epoch` | `feat/rekalman` | Tare stationarity gate; liftoff detection enabled when the buzzer is not started; Kalman liftoff epoch from IMU detection during IGNITION | Recommended before flight; needs a board smoke test |
 | `fix/acc-hold-params` | `feat/kalman-liftoff-epoch` | `vertical_acc_hold` on the body thrust axis with `FlightParams`; bumps `FLIGHT_PARAMS` to `a8e369a` | **Théo to review** (pin bump, threshold semantics) |
+| `feat/kalman-touchdown` | `fix/acc-hold-params` | Baro-only `touchdown_detected` in DESCENT/LANDED (enables DESCENT → LANDED) | **Théo to review** (FSM input) |
 | `feat/sd-log-imu-pipeline` | PR #24 (`feat/sd-logger-low-rate`) | `ImuPipeline` gated together with raw IMU (storage and CPU) | Merge into PR #24 |
 | `fix/gnss-init-nonfatal` | `feat/rekalman` | GPS init failure no longer stops the super-loop | **Théo to review** |
 | `test/kalman-host-replay` | `feat/rekalman` | Host replay harness running the firmware Kalman runtime on recorded logs (`Application/Tests/host_replay`, not part of the firmware build) | Tooling, can merge anytime |
@@ -93,16 +94,28 @@ Answered (2026-10-07):
 
 Remaining (FSM / system, not Kalman):
 
+Answered (2026-10-08):
+
+- **Flight config:** will be redone with Pedro before the coldflow (ColdflowMode off, FIXED values included). SepMech and the FSM latches are on Théo's TODO list. `fix/gnss-init-nonfatal` will be reviewed.
+- **SD metrics:** reporting `imu_batch_fail + write_fail_count` is fine.
+- **Logging during ABORT_ON_GROUND:** kept on (aborts are short and usually end the day).
+- **Missing PRC_INTRANET commit:** a false alarm. It is `a8301a5` (18 Aug), fixed the same day by `481b4ea`; only a recursive submodule fetch of old history trips on it.
+- **`kalman_request_reset()`:** for the case Théo raised (an IMU anomaly during FILLING) without going through an abort. RECOVER → INIT already resets the Kalman, so nothing is needed on abort; what is missing is a CLI/uplink command.
+- **LANDED:** implemented in `feat/kalman-touchdown`. The Kalman sets `touchdown_detected` while the fused-baro altitude slope stays under 0.5 m/s (FSM SPEED_ZERO) over 2.5 s for 3 s, in DESCENT and LANDED. It is baro-only (no GNSS, no navigation filter) and a live flag, not latched; the FSM still requires `Descent.MaxDurationMs`. No false trigger during the real test-flight descent; on the VSFT case it triggers 5.2 s after landing.
+- **VSFT 1 data:** a synthetic flight driven by the VSFT 1 chamber-pressure log (thrust scaled to 7.5 kN, 130 kg, hold-down release at Burn + 50 ms) runs end to end in the host replay: Kalman epoch 4 ms after release, accel hold DID_HOLD → BURN 0.95 s later, apogee 6 ms after the model's, LANDED. The old code aborts during the igniter phase (old 3 s/100 ms evaluator). Details in `Application/Tests/host_replay/README.md`.
+
+Remaining:
+
 1. **Ascent timeout:** `AscentMaxDurationMs = INF_TIME` (`FIXED`, counted from ASCENT entry). It needs a finite backup, e.g. (nominal apogee time − burn time) + margin from the trajectory simulation.
 2. **SepMech** is not triggered on DESCENT or ABORT_IN_FLIGHT.
 3. **`ColdflowMode`** must be `false` in the frozen flight config, otherwise apogee never moves the FSM to DESCENT.
 4. **BURN-relative timers on the accel-hold path:** BURN comes ~0.95 s after motion, so `timer_burn` (`MinDurationMs`, `FcMaxDurationMs`) and the flight timer start that much late.
 5. **FSM latches not reset on INIT:** `has_lifted_off_`, the flight timer and the entry timestamps.
 6. **`kalman_request_reset()`** needs to be wired to a CLI/uplink command.
-7. **`touchdown_detected` is never set,** so LANDED is unreachable. The Kalman's descent filter could provide it if wanted.
+7. **`touchdown_detected`:** see `feat/kalman-touchdown` above.
 8. **Release hygiene:** archive the exact source and build flags of the flight binary, and check `FAKE_GNSS_ENABLE=0` and `KALMAN_DEBUG_FORCE_FLIGHT=0`.
 9. **SD failure metrics:** raw-IMU batch failures (`imu_batch_fail`) are not included in `write_fail_count`, so a telemetry counter based on the latter misses them.
-10. **Submodule:** a pushed commit references PRC_INTRANET `9da0f05`, which is not on GitHub.
+10. **Descent navigation output without GNSS (Kalman, open):** the baro descent filter only takes over after a GNSS snap, so with GNSS log-only the descent altitude/speed in the navigation store (telemetry) comes from the ESKF. That drifts under the parachute (−36 m at landing on the test flight, Flight Shadow ~4 m), and after LANDED it falls back to the ESKF anyway. Running the descent filter on baro alone was tried: a ~50 m baro transient at chute deployment locks its gate out for the rest of the descent. Not flight-critical (apogee and touchdown do not use it); options are to publish the Flight Shadow in descent when there is no GNSS, or to add a baro re-anchor to the descent filter.
 
 ## 5. Board checks (remote access)
 
