@@ -26,31 +26,35 @@ extern "C" void kalman_on_liftoff(uint32_t liftoff_ms) {
     g_liftoff_pending.store(true, std::memory_order_release);
 }
 
+extern "C" void kalman_lifecycle_rearm(void) {
+    g_liftoff_pending.store(false, std::memory_order_relaxed);
+    g_liftoff_latched.store(false, std::memory_order_relaxed);
+    g_liftoff_ms.store(0, std::memory_order_relaxed);
+
+    auto &goat = flight_computer::GOATStore::get_instance();
+    // if (eventStoreMutexHandle != nullptr) {
+        // osMutexAcquire(eventStoreMutexHandle, osWaitForever);
+    // }
+
+    auto event = goat.eventStore.get();
+    event.catastrophic_failure = false;
+    event.apogee_detected = false;
+    event.vertical_acc_hold = flight_computer::ACC_HOLD_NOT_ELAPSED;
+    event.imu_liftoff_detected = false;
+    goat.eventStore.set(event);
+
+    // if (eventStoreMutexHandle != nullptr) {
+        // osMutexRelease(eventStoreMutexHandle);
+    // }
+}
+
 extern "C" void kalman_on_state_change(uint32_t state) {
     const uint32_t previous_state =
         g_kalman_state.exchange(state, std::memory_order_relaxed);
 
     // INIT re-arms lifecycle state for a fresh flight sequence.
     if (state == 0U) {
-        g_liftoff_pending.store(false, std::memory_order_relaxed);
-        g_liftoff_latched.store(false, std::memory_order_relaxed);
-        g_liftoff_ms.store(0, std::memory_order_relaxed);
-
-        auto &goat = flight_computer::GOATStore::get_instance();
-        // if (eventStoreMutexHandle != nullptr) {
-            // osMutexAcquire(eventStoreMutexHandle, osWaitForever);
-        // }
-
-        auto event = goat.eventStore.get();
-        event.catastrophic_failure = false;
-        event.apogee_detected = false;
-        event.vertical_acc_hold = flight_computer::ACC_HOLD_NOT_ELAPSED;
-        event.imu_liftoff_detected = false;
-        goat.eventStore.set(event);
-
-        // if (eventStoreMutexHandle != nullptr) {
-            // osMutexRelease(eventStoreMutexHandle);
-        // }
+        kalman_lifecycle_rearm();
     }
 
     (void)previous_state;  // No wake is needed in the super-loop model;

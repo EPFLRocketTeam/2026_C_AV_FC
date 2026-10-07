@@ -75,6 +75,25 @@ constexpr uint32_t kNominalImuDtUs =
 constexpr uint32_t kNominalImuDtUs = 1000U;
 #endif
 
+std::atomic<bool> g_reset_requested{false};
+
+/// States in which a requested Kalman reset is honoured: on the ground, with
+/// enough time before launch for the preflight estimators to reconverge
+/// (tens of seconds to ~2 minutes of stationary data).
+bool kalmanResetAllowedIn(uint32_t raw_state) {
+	switch (raw_state) {
+	case flight_computer::State::INIT:
+	case flight_computer::State::CALIBRATION:
+	case flight_computer::State::FILLING:
+	case flight_computer::State::ARMED:
+	case flight_computer::State::ABORT_ON_GROUND:
+	case flight_computer::State::LANDED:
+		return true;
+	default:
+		return false;
+	}
+}
+
 std::atomic<uint32_t> g_last_main_loop_iteration_us{0u};
 std::atomic<uint32_t> g_max_main_loop_iteration_us{0u};
 volatile uint64_t g_pending_baro_trigger_us = 0u;
@@ -250,6 +269,28 @@ struct KalmanRuntime {
 #endif
 	}
 
+	/// Reset every piece of Kalman runtime state that describes a flight
+	/// sequence: estimator (incl. preflight tares, rail/flight shadows,
+	/// ground references, turn-on bias, GNSS anchor, pending IMU groups),
+	/// apogee hub, both liftoff detectors, IMU timestamp tracking and
+	/// health counters. The FSM state seen by the runtime is unchanged.
+	void resetRuntime() {
+		estimator.reset();
+		estimator.configureReplaySensorCounts(4u, kActiveBaroSources);
+		active_imu_sources = 4u;
+		apogee_hub.reset();
+		for (size_t i = 0; i < 4u; ++i) {
+			last_imu_ts_us[i] = 0;
+			has_prev_imu_ts[i] = false;
+		}
+		liftoff_ms = 0;
+		apogee_detected = false;
+		last_body_accel_mps2 = {};
+		acc_hold.reset();
+		liftoff_detector.reset();
+		KalmanHealthStore::instance().reset();
+	}
+
 	void onStateChange(uint32_t raw_state) {
 		initIfNeeded();
 		if (raw_state > static_cast<uint32_t>(flight_computer::State::ABORT_IN_FLIGHT)) {
@@ -265,24 +306,7 @@ struct KalmanRuntime {
 		last_state = state;
 
 		if (state == flight_computer::State::INIT) {
-			estimator.reset();
-			estimator.configureReplaySensorCounts(4u, kActiveBaroSources);
-			active_imu_sources = 4u;
-			apogee_hub.reset();
-			last_imu_ts_us[0] = 0;
-			last_imu_ts_us[1] = 0;
-			last_imu_ts_us[2] = 0;
-			last_imu_ts_us[3] = 0;
-			has_prev_imu_ts[0] = false;
-			has_prev_imu_ts[1] = false;
-			has_prev_imu_ts[2] = false;
-			has_prev_imu_ts[3] = false;
-			liftoff_ms = 0;
-			apogee_detected = false;
-			last_body_accel_mps2 = {};
-			acc_hold.reset();
-			liftoff_detector.reset();
-			KalmanHealthStore::instance().reset();
+			resetRuntime();
 		}
 
 		// Start liftoff acceleration-hold evaluation on IGNITION entry.
@@ -768,6 +792,18 @@ int kalman_loop() {
 	const uint32_t current_state = kalman_current_state();
 	kalman.onStateChange(current_state);
 
+	if (g_reset_requested.exchange(false)) {
+		if (kalmanResetAllowedIn(current_state)) {
+			kalman.resetRuntime();
+			kalman_lifecycle_rearm();
+			app_printf("[KAL] Reset done (state=%lu)\r\n",
+			       static_cast<unsigned long>(current_state));
+		} else {
+			app_printf("[KAL] Reset refused (state=%lu)\r\n",
+			       static_cast<unsigned long>(current_state));
+		}
+	}
+
 	AppImuRingBuffer *buffers[] = {&imuData1, &imuData2, &imuData3, &imuData4};
 
 	bool source_healthy[4] = {false, false, false, false};
@@ -992,6 +1028,14 @@ int kalman_loop() {
 #endif
 
 	return drained;
+}
+
+uint8_t kalman_request_reset(void) {
+	if (!kalmanResetAllowedIn(kalman_current_state())) {
+		return 0u;
+	}
+	g_reset_requested.store(true);
+	return 1u;
 }
 
 void kalman_note_main_loop_iteration_us(uint32_t iteration_us) {
