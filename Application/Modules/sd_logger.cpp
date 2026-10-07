@@ -48,6 +48,10 @@ void SdLogger::writeRecord(SdLogRecordType type, const void* payload, uint16_t p
     }
 }
 
+void SdLogger::setLogRate (bool high_rate_enabled) {
+    high_rate_enabled_ = high_rate_enabled;
+}
+
 // ============================================================
 // DataDump and FSM Logging
 // ============================================================
@@ -142,6 +146,7 @@ void SdLogger::logImuDynamics(const eskf::ImuDynamicsSnapshot& snapshot) {
 
 void SdLogger::logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUData* samples, size_t count) {
     if (sd_ == nullptr || count == 0) return;
+    if (!high_rate_enabled_) return;
 
     SdLogImuBatchHeader batch_hdr;
     batch_hdr.sensor_index = static_cast<uint8_t>(sensor_index);

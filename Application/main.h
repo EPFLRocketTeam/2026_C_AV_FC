@@ -15,6 +15,9 @@ void simple_radio_tick(void);
 void app_super_loop_setup(void);
 void app_super_loop_iterate(void);
 
+void app_on_state_becomes_init (void);
+void app_on_state_becomes_armed (void);
+
 // Bridge functions called from HAL callbacks in Core/Src/main.c.
 void app_on_imu_exti(uint16_t gpio_pin);
 void app_on_imu_spi_rx_complete(SPI_HandleTypeDef* hspi);
