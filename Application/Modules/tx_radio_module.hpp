@@ -77,8 +77,10 @@ PREPARE_DOWNLINK(flight_computer::Batteries) {
 	packet.lpb1_current = dump.lpb1_current;
     packet.lpb2_voltage = dump.lpb2_voltage;
 	packet.lpb2_current = dump.lpb2_current;
-	packet.vout_5v_voltage = dump.vout_5v_voltage;
-	packet.vout_5v_current = dump.vout_5v_current;
+	packet.vout1_5v_voltage = dump.vout1_5v_voltage;
+	packet.vout1_5v_current = dump.vout1_5v_current;
+	packet.vout2_5v_voltage = dump.vout2_5v_voltage;
+	packet.vout2_5v_current = dump.vout2_5v_current;
 	packet.hpb_main_voltage = dump.hpb_main_voltage;
 	packet.hpb_main_current = dump.hpb_main_current;
 	packet.hpb_backup_voltage = dump.hpb_backup_voltage;

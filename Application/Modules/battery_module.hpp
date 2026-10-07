@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Application/Data/data.hpp"
+#include "Application/app_printf.h"
 #include "Drivers/INA228/INA228.h"
 #include <cstddef>
 #include <cstdint>
@@ -82,6 +83,20 @@ public:
             }
             all_ok &= rail_ok_[i];
         }
+
+        const char* ok = "ok"; const char* no = "no";
+        app_printf("\n\nBattery Status\n");
+        app_printf("LPB1 LPB2 5V1 5V2 HPB-M HPB-B 24V\n");
+        app_printf("%s   %s   %s  %s  %s    %s    %s\n\n",
+            rail_ok_[kLpb1] ? ok : no,
+            rail_ok_[kLpb2] ? ok : no,
+            rail_ok_[kVout5v1] ? ok : no,
+            rail_ok_[kVout5v2] ? ok : no,
+            rail_ok_[kHpbMain] ? ok : no,
+            rail_ok_[kHpbBackup] ? ok : no,
+            rail_ok_[kVout24v] ? ok : no
+        );
+
         return all_ok;
     }
 
@@ -97,19 +112,21 @@ public:
             flight_computer::GOATStore::get_instance().batteriesStore;
 
         if (rail_ok_[kLpb1]) {
-            store.set_lpb_voltage(rails_[kLpb1].getBusVoltage());
-            store.set_lpb_current(rails_[kLpb1].getCurrent());
-        } else if (rail_ok_[kLpb2]) {
-            store.set_lpb_voltage(rails_[kLpb2].getBusVoltage());
-            store.set_lpb_current(rails_[kLpb2].getCurrent());
+            store.set_lpb1_voltage(rails_[kLpb1].getBusVoltage());
+            store.set_lpb1_current(rails_[kLpb1].getCurrent());
+        }
+        if (rail_ok_[kLpb2]) {
+            store.set_lpb2_voltage(rails_[kLpb2].getBusVoltage());
+            store.set_lpb2_current(rails_[kLpb2].getCurrent());
         }
 
         if (rail_ok_[kVout5v1]) {
-            store.set_vout_5v_voltage(rails_[kVout5v1].getBusVoltage());
-            store.set_vout_5v_current(rails_[kVout5v1].getCurrent());
-        } else if (rail_ok_[kVout5v2]) {
-            store.set_vout_5v_voltage(rails_[kVout5v2].getBusVoltage());
-            store.set_vout_5v_current(rails_[kVout5v2].getCurrent());
+            store.set_vout1_5v_voltage(rails_[kVout5v1].getBusVoltage());
+            store.set_vout1_5v_current(rails_[kVout5v1].getCurrent());
+        }
+        if (rail_ok_[kVout5v2]) {
+            store.set_vout2_5v_voltage(rails_[kVout5v2].getBusVoltage());
+            store.set_vout2_5v_current(rails_[kVout5v2].getCurrent());
         }
 
         if (rail_ok_[kHpbMain]) {

@@ -190,8 +190,10 @@ struct Batteries {
 	float lpb1_current;
   float lpb2_voltage;
 	float lpb2_current;
-	float vout_5v_voltage;
-	float vout_5v_current;
+	float vout1_5v_voltage;
+	float vout1_5v_current;
+	float vout2_5v_voltage;
+	float vout2_5v_current;
 	float hpb_main_voltage;
 	float hpb_main_current;
 	float hpb_backup_voltage;
@@ -273,11 +275,17 @@ public:
   float get_lpb2_current () const;
   void set_lpb2_current (float value);
 
-  float get_vout_5v_voltage () const;
-  void set_vout_5v_voltage (float value);
+  float get_vout1_5v_voltage () const;
+  void set_vout1_5v_voltage (float value);
 
-  float get_vout_5v_current () const;
-  void set_vout_5v_current (float value);
+  float get_vout1_5v_current () const;
+  void set_vout1_5v_current (float value);
+  
+  float get_vout2_5v_voltage () const;
+  void set_vout2_5v_voltage (float value);
+
+  float get_vout2_5v_current () const;
+  void set_vout2_5v_current (float value);
 
   float get_hpb_main_voltage () const;
   void set_hpb_main_voltage (float value);
