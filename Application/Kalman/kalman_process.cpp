@@ -59,6 +59,15 @@ constexpr size_t kMaxImuSamplesPerSourcePerRun = 32u;  // was 128; lower cap
 constexpr size_t kMaxImuSamplesPerEstimatorBatch = 16u;
 constexpr size_t kMaxBaroSamplesPerSourcePerRun = 8u;
 constexpr size_t kMaxGpsSamplesPerRun = 8u;
+
+// GNSS fusion policy. Default is log-only: fixes are still received, logged
+// (raw UBX via the GPS driver callback) and drained here, but never fed to
+// the estimator. GNSS fusion was never flight-tested, and apogee detection
+// does not need it. The logs allow replaying the flight offline with fusion
+// enabled. Build with -DKALMAN_GNSS_FUSION_ENABLE=1 to fuse GNSS.
+#ifndef KALMAN_GNSS_FUSION_ENABLE
+#define KALMAN_GNSS_FUSION_ENABLE 0
+#endif
 #if APP_IMU_PRIMARY_ODR_HZ > 0
 constexpr uint32_t kNominalImuDtUs =
 	static_cast<uint32_t>(1000000ULL / APP_IMU_PRIMARY_ODR_HZ);
@@ -219,11 +228,12 @@ struct KalmanRuntime {
 		       ESKF_BARO_ODR_HZ);
 		app_printf("[KAL-CFG] activeBaroSources=%lu  "
 		       "FORCE_FLIGHT=%d  PRINT_DECIM=%d  "
-		       "FORCE_FLIGHT_DELAY_MS=%u\r\n",
+		       "FORCE_FLIGHT_DELAY_MS=%u  GNSS_FUSION=%d\r\n",
 		       static_cast<unsigned long>(kActiveBaroSources),
 		       KALMAN_DEBUG_FORCE_FLIGHT,
 		       KALMAN_DEBUG_PRINT_DECIMATION,
-		       (unsigned)KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS);
+		       (unsigned)KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS,
+		       KALMAN_GNSS_FUSION_ENABLE);
 #ifdef COMPILE_OPT_LEVEL
 		app_printf("[KAL-CFG] Optimization: -O%d", COMPILE_OPT_LEVEL);
 #elif defined(__OPTIMIZE__)
@@ -724,12 +734,14 @@ struct KalmanRuntime {
 		for (size_t i = 0; i < fix_count; ++i) {
 			const app::sensors::gnss::GnssSample sample =
 				convertGpsFixSample(staged_fixes[i], fallback_timestamp_us);
+#if KALMAN_GNSS_FUSION_ENABLE
 			// Forward ALL fixes to the estimator (including invalid ones) so
 			// the estimator's own stale/frozen detection and fix-drop
 			// diagnostics can observe the full GNSS health picture.
 			// The estimator has its own usability gate:
 			//   (sample.valid && sample.fix_type >= 2).
 			estimator.processGpsSample(sample);
+#endif
 			if (sample.valid) {
 				health.gps_updates += 1;
 			}
