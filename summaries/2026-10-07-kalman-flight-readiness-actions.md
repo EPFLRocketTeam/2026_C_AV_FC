@@ -16,6 +16,7 @@ None of this has been run on the board yet. Everything builds (CubeIDE Debug, cl
 | `fix/acc-hold-params` | `feat/kalman-liftoff-epoch` | `vertical_acc_hold` on the body thrust axis with `FlightParams`; bumps `FLIGHT_PARAMS` to `a8e369a` | **Théo to review** (pin bump, threshold semantics) |
 | `feat/sd-log-imu-pipeline` | PR #24 (`feat/sd-logger-low-rate`) | `ImuPipeline` gated together with raw IMU (storage and CPU) | Merge into PR #24 |
 | `fix/gnss-init-nonfatal` | `feat/rekalman` | GPS init failure no longer stops the super-loop | **Théo to review** |
+| `test/kalman-host-replay` | `feat/rekalman` | Host replay harness running the firmware Kalman runtime on recorded logs (`Application/Tests/host_replay`, not part of the firmware build) | Tooling, can merge anytime |
 | `test/flight-readiness-all` | — | Local merge of everything above, for flashing during remote tests only | Do not merge |
 
 ## 2. New critical finding: a late liftoff epoch silently breaks the ESKF
@@ -50,6 +51,20 @@ Fixes (`feat/kalman-liftoff-epoch`):
 
 Measured detector latency on real data, with the firmware `LiftoffDetector` fed with the recorded samples: ERT test flight about 20 ms after strong thrust (41 ms before the flown FSM's BURN); replayed flight about 30–50 ms after onset (clean in the table above).
 
+### Confirmation on the ERT test flight (host replay)
+
+`Application/Tests/host_replay` (branch `test/kalman-host-replay`) runs the real `kalman_process.cpp` and estimator on the decoded test-flight SD logs (4 IMUs, 4 barometers), with a scripted FSM. The barometers give the apogee as 143.5 m AGL at about 1356.42 s.
+
+| Scenario | Before | After |
+|---|---|---|
+| As flown (BURN 66 ms after motion onset) | ESKF max 42.9 m; apogee only via the Shadow fallback at 1355.89 s | ESKF max 142.2 m; apogee 1356.34 s |
+| BURN 100 / 200 / 400 ms after onset, IMU detector off | ESKF max 0.5 m; apogee at 1358.17 / 1358.19 / 1354.98 s (1.75 s late to 1.45 s early) | ESKF max 142.2–142.3 m; apogee 1356.34 s |
+| Firehorn FSM: IGNITION, accel hold, no cable | ABORT_ON_GROUND 1.9 s before motion | Kalman epoch from the IMU at 1350.319 s; DID_HOLD (median 53.4 m/s²) → BURN at 1351.241 s; apogee 1356.34 s |
+| Same, accel-hold window moved into thrust | ABORT_ON_GROUND during liftoff (wrong axis) | — |
+| Accel hold with the IMU detector off (BURN ≈ 0.96 s late) | — | degraded: ESKF max 31.5 m; apogee via the Shadow fallback at 1356.13 s |
+
+In the flight itself, the ESKF reached 131.6 m: the same data and epoch can give anything from about −10 m to −100 m, depending on where the tare windows fall relative to onset. The last row shows that, on a short flight, a ~1 s late epoch is not recovered by baro alone, so the IMU self-latch is what makes the accel-hold path safe for the Kalman. The harness also confirmed: reset accepted 20 s before liftoff and refused in IGNITION; injected bogus GNSS leaves the output byte-identical; an IMU dropped during boost does not disturb apogee.
+
 ## 3. Codex items
 
 | # | Item | Status |
@@ -66,13 +81,28 @@ Measured detector latency on real data, with the firmware `LiftoffDetector` fed 
 | 11 | Hardware calibration placeholders | **Accepted.** Simulations show negligible impact on apogee detection. A calibration protocol and scripts exist (ask Anas) if time allows. |
 | 6.3 | Dual-window detector timing depends on the IMU count | Kept as flown (effective windows 2.5/7.5 ms and 0.5 s arming with 4 IMUs). With fewer IMUs it only gets slower (max 10/30 ms). |
 
-## 4. Questions for other members
+## 4. Answers and remaining items for Théo
 
-1. **Firehorn thrust-to-weight during the first ~100 ms of motion?** The detector needs > 2 g excess (fast) and > 1 g (slow). The acc-hold needs a mean specific force > 15 m/s², i.e. net acceleration > 0.53 g. If the net acceleration is below 2 g, the detector never fires and the Kalman falls back to the FSM epoch (the tare gate keeps that degraded but working).
-2. **Théo:** is `LiftoffAccelThreshold = 15` meant as specific force (accelerometer reading, ~9.81 on the pad), as implemented? (The old value 2 only made sense as gravity-free acceleration.)
-3. **Théo:** is it OK to bump the `FLIGHT_PARAMS` pin to `a8e369a`? It also changes Pedro's DYNAMIC defaults. If the PRC boards compare config CRCs, they need the same pin.
-4. **Whoever flashed the test flight:** was `buzzer.start()` uncommented, or were other local changes made? Please archive the exact source and build flags of the final flight binary (also check `FAKE_GNSS_ENABLE` and `KALMAN_DEBUG_FORCE_FLIGHT`).
-5. **Théo:** the accel-hold verdict is purely time-scheduled. If the engine lights later than `TotalTimeUntilHoldDownMs` predicts, the window can close with little acceleration while the cable is still connected. That gives DID_NOT_HOLD, then ABORT_ON_GROUND and a broadcast abort, possibly just as the rocket lifts off. Is that the intended behaviour? (On the Kalman side, a self-latch followed by an abort is harmless: it integrates static data until RECOVER → INIT or `kalman_request_reset()`.)
+Answered (2026-10-07):
+
+- **Thrust:** ~7.5 kN for 130 kg, i.e. ~5.9 g specific force and ~4.9 g net. The hold-down breaks at ~0.05 s and peak thrust is reached at 0.1–0.2 s. The IMU detector thresholds (2 g / 1 g excess) and the accel hold (mean ~57 m/s² vs 15) have large margins.
+- **`LiftoffAccelThreshold = 15`:** an IMU reading (specific force, ~9.81 on the pad), as implemented.
+- **`FLIGHT_PARAMS`:** all DYNAMIC/FIXED values will be frozen into a flight config flashed on every board before EuRoC.
+- **Test-flight binary:** the buzzer was enabled, so the binary had local changes on top of the commits of that time (all of which have `buzzer.start()` commented out).
+- **Late ignition vs the accel-hold abort:** considered unlikely; to be discussed with Pedro.
+
+Remaining (FSM / system, not Kalman):
+
+1. **Ascent timeout:** `AscentMaxDurationMs = INF_TIME` (`FIXED`, counted from ASCENT entry). It needs a finite backup, e.g. (nominal apogee time − burn time) + margin from the trajectory simulation.
+2. **SepMech** is not triggered on DESCENT or ABORT_IN_FLIGHT.
+3. **`ColdflowMode`** must be `false` in the frozen flight config, otherwise apogee never moves the FSM to DESCENT.
+4. **BURN-relative timers on the accel-hold path:** BURN comes ~0.95 s after motion, so `timer_burn` (`MinDurationMs`, `FcMaxDurationMs`) and the flight timer start that much late.
+5. **FSM latches not reset on INIT:** `has_lifted_off_`, the flight timer and the entry timestamps.
+6. **`kalman_request_reset()`** needs to be wired to a CLI/uplink command.
+7. **`touchdown_detected` is never set,** so LANDED is unreachable. The Kalman's descent filter could provide it if wanted.
+8. **Release hygiene:** archive the exact source and build flags of the flight binary, and check `FAKE_GNSS_ENABLE=0` and `KALMAN_DEBUG_FORCE_FLIGHT=0`.
+9. **SD failure metrics:** raw-IMU batch failures (`imu_batch_fail`) are not included in `write_fail_count`, so a telemetry counter based on the latter misses them.
+10. **Submodule:** a pushed commit references PRC_INTRANET `9da0f05`, which is not on GitHub.
 
 ## 5. Board checks (remote access)
 
