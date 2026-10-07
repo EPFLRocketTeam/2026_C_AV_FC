@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Application/main.h"
 #include "Application/app_timebase.h"
 #include "Application/Data/data.hpp"
 #include "Drivers/SX127X/SX127X_capsule.hpp"
@@ -72,8 +73,10 @@ PREPARE_DOWNLINK(flight_computer::Event) {
     (void) packet; (void) dump;
 }
 PREPARE_DOWNLINK(flight_computer::Batteries) {
-    packet.lpb_voltage = dump.lpb_voltage;
-	packet.lpb_current = dump.lpb_current;
+    packet.lpb1_voltage = dump.lpb1_voltage;
+	packet.lpb1_current = dump.lpb1_current;
+    packet.lpb2_voltage = dump.lpb2_voltage;
+	packet.lpb2_current = dump.lpb2_current;
 	packet.vout_5v_voltage = dump.vout_5v_voltage;
 	packet.vout_5v_current = dump.vout_5v_current;
 	packet.hpb_main_voltage = dump.hpb_main_voltage;
@@ -98,6 +101,10 @@ PREPARE_DOWNLINK(flight_computer::DataDump) {
     packet.av_state     = static_cast<uint8_t>(dump.av_state);
     packet.av_fc_temp   = dump.av_fc_temp;
     packet.av_timestamp = dump.av_timestamp;
+
+    packet.sd_fail_count = app_get_sd_fail_count();
+    packet.remaining_disk_size = app_get_remaining_disk_size();
+    packet.average_imu_rate = app_get_current_imu_rate();
     
     prepare_downlink_packet(packet, dump.gps_state);
     prepare_downlink_packet(packet, dump.sensStatus);

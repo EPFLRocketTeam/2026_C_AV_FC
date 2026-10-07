@@ -687,6 +687,8 @@ extern "C" void app_super_loop_setup(void) {
 
 static int nb_superloops = 0;
 static int nb_consumed = 0;
+static uint32_t lastRatioComputationTime = 0;
+static int nb_consumed_since_last_poll = 0;
 extern "C" void app_super_loop_iterate(void) {
 	FC_Shell_Tick();
     RUN_EVERY(100)
@@ -878,7 +880,9 @@ extern "C" void app_super_loop_iterate(void) {
         nb_consumed = 0;
     }
 
-    nb_consumed += g_superloop.imuModule.takeProducedCount();
+
+    size_t producedCount = g_superloop.imuModule.takeProducedCount();
+    nb_consumed += producedCount;
     g_superloop.baroModule.update(iter_now_ms);
     for (size_t i = 0; i < 4; ++i) {
         g_baro_healthy[i] = g_superloop.baroModule.sensorHealthy(i) ? 1u : 0u;
@@ -910,4 +914,28 @@ extern "C" void app_super_loop_iterate(void) {
     const uint64_t elapsed_us = iteration_end_us - iteration_start_us;
     kalman_note_main_loop_iteration_us(static_cast<uint32_t>(elapsed_us));
     g_metrics_tracker.recordLoop(static_cast<uint32_t>(elapsed_us));
+}
+
+extern "C" uint64_t app_get_remaining_disk_size (void) {
+    return g_sd_interface.disk_size_remaining();
+}
+extern "C" uint64_t app_get_sd_fail_count (void) {
+    return g_sd_logger.writeFailCount();
+}
+extern "C" float app_get_current_imu_rate (void) {
+    float ratio = 0;
+    if (lastRatioComputationTime != 0) {
+        uint32_t deltaTime = HAL_GetTick() - lastRatioComputationTime;
+
+        ratio = ((float) nb_consumed_since_last_poll) / ((float) deltaTime);
+    }
+
+    flight_computer::GOATStore::get_instance()
+        .sensStatusStore
+        .set_imu_rate(ratio);
+
+    nb_consumed_since_last_poll = 0;
+    lastRatioComputationTime = HAL_GetTick();
+
+    return ratio;
 }
