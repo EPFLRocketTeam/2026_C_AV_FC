@@ -203,6 +203,92 @@ struct LiftoffAccHold {
 	}
 };
 
+// ---------------------------------------------------------------
+// Touchdown detector (FSM DESCENT -> LANDED).
+//
+// Baro-only, so it depends neither on GNSS nor on the navigation filters:
+// the least-squares slope of the fused barometer altitude over the last
+// kWindowUs must stay below kMaxSpeedMps (FSM spec SPEED_ZERO) for
+// kConfirmUs. Under parachute the descent rate is several m/s, so this only
+// holds on the ground (or if the rocket hangs somewhere). Runs in DESCENT
+// and LANDED. The flag is live, not latched; the FSM additionally requires
+// Descent.MaxDurationMs.
+// ---------------------------------------------------------------
+struct TouchdownDetector {
+	static constexpr size_t kCapacity = 256u;
+	static constexpr uint64_t kWindowUs = 2500000u;
+	static constexpr uint64_t kConfirmUs = 3000000u;
+	static constexpr uint64_t kStaleUs = 2000000u;
+	static constexpr size_t kMinSamples = 10u;
+	static constexpr double kMaxSpeedMps = 0.5;
+
+	uint64_t ts[kCapacity] = {};
+	float alt[kCapacity] = {};
+	size_t head = 0;   ///< Oldest sample
+	size_t count = 0;
+	uint64_t still_since_us = 0;
+	bool detected = false;
+
+	void reset() {
+		head = 0;
+		count = 0;
+		still_since_us = 0;
+		detected = false;
+	}
+
+	void addSample(uint64_t sample_ts_us, float altitude_m) {
+		if (count > 0 && sample_ts_us <= ts[(head + count - 1u) % kCapacity]) {
+			return;  // Same fused sample as last tick
+		}
+		if (count == kCapacity) {
+			head = (head + 1u) % kCapacity;
+			--count;
+		}
+		ts[(head + count) % kCapacity] = sample_ts_us;
+		alt[(head + count) % kCapacity] = altitude_m;
+		++count;
+		while (count > 0 && ts[head] + kWindowUs < sample_ts_us) {
+			head = (head + 1u) % kCapacity;
+			--count;
+		}
+	}
+
+	void update(uint64_t now_us) {
+		const uint64_t newest = count ? ts[(head + count - 1u) % kCapacity] : 0u;
+		if (count < kMinSamples || now_us > newest + kStaleUs ||
+			newest - ts[head] < (kWindowUs * 8u) / 10u) {
+			still_since_us = 0;
+			detected = false;
+			return;
+		}
+		double mt = 0.0, ma = 0.0;
+		for (size_t i = 0; i < count; ++i) {
+			const size_t k = (head + i) % kCapacity;
+			mt += static_cast<double>(ts[k] - ts[head]) * 1e-6;
+			ma += static_cast<double>(alt[k]);
+		}
+		mt /= static_cast<double>(count);
+		ma /= static_cast<double>(count);
+		double cov = 0.0, var = 0.0;
+		for (size_t i = 0; i < count; ++i) {
+			const size_t k = (head + i) % kCapacity;
+			const double dt = static_cast<double>(ts[k] - ts[head]) * 1e-6 - mt;
+			cov += dt * (static_cast<double>(alt[k]) - ma);
+			var += dt * dt;
+		}
+		const double slope_mps = (var > 0.0) ? cov / var : 0.0;
+		if (std::fabs(slope_mps) < kMaxSpeedMps) {
+			if (still_since_us == 0) {
+				still_since_us = newest;
+			}
+			detected = (newest - still_since_us) >= kConfirmUs;
+		} else {
+			still_since_us = 0;
+			detected = false;
+		}
+	}
+};
+
 struct KalmanRuntime {
 	app::EskfEstimator estimator;
 	app::ApogeeHub apogee_hub;
@@ -220,6 +306,8 @@ struct KalmanRuntime {
 	LiftoffAccHold acc_hold;  ///< Liftoff acceleration-hold evaluator
 	LiftoffDetector liftoff_detector;  ///< IMU dual-window liftoff detector
 	uint32_t imu_liftoff_detect_ms = 0;  ///< Timestamp of the detecting sample
+	TouchdownDetector touchdown_detector;  ///< Baro stillness in DESCENT
+	bool touchdown_published = false;
 
 #if KALMAN_DEBUG_PRINT
 	kalman_debug::RawSensorSnapshot debug_raw_sensor_{};
@@ -303,6 +391,8 @@ struct KalmanRuntime {
 		acc_hold.reset();
 		liftoff_detector.reset();
 		imu_liftoff_detect_ms = 0;
+		touchdown_detector.reset();
+		touchdown_published = false;
 		KalmanHealthStore::instance().reset();
 	}
 
@@ -713,6 +803,28 @@ struct KalmanRuntime {
 		// Currently, av_state.cpp::fromAscent() reads dump.event.apogee_detected
 		// and transitions to DESCENT. The robustness checks listed above are
 		// NOT yet implemented there — this is a flight-safety TODO.
+
+		// ── Touchdown detector → EventStore (live flag, DESCENT/LANDED) ──
+		if (last_state == flight_computer::State::DESCENT ||
+			last_state == flight_computer::State::LANDED) {
+			float baro_alt_m = 0.0f;
+			uint64_t baro_ts_us = 0u;
+			if (estimator.latestBaroAltitude(baro_alt_m, baro_ts_us)) {
+				touchdown_detector.addSample(baro_ts_us, baro_alt_m);
+			}
+			touchdown_detector.update(now_us);
+		} else {
+			touchdown_detector.reset();
+		}
+		if (touchdown_detector.detected != touchdown_published) {
+			touchdown_published = touchdown_detector.detected;
+			auto event = goat.eventStore.get();
+			event.touchdown_detected = touchdown_published;
+			goat.eventStore.set(event);
+			app_printf("[TOUCHDOWN] %s at t=%lu ms\r\n",
+			       touchdown_published ? "Detected" : "Cleared",
+			       static_cast<unsigned long>(now_us / 1000ULL));
+		}
 
 		// ── IMU liftoff detector → EventStore ────────────────────────
 		const bool imu_liftoff = liftoff_detector.isDetected();

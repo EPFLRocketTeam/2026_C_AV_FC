@@ -102,6 +102,11 @@ public:
   /// Check if in coast phase (past burnout - body-X acceleration < 0)
   bool isCoastPhase() const;
 
+  /// Latest fused (virtual) barometer altitude, ISA, relative to the
+  /// liftoff ground reference once in flight. Independent of GNSS and of the
+  /// navigation filters. Returns false until a valid fused sample exists.
+  bool latestBaroAltitude(float &altitude_m, uint64_t &timestamp_us) const;
+
   /// Get body-frame X-axis acceleration (for high-accel lockout check)
   eskf_scalar bodyAccelX() const;
 
@@ -240,6 +245,9 @@ private:
     float variance = 0.0f;
   };
   LatestBaroForDescent latest_descent_baro_{};
+  bool latest_fused_baro_valid_ = false;
+  float latest_fused_baro_alt_m_ = 0.0f;
+  uint64_t latest_fused_baro_ts_ = 0;
   bool descent_waiting_initial_gnss_snap_ = false;
   uint64_t descent_last_gnss_fuse_us_ = 0;
 

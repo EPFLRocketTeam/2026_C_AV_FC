@@ -16,7 +16,7 @@ int kalman_loop(void);
 /// references, turn-on bias, GNSS anchor), apogee hub, both liftoff
 /// detectors, health counters, the liftoff latch and the Kalman-owned
 /// EventStore flags (apogee_detected, imu_liftoff_detected,
-/// vertical_acc_hold, catastrophic_failure). FSM state and timers are NOT
+/// vertical_acc_hold, touchdown_detected, catastrophic_failure). FSM state and timers are NOT
 /// touched. The estimator then needs stationary time to reconverge, like
 /// after boot (tens of seconds to ~2 minutes).
 ///
