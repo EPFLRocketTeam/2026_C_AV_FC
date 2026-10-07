@@ -672,6 +672,7 @@ extern "C" void app_super_loop_setup(void) {
             g_superloop.baroModule.sensorInit(2), g_superloop.baroModule.sensorInit(3),
             gps_state);
 #endif
+    // DO NOT REENABLE BUZZER UNLESS LIFTOFF DETECTION is allowed after Buzzer
     /* g_superloop.buzzer.tick(HAL_GetTick());
     g_superloop.buzzer.start(
         HAL_GetTick(),
@@ -697,19 +698,23 @@ extern "C" void app_super_loop_iterate(void) {
     fcTemperatureModule.tick();
 
 	//app_printf("Buzzer advancing ---------------------------------------------\r\n");
-	g_superloop.buzzer.tick(HAL_GetTick());
-    if (g_superloop.buzzer.is_finished() && !g_buzzer_finished) {
-        g_buzzer_finished = true;
-        g_buzzer_finished_ms = HAL_GetTick();
-    }
+    // DO NOT REENABLE BUZZER UNLESS LIFTOFF DETECTION is allowed after Buzzer
+	// g_superloop.buzzer.tick(HAL_GetTick());
+    // if (g_superloop.buzzer.is_finished() && !g_buzzer_finished) {
+    //     g_buzzer_finished = true;
+    //     g_buzzer_finished_ms = HAL_GetTick();
+    // }
 
     // Allow liftoff detection only after buzzer vibrations have settled
-    if (g_buzzer_finished && !g_liftoff_detection_allowed &&
-        (HAL_GetTick() - g_buzzer_finished_ms >= kLiftoffArmDelayMs)) {
+    if (!g_liftoff_detection_allowed) {
         g_liftoff_detection_allowed = true;
-        app_printf("[LIFTOFF] Detection enabled (%lums after buzzer)\r\n",
-               (unsigned long)kLiftoffArmDelayMs);
     }
+    // if (g_buzzer_finished && !g_liftoff_detection_allowed &&
+    //     (HAL_GetTick() - g_buzzer_finished_ms >= kLiftoffArmDelayMs)) {
+    //     g_liftoff_detection_allowed = true;
+    //     app_printf("[LIFTOFF] Detection enabled (%lums after buzzer)\r\n",
+    //            (unsigned long)kLiftoffArmDelayMs);
+    // }
 
     if (!g_superloop.ready) {
         return;

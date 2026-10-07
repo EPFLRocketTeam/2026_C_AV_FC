@@ -11,7 +11,7 @@
 #include "Application/Kalman/kalman_debug.hpp"
 #include "Application/Data/fsm.hpp"
 #include "Application/Data/data.hpp"
-#include "Application/FlightControl/threshold.h"
+#include "Application/Config/config.hpp"
 #include "Application/FlightControl/liftoff_detector.hpp"
 #include "Application/Modules/baro_module.hpp"
 #include "Application/Modules/imu_modlue.hpp"
@@ -123,10 +123,14 @@ struct LiftoffAccHold {
 			return ACC_HOLD_NOT_ELAPSED;
 		}
 
-		constexpr uint64_t ramp_up_us =
-			static_cast<uint64_t>(RAMP_UP_DURATION * 1000000.0f);
-		constexpr uint64_t window_us =
-			static_cast<uint64_t>(ACCEL_LIFTOFF_DURATION_MS * 1000.0f);
+		uint64_t ramp_up_us =
+			static_cast<uint64_t>(
+				config::get().Ignition.TotalTimeUntilHoldDownMs()
+			) * 1000ULL;
+		uint64_t window_us =
+			static_cast<uint64_t>(
+				config::get().Ignition.LiftoffAccelDurationMs
+			) * 1000ULL;
 
 		// Phase 1: wait for motor ramp-up to complete.
 		if (!in_window) {
@@ -155,7 +159,9 @@ struct LiftoffAccHold {
 		}
 
 		const double mean_accel = accel_sum / static_cast<double>(accel_count);
-		if (mean_accel > static_cast<double>(ACCEL_LIFTOFF)) {
+
+		float targetLiftoffAcceleration = config::get().Ignition.LiftoffAccelThreshold;
+		if (mean_accel > static_cast<double>(targetLiftoffAcceleration)) {
 			return ACC_HOLD_DID_HOLD;
 		}
 		return ACC_HOLD_DID_NOT_HOLD;
