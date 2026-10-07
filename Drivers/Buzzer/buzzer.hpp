@@ -106,6 +106,10 @@ public:
         return offset == number_steps(N_els);
     }
 
+    bool is_started () const {
+        return started;
+    }
+
     template<typename... Args>
     void start(ssize_t current_time, void (*enable_buzzer)(bool), Args... args) {
         static_assert(sizeof...(Args) == N_els, "Wrong number of args");

@@ -698,7 +698,12 @@ extern "C" void app_super_loop_iterate(void) {
 
 	//app_printf("Buzzer advancing ---------------------------------------------\r\n");
 	g_superloop.buzzer.tick(HAL_GetTick());
-    if (g_superloop.buzzer.is_finished() && !g_buzzer_finished) {
+    // A buzzer that was never started (start() is commented out in setup)
+    // produces no vibrations to wait for; without this, liftoff detection
+    // would never be enabled.
+    const bool buzzer_quiet =
+        !g_superloop.buzzer.is_started() || g_superloop.buzzer.is_finished();
+    if (buzzer_quiet && !g_buzzer_finished) {
         g_buzzer_finished = true;
         g_buzzer_finished_ms = HAL_GetTick();
     }
