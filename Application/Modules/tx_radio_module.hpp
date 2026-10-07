@@ -45,6 +45,7 @@ PREPARE_DOWNLINK(flight_computer::PropSensors) {
 	packet.LOX_fls_temp_3 = dump.fls_OTA_temperature_3;
 	packet.LOX_fls_temp_4 = dump.fls_OTA_temperature_4;
 	packet.LOX_fls_temp_5 = dump.fls_OTA_temperature_5;
+	packet.LOX_fls_temp_6 = dump.fls_OTA_temperature_6;
     packet.fuel_inj_pressure = dump.fuel_inj_pressure;
 	packet.LOX_inj_pressure = dump.LOX_inj_pressure;
 	packet.chamber_pressure = dump.chamber_pressure;

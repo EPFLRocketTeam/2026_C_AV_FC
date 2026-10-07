@@ -93,20 +93,22 @@ void OnDprLoxPressures(void*, pi::payload::dpr_lox_pressures p) noexcept {
 }
 void OnDprLoxTempsOta12(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
-  sensors.set_fls_OTA_temperature_1(t.ota1());
-  sensors.set_fls_OTA_temperature_2(t.ota2());
+  if (t.hasOta1()) sensors.set_fls_OTA_temperature_1(t.ota1());
+  if (t.hasOta2()) sensors.set_fls_OTA_temperature_2(t.ota2());
 }
 void OnDprLoxTempsOta34(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
   // OTA4 moved to the engine board (see OnPrcTempsOta45 below) -- only
   // OTA3 is meaningful in this message now.
-  GOATStore::get_instance().propSensorsStore.set_fls_OTA_temperature_3(t.ota3());
+  auto& sensors = GOATStore::get_instance().propSensorsStore;
+  if (t.hasOta3()) sensors.set_fls_OTA_temperature_3(t.ota3());
+  if (t.hasOta4()) sensors.set_fls_OTA_temperature_4(t.ota4());
 }
 // Sent by the engine board (Node::PrcP), not DPR-LOX: OTA1-3 are read out
 // on DPR-LOX (OnDprLoxTempsOta12/34 above), OTA4/5 on the engine board.
-void OnPrcTempsOta45(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
+void OnDprLoxTempsOta56(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
-  sensors.set_fls_OTA_temperature_4(t.ota5());
-  sensors.set_fls_OTA_temperature_5(t.ota6());
+  if (t.hasOta5()) sensors.set_fls_OTA_temperature_5(t.ota5());
+  if (t.hasOta6()) sensors.set_fls_OTA_temperature_6(t.ota6());
 }
 
 void OnPrcPInjector(void*, pi::payload::prc_p_injector p) noexcept {
@@ -167,7 +169,7 @@ pi::context& Ctx() {
     driver.on_dpr_lox_pressures = OnDprLoxPressures;
     driver.on_dpr_lox_temps_ota_1_2 = OnDprLoxTempsOta12;
     driver.on_dpr_lox_temps_ota_3_4 = OnDprLoxTempsOta34;
-    driver.on_dpr_lox_temps_ota_5_6 = OnPrcTempsOta45;
+    driver.on_dpr_lox_temps_ota_5_6 = OnDprLoxTempsOta56;
     driver.on_prc_p_chamber     = OnPrcPChamber;
     driver.on_prc_p_injector    = OnPrcPInjector;
     driver.on_prc_t_chamber     = OnPrcTChamber;

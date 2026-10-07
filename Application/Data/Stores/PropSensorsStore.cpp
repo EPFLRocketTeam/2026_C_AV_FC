@@ -53,6 +53,9 @@ void PropSensorsStore::set_fls_OTA_temperature_4 (double value) { data_.fls_OTA_
 double PropSensorsStore::get_fls_OTA_temperature_5 () const { return data_.fls_OTA_temperature_5; }
 void PropSensorsStore::set_fls_OTA_temperature_5 (double value) { data_.fls_OTA_temperature_5 = value; }
 
+double PropSensorsStore::get_fls_OTA_temperature_6 () const { return data_.fls_OTA_temperature_6; }
+void PropSensorsStore::set_fls_OTA_temperature_6 (double value) { data_.fls_OTA_temperature_6 = value; }
+
 double PropSensorsStore::get_fuel_inj_pressure () const { return data_.fuel_inj_pressure; }
 void PropSensorsStore::set_fuel_inj_pressure (double value) { data_.fuel_inj_pressure = value; }
 

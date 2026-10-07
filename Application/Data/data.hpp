@@ -127,8 +127,9 @@ struct PropSensors {
 
   // === ENGINE ===
   
-  // 5 -> lowest
+  // 6 -> lowest
   double fls_OTA_temperature_5;
+  double fls_OTA_temperature_6;
 
   double fuel_inj_pressure;
   double fuel_inj_temperature;
@@ -428,6 +429,9 @@ public:
 
   double get_fls_OTA_temperature_5 () const;
   void set_fls_OTA_temperature_5 (double value);
+  
+  double get_fls_OTA_temperature_6 () const;
+  void set_fls_OTA_temperature_6 (double value);
 
   double get_fuel_inj_pressure () const;
   void set_fuel_inj_pressure (double value);
