@@ -8,6 +8,8 @@
 //                   without cable (FSM spec, no valve bypass)
 //   t_burn, t_ign, t_cable : absolute us (0 = never)
 //   burn_to_ascent_ms      : BURN -> ASCENT delay (default 2000)
+//   descent_max_ms         : DESCENT -> LANDED needs touchdown_detected and
+//                            this long in DESCENT (default 60000)
 //   detector=0             : never allow IMU liftoff detection
 //   reset_at=<us>          : call kalman_request_reset() (new code only)
 //   reset_at2=<us>         : second reset request
@@ -101,6 +103,7 @@ int main(int argc, char **argv) {
   const uint64_t t_burn = argU(argc, argv, "t_burn", 0), t_ign = argU(argc, argv, "t_ign", 0);
   const uint64_t t_cable = argU(argc, argv, "t_cable", 0);
   const uint64_t burn_to_ascent_us = argU(argc, argv, "burn_to_ascent_ms", 2000) * 1000u;
+  const uint64_t descent_max_us = argU(argc, argv, "descent_max_ms", 60000) * 1000u;
   const bool detector = argU(argc, argv, "detector", 1) != 0, fake_gps = argU(argc, argv, "fake_gps", 0) != 0;
   const uint64_t reset_at = argU(argc, argv, "reset_at", 0), reset_at2 = argU(argc, argv, "reset_at2", 0);
   const std::string drop = argS(argc, argv, "drop_imu", "");
@@ -134,14 +137,14 @@ int main(int argc, char **argv) {
 
   FILE *out = std::fopen(out_path.c_str(), "w");
   if (!out) { std::perror(out_path.c_str()); return 1; }
-  std::fprintf(out, "t_us,state,nav_alt_up,nav_vz_up,eskf_alt_up,eskf_vz_up,fs_alt_up,fs_vz_up,apogee,imu_liftoff,acc_hold\n");
+  std::fprintf(out, "t_us,state,nav_alt_up,nav_vz_up,eskf_alt_up,eskf_vz_up,fs_alt_up,fs_vz_up,apogee,imu_liftoff,acc_hold,touchdown\n");
 
   const uint64_t t0 = imu.front().ts, t_end = imu.back().ts;
   const uint64_t tick_us = 500;
   size_t ii = 0, bi = 0, ti = 0;
-  uint64_t burn_entry = 0, next_rec = 0, next_gps = t0 + 1000000;
+  uint64_t burn_entry = 0, descent_entry = 0, next_rec = 0, next_gps = t0 + 1000000;
   bool reset_done = false, reset2_done = false;
-  uint8_t prev_acc = 0; bool prev_apogee = false, prev_lift = false;
+  uint8_t prev_acc = 0; bool prev_apogee = false, prev_lift = false, prev_touch = false;
   auto &goat = flight_computer::GOATStore::get_instance();
 
   for (g_sim_us = t0; g_sim_us <= t_end; g_sim_us += tick_us) {
@@ -195,20 +198,22 @@ int main(int argc, char **argv) {
       }
     }
     if (g_state == State::BURN && g_sim_us - burn_entry >= burn_to_ascent_us) transition(State::ASCENT);
-    else if (g_state == State::ASCENT && ev.apogee_detected) transition(State::DESCENT);
+    else if (g_state == State::ASCENT && ev.apogee_detected) { transition(State::DESCENT); descent_entry = g_sim_us; }
+    else if (g_state == State::DESCENT && ev.touchdown_detected && g_sim_us - descent_entry > descent_max_us) transition(State::LANDED);
 
     if (ev.vertical_acc_hold != prev_acc) { std::printf("[t=%.6f] vertical_acc_hold=%u\n", g_sim_us / 1e6, ev.vertical_acc_hold); prev_acc = ev.vertical_acc_hold; }
     if (ev.imu_liftoff_detected != prev_lift) { std::printf("[t=%.6f] imu_liftoff_detected=%d\n", g_sim_us / 1e6, ev.imu_liftoff_detected); prev_lift = ev.imu_liftoff_detected; }
+    if (ev.touchdown_detected != prev_touch) { std::printf("[t=%.6f] touchdown_detected=%d\n", g_sim_us / 1e6, ev.touchdown_detected); prev_touch = ev.touchdown_detected; }
     if (ev.apogee_detected != prev_apogee) { std::printf("[t=%.6f] apogee_detected=%d\n", g_sim_us / 1e6, ev.apogee_detected); prev_apogee = ev.apogee_detected; }
 
     if (g_sim_us >= next_rec) {
       next_rec = g_sim_us + 10000;
       const auto nav = goat.navigationDataStore.get();
-      std::fprintf(out, "%llu,%s,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%u\n", (unsigned long long)g_sim_us, stateName(g_state),
+      std::fprintf(out, "%llu,%s,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%u,%d\n", (unsigned long long)g_sim_us, stateName(g_state),
                    nav.altitude, -nav.speed.z,
                    g_logger.has_state ? -g_logger.last_state.p[2] : 0.0, g_logger.has_state ? -g_logger.last_state.v[2] : 0.0,
                    g_logger.has_fs ? g_logger.last_fs.altitude_m : 0.0, g_logger.has_fs ? -g_logger.last_fs.velocity_mps : 0.0,
-                   ev.apogee_detected, ev.imu_liftoff_detected, ev.vertical_acc_hold);
+                   ev.apogee_detected, ev.imu_liftoff_detected, ev.vertical_acc_hold, ev.touchdown_detected);
     }
   }
   std::fclose(out);
