@@ -1,4 +1,5 @@
 #include "av_state.h"
+#include "Application/main.h"
 #include "Application/Data/data.hpp"
 #include "Application/Config/config.hpp"
 #include "Application/FlightControl/prc_can.hpp"
@@ -312,14 +313,11 @@ void AvState::update(const DataDump &dump) {
     // entering ABORT_IN_FLIGHT. No separation mechanism driver/CAN message
     // exists anywhere in this codebase yet -- call it here once it does.
     if (currentState == State::ABORT_IN_FLIGHT) {
-      // Fc_Can_SendSepMechTrigger();
+      app_open_parachute();
     }
 
-    // TODO(SepMech): spec's DESCENT description: "Apogee reached and
-    // detected, separation mechanism triggered." Same missing driver as
-    // above -- call it here once it exists.
     if (currentState == State::DESCENT) {
-      // Fc_Can_SendSepMechTrigger();
+      app_open_parachute();
 
       // Passivate side effect: tells the Engine board to run its
       // passivation sequence (2026_C_AV_PRC's engine_state.cpp:

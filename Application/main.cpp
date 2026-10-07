@@ -934,7 +934,7 @@ extern "C" uint64_t app_get_remaining_disk_size (void) {
     return g_sd_interface.disk_size_remaining();
 }
 extern "C" uint64_t app_get_sd_fail_count (void) {
-    return g_sd_logger.writeFailCount();
+    return g_sd_logger.writeFailCount() + g_sd_logger.imuBatchFail();
 }
 extern "C" float app_get_current_imu_rate (void) {
     float ratio = 0;
@@ -952,4 +952,28 @@ extern "C" float app_get_current_imu_rate (void) {
     lastRatioComputationTime = HAL_GetTick();
 
     return ratio;
+}
+extern "C" void app_open_parachute () {
+    app_set_pyro_status(1, true);
+    app_set_pyro_status(2, true);
+    app_set_pyro_status(3, true);
+    app_set_pyro_status(4, true);
+}
+extern "C" void app_set_pyro_status (int pyro_id, bool enabled) {
+    auto &store = flight_computer::GOATStore::get_instance().vehiculeOverviewStore;
+    auto target = enabled ? GPIO_PIN_SET : GPIO_PIN_RESET;
+
+    if (pyro_id == 1) {
+        store.set_pyro_ch1_on(enabled);
+        HAL_GPIO_WritePin(PYROS_1_GPIO_Port, PYROS_1_Pin, target);
+    } else if (pyro_id == 2) {
+        store.set_pyro_ch2_on(enabled);
+        HAL_GPIO_WritePin(PYROS_2_GPIO_Port, PYROS_2_Pin, target);
+    } else if (pyro_id == 3) {
+        store.set_pyro_ch3_on(enabled);
+        HAL_GPIO_WritePin(PYROS_3_GPIO_Port, PYROS_3_Pin, target);
+    } else if (pyro_id == 4) {
+        store.set_pyro_ch4_on(enabled);
+        HAL_GPIO_WritePin(PYROS_4_GPIO_Port, PYROS_4_Pin, target);
+    }
 }

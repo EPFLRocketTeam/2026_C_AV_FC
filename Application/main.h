@@ -15,6 +15,8 @@ void simple_radio_tick(void);
 void app_super_loop_setup(void);
 void app_super_loop_iterate(void);
 
+void app_open_parachute ();
+void app_set_pyro_status (int pyro_id, bool enabled);
 uint64_t app_get_remaining_disk_size (void);
 uint64_t app_get_sd_fail_count (void);
 float app_get_current_imu_rate (void);
