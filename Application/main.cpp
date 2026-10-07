@@ -5,6 +5,7 @@
 #include "Modules/baro_module.hpp"
 #include "Modules/imu_modlue.hpp"
 #include "Modules/gps_module.hpp"
+#include "Application/Modules/battery_module.hpp"
 #include "plume_driver.hpp"
 #include "Modules/sd_logger.hpp"
 #include "Drivers/Buzzer/buzzer.hpp"
@@ -33,6 +34,7 @@ extern "C" {
 extern SPI_HandleTypeDef hspi4;
 extern SPI_HandleTypeDef hspi5;
 extern UART_HandleTypeDef huart6;
+extern I2C_HandleTypeDef hi2c2;
 extern SD_HandleTypeDef hsd1;
 
 using Drivers::InvIMU::Config;
@@ -405,6 +407,8 @@ struct SuperLoopContext {
     RingBuffer<GpsBasicFixData, 100>* gpsRing[1] = {&gpsData};
     GpsModule gpsModule{gpsArr, gpsRing};
 
+    BatteryModule batteryModule{&hi2c2};
+
     bool setup_done = false;
     bool ready = false;
 };
@@ -624,6 +628,10 @@ extern "C" void app_super_loop_setup(void) {
         printf("WARNING: No barometers initialized\r\n");
     }
 
+    if (!g_superloop.batteryModule.init()) {
+        printf("WARNING: not all battery rails initialized\r\n");
+    }
+
     bool gps_state = g_superloop.gpsModule.init();
 #if FAKE_GNSS_ENABLE   /////
     printf("[APP] FAKE_GNSS_ENABLE=1: skipping real GPS init, using synthetic 16Hz GNSS\r\n");
@@ -683,6 +691,7 @@ extern "C" void app_super_loop_iterate(void) {
 
 	//printf("Buzzer advancing ---------------------------------------------\r\n");
 	g_superloop.buzzer.tick(HAL_GetTick());
+	g_superloop.batteryModule.update(HAL_GetTick());
     if (g_superloop.buzzer.is_finished() && !g_buzzer_finished) {
         g_buzzer_finished = true;
         g_buzzer_finished_ms = HAL_GetTick();
