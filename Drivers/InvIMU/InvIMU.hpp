@@ -130,6 +130,12 @@ namespace InvIMU {
         uint32_t offsetBurstCount() const { return _offset_burst_count; }
         bool offsetGateArmed() const { return _offset_gate_armed; }
 
+        FifoStats takeFifoStats() override {
+            const FifoStats s = _fifo_stats;
+            _fifo_stats = FifoStats{};
+            return s;
+        }
+
         void onInterrupt(uint64_t irq_us = 0) override;
         void tick() override;        
         void onDmaComplete() override;
@@ -209,6 +215,8 @@ namespace InvIMU {
         // SPI diagnostic counters
         uint32_t _spi_fifo_read_fail_count = 0;
         uint32_t _spi_state_not_ready_count = 0;
+
+        FifoStats _fifo_stats{};
 
         static void enable_dwt_cyccnt();
         static bool dwt_is_running();
