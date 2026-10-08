@@ -140,7 +140,7 @@ public:
   uint8_t previouslyHealthyCount (uint64_t healthyMinTimeUs) {
     uint8_t res = 0;
     for (size_t i = 0; i < kNumSensors; ++i) {
-      if (state.last_healthy_time_us >= healthyMinTimeUs) {
+      if (sensor_state_[i].last_healthy_time_us >= healthyMinTimeUs) {
         res ++;
       }
     }

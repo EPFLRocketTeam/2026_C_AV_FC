@@ -931,7 +931,7 @@ extern "C" void app_super_loop_iterate(void) {
 }
 
 extern "C" uint8_t app_get_current_baro_count (void) {
-    static uint64_t last_call_time = 0;
+    static uint64_t last_call_time = 1;
     uint8_t res = g_superloop.baroModule.previouslyHealthyCount(last_call_time);
     last_call_time = app_timebase_now_us();
     return res;
