@@ -56,6 +56,15 @@
  */
 #define OUTPUT_LOG
 
+/**
+ * APP_RADIO_ENABLE: runs simple_radio_tick() (telemetry downlink + uplink
+ * commands) in the super loop. The radio driver no longer blocks the loop
+ * during a transmission, so it can stay on during IMU acquisition.
+ */
+#ifndef APP_RADIO_ENABLE
+#define APP_RADIO_ENABLE 1
+#endif
+
 /*  CAN bus test between 2026_C_AV_PRC and 2026_C_AV_FC (PD0=RX, PD1=TX on both boards).  */
 #define CANBUS_TEST_TX_ID   0x101u   /*  FC -> PRC  */
 #define CANBUS_TEST_RX_ID   0x100u   /*  PRC -> FC  */
@@ -260,7 +269,9 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  //HAL_Delay(1000);
 	  //app_printf("In tick.\n");
-	  // simple_radio_tick();
+#if APP_RADIO_ENABLE
+	  simple_radio_tick();
+#endif
 	  /*
 	  	  app_printf("flag: %i\r\n", flag);
 	  	  if (!flag) {
