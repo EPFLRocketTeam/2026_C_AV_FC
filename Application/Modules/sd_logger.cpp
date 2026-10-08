@@ -133,6 +133,7 @@ void SdLogger::logFlightShadow(const eskf::FlightShadowSnapshot& snapshot) {
 }
 
 void SdLogger::logImuPipeline(const eskf::ImuPipelineSnapshot& snapshot) {
+    if (!high_rate_enabled_) return;
     writeRecord(SD_LOG_IMU_PIPELINE, &snapshot, sizeof(snapshot));
 }
 
