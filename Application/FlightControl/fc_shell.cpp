@@ -34,7 +34,15 @@ namespace fc_commands {
 // transition (fromArmed() checks the same placeholder id as CALIBRATE/ARM,
 // see OnAvCalibrate's comment below), and also clears the Engine board to
 // ignite -- not three separate commands.
+bool IsProtectedMode () {
+  flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
+
+  return state == flight_computer::State::PRESSURIZATION
+      || state == flight_computer::State::IGNITION
+      || state == flight_computer::State::BURN;
+}
 void OnPressurize(void*, bool value) noexcept {
+  if (IsProtectedMode()) return ;
   app_printf("[SHELL] pressurize %s\r\n", value ? "on" : "off");
   Fc_Can_SendDprLoxPressurize(value ? 1 : 0);
   Fc_Can_SendDprEthPressurize(value ? 1 : 0);
@@ -45,39 +53,48 @@ void OnPressurize(void*, bool value) noexcept {
 }
 // Toggles the engine board's MO valve directly, bypassing the FSM.
 void OnMainLox(void*, bool value)  noexcept {
+  if (IsProtectedMode()) return ;
   app_printf("[SHELL] main lox %s\r\n", value ? "open" : "close");
   Fc_Can_SendMainValveCmd(0, value ? 1 : 0);
 }
 void OnMainFuel(void*, bool value) noexcept {
+  if (IsProtectedMode()) return ;
   app_printf("[SHELL] main fuel %s\r\n", value ? "open" : "close");
   Fc_Can_SendMainValveCmd(1, value ? 1 : 0);
 }
 void OnVentCopv(void*, bool value) noexcept {
+  if (IsProtectedMode()) return ;
   app_printf("[SHELL] vent copv %s\r\n", value ? "open" : "close");
   Fc_Can_SendDprLoxCopvVent(value ? 1 : 0);
   Fc_Can_SendDprEthCopvVent(value ? 1 : 0);
 }
 void OnVentLox(void*, bool value)  noexcept {
+  if (IsProtectedMode()) return ;
   app_printf("[SHELL] vent lox %s\r\n", value ? "open" : "close");
   Fc_Can_SendDprLoxVent(value ? 1 : 0);
 }
 void OnVentFuel(void*, bool value) noexcept {
+  if (IsProtectedMode()) return ;
   app_printf("[SHELL] vent fuel %s\r\n", value ? "open" : "close");
   Fc_Can_SendDprEthVent(value ? 1 : 0);
 }
 void OnSafetyLox(void*, bool value)  noexcept {
+  if (IsProtectedMode()) return ;
   app_printf("[SHELL] safety lox %s\r\n", value ? "open" : "close");
   Fc_Can_SendDprLoxSafety(value ? 1 : 0);
 }
 void OnSafetyFuel(void*, bool value) noexcept {
+  if (IsProtectedMode()) return ;
   app_printf("[SHELL] safety fuel %s\r\n", value ? "open" : "close");
   Fc_Can_SendDprEthSafety(value ? 1 : 0);
 }
 void OnBallLox(void*, float value) noexcept {
+  if (IsProtectedMode()) return ;
   app_printf("[SHELL] ball lox %.1f\r\n", value);
   Fc_Can_SendDprLoxBallValve(value);
 }
 void OnBallFuel(void*, float value) noexcept {
+  if (IsProtectedMode()) return ;
   app_printf("[SHELL] ball fuel %.1f\r\n", value);
   Fc_Can_SendDprEthBallValve(value);
 }
