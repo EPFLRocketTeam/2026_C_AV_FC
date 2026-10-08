@@ -80,7 +80,8 @@ struct FlightEventTimers {// TODO: Properly update the store test
 };
 
 struct VehiculeOverview {// TODO: Properly update the store test
-  uint8_t no_cable_continuity;
+  bool no_cable_continuity_engine;
+  bool no_cable_continuity_lox;
 
   bool pyros_on[4];
 
@@ -324,8 +325,11 @@ class VehiculeOverviewStore : public IStore<VehiculeOverview> {
 public:
   VehiculeOverviewStore();
 
-  uint8_t get_no_cable_continuity() const;
-  void set_no_cable_continuity(uint8_t value);
+  bool get_no_cable_continuity_engine () const;
+  void set_no_cable_continuity_engine (bool value);
+
+  bool get_no_cable_continuity_lox () const;
+  void set_no_cable_continuity_lox (bool value);
 
   bool get_pyro_ch1_on () const;
   bool get_pyro_ch2_on () const;
