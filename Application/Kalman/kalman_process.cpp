@@ -12,7 +12,6 @@
 #include "Application/Kalman/kalman_debug.hpp"
 #include "Application/Data/fsm.hpp"
 #include "Application/Data/data.hpp"
-#include "Application/FlightControl/threshold.h"
 #include "Application/FlightControl/liftoff_detector.hpp"
 #include "Application/Modules/baro_module.hpp"
 #include "Application/Modules/imu_modlue.hpp"
