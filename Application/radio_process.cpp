@@ -96,6 +96,19 @@ void handleRxCommand(void* data) noexcept {
 	case AV_CMD_DPR_FUEL:
 		fc_commands::OnBallFuel(nullptr, percent);
 		break ;
+	
+	case AV_CMD_CAMERA_START:
+		fc_commands::cameras_start(nullptr);
+		break ;
+	case AV_CMD_CAMERA_STOP:
+		fc_commands::cameras_stop(nullptr);
+		break ;
+	case AV_CMD_CAMERA_ABORT:
+		fc_commands::cameras_abort(nullptr);
+		break ;
+	case AV_CMD_CAMERA_RECOVER:
+		fc_commands::cameras_recover(nullptr);
+		break ;
 
 	default:
 		app_printf("[RADIO] unhandled order_id %u\r\n", packet->order_id);

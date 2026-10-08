@@ -88,6 +88,11 @@ void OnDprEthPassivate(void*) noexcept;
 void OnDprEthReset(void*) noexcept;
 void OnDprBroadcastAbort(void*) noexcept;
 
+void cameras_abort (void* ctx);
+void cameras_recover (void* ctx);
+void cameras_start (void* ctx);
+void cameras_stop (void* ctx);
+
 void handleRxCommand(void* data) noexcept;
 }  // namespace fc_commands
 
