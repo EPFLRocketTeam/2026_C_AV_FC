@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
+#include "../../Application/app_perf.h"
 #include "../../Drivers/InvIMU/Tests/Hardware/imu_manual_test.h"
 #include "../../Drivers/BMP390/Tests/Manual/bmp390_manual_test.h"
 #include "../../Drivers/UBX_GPS/Tests/Hardware/gps_manual_test.h"
@@ -270,7 +271,11 @@ int main(void)
 	  //HAL_Delay(1000);
 	  //app_printf("In tick.\n");
 #if APP_RADIO_ENABLE
-	  simple_radio_tick();
+	  {
+	    const uint64_t perf_t0 = app_perf_begin();
+	    simple_radio_tick();
+	    app_perf_end(APP_PERF_RADIO, perf_t0);
+	  }
 #endif
 	  /*
 	  	  app_printf("flag: %i\r\n", flag);
@@ -341,6 +346,7 @@ int main(void)
 	     *  entries instead of the newest one. Each frame is decoded via
 	     *  prc_intranet (see Application/FlightControl/prc_can.cpp); ids it
 	     *  doesn't recognize are silently ignored. */
+	    const uint64_t perf_can_t0 = app_perf_begin();
 	    while (HAL_FDCAN_GetRxFifoFillLevel(&hfdcan1, FDCAN_RX_FIFO0) > 0)
 	    {
 	      FDCAN_RxHeaderTypeDef rxHeader;
@@ -369,6 +375,7 @@ int main(void)
 	      app_printf("[CAN] WARNING: RX FIFO0 overflow, frame(s) rejected (count=%lu)\r\n",
 	             (unsigned long)rf0l_count);
 	    }
+	    app_perf_end(APP_PERF_CAN, perf_can_t0);
 
 	  }
 

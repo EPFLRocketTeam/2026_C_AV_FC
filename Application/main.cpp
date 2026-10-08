@@ -15,6 +15,7 @@
 #include "Application/Config/config.hpp"
 #include "Application/FlightControl/fc_shell.hpp"
 #include "Application/app_logger.hpp"
+#include "Application/app_perf.h"
 #include "Drivers/Camera/CameraPlatform.hpp"
 
 
@@ -702,8 +703,36 @@ static int nb_superloops = 0;
 static int nb_consumed = 0;
 static uint32_t lastRatioComputationTime = 0;
 static int nb_consumed_since_last_poll = 0;
+#if APP_PERF_TRACE
+// One line per report period: per-IMU frames, timestamp gaps and samples lost
+// in them, largest frame step, and hardware FIFO fill (see ImuModule /
+// InvIMU_Interface::FifoStats).
+static void app_print_imu_acquisition(void) {
+    char line[384];
+    int n = snprintf(line, sizeof(line), "[IMU-ACQ]");
+    for (size_t i = 0; i < 4; ++i) {
+        const auto a = g_superloop.imuModule.takeAcqStats(i);
+        const auto f = g_superloop.imuModule.takeFifoStats(i);
+        if (n > 0 && n < (int)sizeof(line)) {
+            n += snprintf(line + n, sizeof(line) - n,
+                          " %u:fr=%lu gap=%lu lost=%lu dt=%luus hwm=%u cap=%lu full=%lu",
+                          (unsigned)i, (unsigned long)a.frames, (unsigned long)a.gaps,
+                          (unsigned long)a.lost, (unsigned long)a.max_dt_us,
+                          (unsigned)f.count_hwm, (unsigned long)f.capped_reads,
+                          (unsigned long)f.full_flags);
+        }
+    }
+    app_printf("%s\r\n", line);
+}
+#endif
+
 extern "C" void app_super_loop_iterate(void) {
+    app_perf_loop_mark();
+    uint64_t perf_t0 = app_perf_begin();
 	FC_Shell_Tick();
+    app_perf_end(APP_PERF_SHELL, perf_t0);
+
+    perf_t0 = app_perf_begin();
     RUN_EVERY(100)
         config::internal::tick();
 
@@ -726,10 +755,13 @@ extern "C" void app_super_loop_iterate(void) {
         app_printf("[LIFTOFF] Detection enabled (%lums after buzzer)\r\n",
                (unsigned long)kLiftoffArmDelayMs);
     }
+    app_perf_end(APP_PERF_PERIPH, perf_t0);
 
     if (!g_superloop.ready) {
         return;
     }
+
+    perf_t0 = app_perf_begin();
 
     // ── SD Card Logging ────────────────────────────────────────────────────
     // Write DataDump at ~62.5 Hz + on FSM transitions.
@@ -861,16 +893,19 @@ extern "C" void app_super_loop_iterate(void) {
                    (unsigned long)delta_stale);
         }
     }
+    app_perf_end(APP_PERF_SD_LOG, perf_t0);
     {
         const uint64_t t0 = app_timebase_now_us();
         g_sd_interface.tick();
         const uint32_t sd_us = static_cast<uint32_t>(app_timebase_now_us() - t0);
         g_metrics_tracker.recordSdTick(sd_us);
         g_sd_logger.notifyTick();
+        app_perf_end(APP_PERF_SD_TICK, t0);
     }
 
     const uint64_t iteration_start_us = app_timebase_now_us();
     const uint32_t iter_now_ms = HAL_GetTick();
+    perf_t0 = app_perf_begin();
     g_superloop.imuModule.update(iter_now_ms);
 
     for (size_t i = 0; i < 4; ++i) {
@@ -897,6 +932,9 @@ extern "C" void app_super_loop_iterate(void) {
 
     size_t producedCount = g_superloop.imuModule.takeProducedCount();
     nb_consumed += producedCount;
+    app_perf_end(APP_PERF_IMU, perf_t0);
+
+    perf_t0 = app_perf_begin();
     g_superloop.baroModule.update(iter_now_ms);
     for (size_t i = 0; i < 4; ++i) {
         g_baro_healthy[i] = g_superloop.baroModule.sensorHealthy(i) ? 1u : 0u;
@@ -910,24 +948,40 @@ extern "C" void app_super_loop_iterate(void) {
 #if FAKE_GNSS_ENABLE
     fake_gnss_inject(iteration_start_us);
 #endif
+    app_perf_end(APP_PERF_BARO_GPS, perf_t0);
 
     const uint64_t kal_start_us = app_timebase_now_us();
     (void)kalman_loop();
     const uint64_t kal_end_us = app_timebase_now_us();
     g_metrics_tracker.recordKalman(static_cast<uint32_t>(kal_end_us - kal_start_us));
+    app_perf_end(APP_PERF_KALMAN, kal_start_us);
 
     /* Second SD drain point: halves the max latency between DMA completion
      * checks (from one full loop iteration ~3-5ms down to ~1-2ms). */
+    perf_t0 = app_perf_begin();
     g_sd_interface.tick();
+    app_perf_end(APP_PERF_SD_TICK, perf_t0);
 
     // ── FSM tick ────────────────────────────────────────────────────────
     // Runs after kalman_loop so that imu_liftoff_detected is fresh.
+    perf_t0 = app_perf_begin();
     fsm_tick();
+    app_perf_end(APP_PERF_FSM, perf_t0);
 
     const uint64_t iteration_end_us = app_timebase_now_us();
     const uint64_t elapsed_us = iteration_end_us - iteration_start_us;
     kalman_note_main_loop_iteration_us(static_cast<uint32_t>(elapsed_us));
     g_metrics_tracker.recordLoop(static_cast<uint32_t>(elapsed_us));
+
+#if APP_PERF_TRACE
+    RUN_EVERY(APP_PERF_REPORT_MS) {
+        perf_t0 = app_perf_begin();
+        app_perf_print();
+        app_print_imu_acquisition();
+        simple_radio_print_stats();
+        app_perf_end(APP_PERF_REPORT, perf_t0);
+    }
+#endif
 }
 
 extern "C" uint64_t app_get_remaining_disk_size (void) {
