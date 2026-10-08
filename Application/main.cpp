@@ -252,6 +252,7 @@ const size_t g_sd_arena_length = 256 * 1024;
  * of up to 250ms at 1 MB/s write rate without dropping records. */
 uint8_t g_sd_arena_buffer[g_sd_arena_length] __attribute__((section(".ram_d2_bss"), aligned(32)));
 bool g_sd_logging_active = false;  // Set after successful init+open
+bool g_gps_init_ok       = false;
 bool g_buzzer_finished   = false;
 static uint32_t g_buzzer_finished_ms = 0;
 static constexpr uint32_t kLiftoffArmDelayMs = 3000; // 3s margin after buzzer
@@ -651,9 +652,12 @@ extern "C" void app_super_loop_setup(void) {
     app_printf("[APP] FAKE_GNSS_ENABLE=1: skipping real GPS init, using synthetic 16Hz GNSS\r\n");
     // Don't init real GPS — no hardware attached.
 #else
+    // GNSS is log-only for the estimator: a receiver failure must not stop
+    // the super-loop (Kalman, FSM, SD). Its status is reported in the boot
+    // marker.
+    g_gps_init_ok = gps_state;
     if (!gps_state) {
-        g_superloop.ready = false;
-        return;
+        app_printf("[APP] WARNING: GPS init failed (non-fatal, GPS disabled)\r\n");
     }
 #endif
 
@@ -714,7 +718,12 @@ extern "C" void app_super_loop_iterate(void) {
 	//app_printf("Buzzer advancing ---------------------------------------------\r\n");
 	g_superloop.buzzer.tick(HAL_GetTick());
 	g_superloop.batteryModule.update(HAL_GetTick());
-    if (g_superloop.buzzer.is_finished() && !g_buzzer_finished) {
+    // A buzzer that was never started (start() is commented out in setup)
+    // produces no vibrations to wait for; without this, liftoff detection
+    // would never be enabled.
+    const bool buzzer_quiet =
+        !g_superloop.buzzer.is_started() || g_superloop.buzzer.is_finished();
+    if (buzzer_quiet && !g_buzzer_finished) {
         g_buzzer_finished = true;
         g_buzzer_finished_ms = HAL_GetTick();
     }
@@ -904,7 +913,9 @@ extern "C" void app_super_loop_iterate(void) {
     }
     (void)g_superloop.baroModule.takeProducedCount();
 #if !FAKE_GNSS_ENABLE
-    g_superloop.gpsModule.update(iter_now_ms);
+    if (g_gps_init_ok) {
+        g_superloop.gpsModule.update(iter_now_ms);
+    }
 #endif
 
 #if FAKE_GNSS_ENABLE

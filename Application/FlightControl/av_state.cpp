@@ -3,7 +3,6 @@
 #include "Application/Data/data.hpp"
 #include "Application/Config/config.hpp"
 #include "Application/FlightControl/prc_can.hpp"
-#include "Application/FlightControl/threshold.h"
 #include "Application/Kalman/kalman_lifecycle.h"
 #include "Drivers/STM32HAL/stm32hal.h"
 #include "Application/app_printf.h"
