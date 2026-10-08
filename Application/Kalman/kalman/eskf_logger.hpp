@@ -20,6 +20,10 @@
 #include "eskf_types.hpp"
 #include <stdint.h>
 
+#include <array>
+#include "Application/Kalman/kalman/preprocessor/virtual_imu.hpp"
+#include "Client/PostFlightV2/annotations.hpp"
+
 namespace eskf {
 
 // ============================================================
@@ -129,9 +133,13 @@ struct StateSnapshot {
   float gps_vel_chi2;             ///< Last GPS velocity Chi² value
   float gps_vel_chi2_threshold;   ///< Last GPS velocity Chi² threshold
   uint64_t timestamp_us;
+  CSV_DECODE_WITH(int)
   uint8_t mode;  ///< FilterMode cast to uint8_t
+  CSV_DECODE_WITH(int)
   uint8_t flags; ///< Heading aligned (bit0), heading init (bit1)
+  CSV_DECODE_WITH(int)
   uint8_t heading_update_result; ///< HeadingUpdateResult (latest)
+  CSV_DECODE_WITH(int)
   uint8_t gps_vel_accepted;      ///< Last GPS velocity gate decision (0/1)
 };
 
@@ -186,6 +194,7 @@ struct RailShadowSnapshot {
   float ground_pressure_pa; ///< Ground reference pressure (Pa)
   uint16_t window_count;  ///< Completed ground-reference windows
   uint64_t timestamp_us;
+  CSV_DECODE_WITH(int)
   uint8_t
       flags; ///< bit0: gate_open, bit1: heading_init, bit2: ground_ref_valid
 };
@@ -199,6 +208,7 @@ struct FlightShadowSnapshot {
   float aero_blind_exit_accum_s;  ///< Debounce accumulator for exit threshold
   float last_reengage_snap_delta_m; ///< Last position snap magnitude (m)
   uint64_t timestamp_us;
+  CSV_DECODE_WITH(int)
   uint8_t flags; ///< bit0: aero_blind, bit1: was_aero_blind
 };
 
@@ -228,7 +238,9 @@ struct ImuPipelineSnapshot {
   float omega_dot_unclamped_norm; ///< |omega_dot| before clipping (rad/s²)
   float lever_arm_correction_norm; ///< |applied correction| (m/s²)
   float lever_arm_correction_unclamped_norm; ///< |raw correction| (m/s²)
+  CSV_DECODE_WITH(bool)
   uint8_t omega_dot_clipped;    ///< 1 if omega-dot clipping applied
+  CSV_DECODE_WITH(bool)
   uint8_t lever_arm_correction_clipped; ///< 1 if correction clipping applied
   float rail_q_gravity[4];  ///< Rail Shadow gravity quaternion [w,x,y,z]
   float rail_q_combined[4]; ///< Rail Shadow combined quaternion [w,x,y,z]
@@ -246,10 +258,16 @@ struct ImuPipelineSnapshot {
 
   float accel_norm;                  ///< |accel_cg| (m/s²)
   float dt_s;                        ///< Sample period used (s)
+  CSV_DECODE_WITH(bool)
   uint8_t imu0_present;              ///< 1 if imu0_* fields are valid
+  CSV_DECODE_WITH(bool)
   uint8_t imu1_present;              ///< 1 if imu1_* fields are valid
+  CSV_DECODE_WITH(int)
   uint8_t valid_imu_count;           ///< Number of valid IMUs
+  CSV_DECODE_WITH(bool)
   uint8_t gate_open;                 ///< Rail Shadow gate state (0/1)
+
+  CSV_DECODE_WITH(SensorStatus)
   uint8_t imu_status[ESKF_MAX_IMUS]; ///< Per-IMU status (SensorStatus)
   uint64_t timestamp_us;             ///< Sample timestamp
 };
