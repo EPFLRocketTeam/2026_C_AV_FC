@@ -9,6 +9,13 @@
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Common.h"
 #include "Drivers/ERT_RF_Protocol_Interface/ParameterDefinition_Firehorn2.h"
 
+// Bench switch: 1 sends every packet with the former blocking driver call
+// (reconfigure + wait for TxDone, ~92 ms per packet, ~154 ms with no radio),
+// to compare against the non-blocking path on the same build.
+#ifndef APP_RADIO_BLOCKING_TX
+#define APP_RADIO_BLOCKING_TX 0
+#endif
+
 #define PREPARE_DOWNLINK(type) \
     inline void prepare_downlink_packet (av_downlink_unpacked_t &packet, const type &dump)
 
@@ -250,6 +257,18 @@ public:
 
         av_downlink_unpacked_t packet;
         packet.packet_nbr = packet_nbr ++;
+
+#if APP_RADIO_BLOCKING_TX
+        {
+            prepare_downlink_packet(packet, dump);
+            av_downlink_t compressed_packet;
+            encode_downlink(&compressed_packet, packet);
+            ++stats_.started;
+            const bool ok = driver_->transmit(CAPSULE_ID::AV_TELEMETRY, (uint8_t*) &compressed_packet, av_downlink_size);
+            if (ok) ++stats_.sent; else ++stats_.timeouts;
+            return ok;
+        }
+#endif
 
         if (!usable()) {
             ++stats_.skipped_absent;

@@ -129,6 +129,11 @@ static void onPacketReceived(uint8_t packetId, uint8_t *payload, uint32_t length
 }
 
 
+// Bench switch: 1 keeps both radios in reset once initialised.
+#ifndef APP_RADIO_HOLD_IN_RESET
+#define APP_RADIO_HOLD_IN_RESET 0
+#endif
+
 extern SPI_HandleTypeDef hspi2;
 extern SPI_HandleTypeDef hspi1;
 
@@ -177,6 +182,14 @@ void simple_radio_init(void) {
 	app_printf("driver: %p\n", &tx);
 	tx_module.init();
 	app_printf("Done.\n");
+
+#if APP_RADIO_HOLD_IN_RESET
+	// Bench only: hold both radios in reset after init, so the downlink and
+	// uplink see the radio disappear (as with the telemetry board unplugged).
+	HAL_GPIO_WritePin((GPIO_TypeDef*) SX127X_TX_hw.reset.port, SX127X_TX_hw.reset.pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin((GPIO_TypeDef*) SX127X_RX_hw.reset.port, SX127X_RX_hw.reset.pin, GPIO_PIN_RESET);
+	app_printf("[RADIO] APP_RADIO_HOLD_IN_RESET: radios held in reset\r\n");
+#endif
 }
 
 void simple_radio_tick(void) {
