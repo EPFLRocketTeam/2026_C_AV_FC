@@ -113,18 +113,28 @@ static void MX_FDCAN2_Init(void);
 /* USER CODE BEGIN 0 */
 
 #ifdef OUTPUT_LOG
+extern USBD_HandleTypeDef hUsbDeviceHS;
+
 int _write(int file, char *ptr, int len) {
-    // Wait until USB is ready, but never wedge: if the CDC endpoint stays
-    // busy (host not draining, missed completion), drop the output instead
-    // of spinning forever.
+    // Never hold the super loop on the serial output: every millisecond spent
+    // here is a millisecond the IMU FIFOs are not serviced.
+    //  - no host (not enumerated, e.g. in flight): drop immediately;
+    //  - endpoint busy: wait at most ~2 ms, then drop. A host that is
+    //    connected but not reading leaves the endpoint busy for good, so
+    //    once a write has been dropped the next ones are dropped at once
+    //    until a transfer gets through.
+    static uint8_t tx_stalled = 0;
     if (!app_printf_is_enabled()) return len;
+    if (hUsbDeviceHS.dev_state != USBD_STATE_CONFIGURED) return len;
 
     uint32_t start = HAL_GetTick();
     while (CDC_Transmit_HS((uint8_t*)ptr, len) == USBD_BUSY) {
-        if (HAL_GetTick() - start > 100) {
-            break;
+        if (tx_stalled || HAL_GetTick() - start > 2) {
+            tx_stalled = 1;
+            return len;
         }
     }
+    tx_stalled = 0;
     return len;
 }
 #endif
