@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
+#include "../../Application/app_perf.h"
 #include "../../Drivers/InvIMU/Tests/Hardware/imu_manual_test.h"
 #include "../../Drivers/BMP390/Tests/Manual/bmp390_manual_test.h"
 #include "../../Drivers/UBX_GPS/Tests/Hardware/gps_manual_test.h"
@@ -55,6 +56,15 @@
  * (or link to the default stub that discards output).
  */
 #define OUTPUT_LOG
+
+/**
+ * APP_RADIO_ENABLE: runs simple_radio_tick() (telemetry downlink + uplink
+ * commands) in the super loop. The radio driver no longer blocks the loop
+ * during a transmission, so it can stay on during IMU acquisition.
+ */
+#ifndef APP_RADIO_ENABLE
+#define APP_RADIO_ENABLE 1
+#endif
 
 /*  CAN bus test between 2026_C_AV_PRC and 2026_C_AV_FC (PD0=RX, PD1=TX on both boards).  */
 #define CANBUS_TEST_TX_ID   0x101u   /*  FC -> PRC  */
@@ -260,7 +270,13 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  //HAL_Delay(1000);
 	  //app_printf("In tick.\n");
-	  // simple_radio_tick();
+#if APP_RADIO_ENABLE
+	  {
+	    const uint64_t perf_t0 = app_perf_begin();
+	    simple_radio_tick();
+	    app_perf_end(APP_PERF_RADIO, perf_t0);
+	  }
+#endif
 	  /*
 	  	  app_printf("flag: %i\r\n", flag);
 	  	  if (!flag) {
@@ -330,6 +346,7 @@ int main(void)
 	     *  entries instead of the newest one. Each frame is decoded via
 	     *  prc_intranet (see Application/FlightControl/prc_can.cpp); ids it
 	     *  doesn't recognize are silently ignored. */
+	    const uint64_t perf_can_t0 = app_perf_begin();
 	    while (HAL_FDCAN_GetRxFifoFillLevel(&hfdcan1, FDCAN_RX_FIFO0) > 0)
 	    {
 	      FDCAN_RxHeaderTypeDef rxHeader;
@@ -358,6 +375,7 @@ int main(void)
 	      app_printf("[CAN] WARNING: RX FIFO0 overflow, frame(s) rejected (count=%lu)\r\n",
 	             (unsigned long)rf0l_count);
 	    }
+	    app_perf_end(APP_PERF_CAN, perf_can_t0);
 
 	  }
 

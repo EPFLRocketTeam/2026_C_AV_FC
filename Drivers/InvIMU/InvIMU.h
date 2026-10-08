@@ -84,7 +84,17 @@ namespace InvIMU {
         virtual uint32_t frameCount0x78() const { return 0u; }
         virtual uint32_t frameCount0xF0() const { return 0u; }
         virtual uint32_t frameCountOther() const { return 0u; }
-        
+
+        // Hardware FIFO fill statistics since the last call: highest
+        // FIFO_COUNT seen (frames), reads capped by the burst buffer, and
+        // INT1_STATUS0.FIFO_FULL seen set.
+        struct FifoStats {
+            uint16_t count_hwm = 0;
+            uint32_t capped_reads = 0;
+            uint32_t full_flags = 0;
+        };
+        virtual FifoStats takeFifoStats() { return FifoStats{}; }
+
         // irq_us: absolute time (µs) of the hardware EXTI event, captured at ISR
         // entry for accurate FIFO timestamp alignment. Pass 0 to fall back to
         // now_us() at the call site (less accurate, may trigger TIMESTAMP_DESYNC).
