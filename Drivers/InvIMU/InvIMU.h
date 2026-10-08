@@ -41,6 +41,7 @@ namespace InvIMU {
         float temperature;
         uint64_t timestamp_us; 
     };
+    static_assert(sizeof(IMUData) == 40);
 
     /**
      * @brief DAQ/Driver health flags required by the FD&N design document.

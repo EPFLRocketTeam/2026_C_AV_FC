@@ -1,4 +1,4 @@
-
+#pragma once
 #include "Application/Kalman/kalman/eskf_logger.hpp"
 #include "Drivers/Camera/CameraDump.hpp"
 #include <stdint.h>

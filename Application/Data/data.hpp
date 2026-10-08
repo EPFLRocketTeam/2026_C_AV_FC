@@ -9,40 +9,58 @@
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
 #include "Drivers/InvIMU/InvIMU.h"
 
+#include "Client/PostFlightV2/annotations.hpp"
+
 namespace flight_computer {
 
 struct bmp3_int_status {
+  CSV_RENAME("fifo_watermark_interrupt")
   uint8_t fifo_wm;
+  CSV_RENAME("fifo_full_interrupt")
   uint8_t fifo_full;
+  CSV_RENAME("data_ready_interrupt")
   uint8_t drdy;
 
   bmp3_int_status() : fifo_wm(0), fifo_full(0), drdy(0) {}
 };
+static_assert(sizeof(bmp3_int_status) == 3);
 
 struct bmp3_sens_status {
+  CSV_RENAME("command_ready")
   uint8_t cmd_rdy;
+  CSV_RENAME("pressure_data_ready")
   uint8_t drdy_press;
+  CSV_RENAME("temperature_data_ready")
   uint8_t drdy_temp;
 
   bmp3_sens_status() : cmd_rdy(0), drdy_press(0), drdy_temp(0) {}
 };
+static_assert(sizeof(bmp3_sens_status) == 3);
 
 struct bmp3_err_status {
+  CSV_RENAME("fatal_error")
   uint8_t fatal;
+  CSV_RENAME("command_error")
   uint8_t cmd;
+  CSV_RENAME("config_error")
   uint8_t conf;
 
   bmp3_err_status() : fatal(0), cmd(0), conf(0) {}
 };
+static_assert(sizeof(bmp3_sens_status) == 3);
 
 struct bmp3_status {
+  CSV_RENAME("interrupts")
   struct bmp3_int_status intr;
   struct bmp3_sens_status sensor;
+  CSV_RENAME("error")
   struct bmp3_err_status err;
+  CSV_RENAME("power_on_reset")
   uint8_t pwr_on_rst;
 
   bmp3_status() : intr{}, sensor{}, err{}, pwr_on_rst(0) {}
 };
+static_assert(sizeof(bmp3_status) == 10);
 
 struct bmp3_data {
   double temperature;
@@ -51,6 +69,7 @@ struct bmp3_data {
   bmp3_data() : temperature(0.0), pressure(0.0) {}
   bmp3_data(double temp, double press) : temperature(temp), pressure(press) {}
 };
+static_assert(sizeof(bmp3_data) == 16);
 
 struct SensStatus {
   uint8_t adxl_status;
@@ -70,6 +89,7 @@ struct SensStatus {
 
   SensStatus();
 };
+static_assert(sizeof(sens_status) == 12);
 
 struct FlightEventTimers {// TODO: Properly update the store test
   uint32_t flight_duration;
@@ -78,6 +98,7 @@ struct FlightEventTimers {// TODO: Properly update the store test
 
   FlightEventTimers();
 };
+static_assert(sizeof(FlightEventTimers) == 12);
 
 struct VehiculeOverview {// TODO: Properly update the store test
   bool no_cable_continuity_engine;
@@ -87,6 +108,7 @@ struct VehiculeOverview {// TODO: Properly update the store test
 
   VehiculeOverview();
 };
+static_assert(sizeof(VehiculeOverview) == 6);
 
 struct adxl375_data {
   float x;
@@ -96,7 +118,7 @@ struct adxl375_data {
   adxl375_data() : x(0.0f), y(0.0f), z(0.0f) {}
   adxl375_data(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
 };
-
+static_assert(sizeof(adxl375_data) == 12);
 
 
 struct NavSensors {
@@ -110,6 +132,7 @@ struct NavSensors {
 
   NavSensors();
 };
+static_assert(sizeof(NavSensors) == 248);
 
 struct PropSensors {
   // === FUEL ===
@@ -150,6 +173,7 @@ struct PropSensors {
 
   PropSensors();
 };
+static_assert(sizeof(PropSensors) == 16 * 8 + 8);
 
 struct Valves {
   bool main_LOX_open, main_fuel_open;
@@ -161,6 +185,7 @@ struct Valves {
 
   Valves();
 };
+static_assert(sizeof(Valves) == 16);
 
 struct Vector3 {
   double x;
@@ -172,6 +197,7 @@ struct Vector3 {
 
   inline double norm() const { return std::sqrt(x * x + y * y + z * z); }
 };
+static_assert(sizeof(Vector3) == 24);
 
 struct NavigationData {
   Vector3 position_kalman;
@@ -185,6 +211,7 @@ struct NavigationData {
 
   NavigationData();
 };
+static_assert(sizeof(NavigationData) == 128);
 
 struct Batteries {
   float lpb1_voltage;
@@ -204,6 +231,7 @@ struct Batteries {
 
   Batteries();
 };
+static_assert(sizeof(Batteries) == 14 * 4);
 
 struct CamsRecording {
   bool cam_sepmech;
@@ -212,6 +240,7 @@ struct CamsRecording {
 
   CamsRecording();
 };
+static_assert(sizeof(CamsRecording) == 3);
 
 struct UplinkCmd {
   uint8_t id;
@@ -219,6 +248,7 @@ struct UplinkCmd {
 
   UplinkCmd();
 };
+static_assert(sizeof(UplinkCmd) == 2);
 
 /**
  * @brief Generic base class for all data stores.
