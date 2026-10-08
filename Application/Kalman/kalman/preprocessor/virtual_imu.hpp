@@ -155,10 +155,20 @@ struct VirtualImuConfig {
   /// Gyro tare is a direct body-frame mean per window.
   /// Accel tare uses norm mismatch projected onto accel direction:
   ///   a_bias_sample = (||a|| - tare_accel_gravity) * (a / ||a||)
-  /// The last completed preflight window is held for flight.
+  /// The last committed preflight window is held for flight.
+  ///
+  /// A window is only committed if the vehicle was stationary during it:
+  /// every sample must satisfy | ||a|| - g | <= tare_max_sample_excess_mps2
+  /// and ||w|| <= tare_max_gyro_rad_s, and the window-mean accel bias must not
+  /// exceed tare_max_mean_bias_mps2. Otherwise the window is discarded and the
+  /// previous tare is kept. Without this gate, any window completed between
+  /// motion onset and the liftoff epoch would freeze thrust as accel bias.
   bool enable_preflight_tare = true;
   uint16_t tare_window_samples = 200;
   eskf_scalar tare_accel_gravity = static_cast<eskf_scalar>(9.80665);
+  eskf_scalar tare_max_sample_excess_mps2 = static_cast<eskf_scalar>(1.5);
+  eskf_scalar tare_max_mean_bias_mps2 = static_cast<eskf_scalar>(1.0);
+  eskf_scalar tare_max_gyro_rad_s = static_cast<eskf_scalar>(0.2);
 
   /// Enable voting (auto-disabled if only 1 sensor)
   bool voting_enabled = true;
@@ -290,6 +300,7 @@ private:
   // Per-IMU preflight windowed tare state.
   bool tare_frozen_ = false;
   uint16_t tare_window_count_[ESKF_MAX_IMUS] = {};
+  bool tare_window_disturbed_[ESKF_MAX_IMUS] = {};
   eskf_scalar tare_window_gyro_sum_[ESKF_MAX_IMUS][3] = {};
   eskf_scalar tare_window_accel_sum_[ESKF_MAX_IMUS][3] = {};
   eskf_scalar gyro_tare_body_[ESKF_MAX_IMUS][3] = {};

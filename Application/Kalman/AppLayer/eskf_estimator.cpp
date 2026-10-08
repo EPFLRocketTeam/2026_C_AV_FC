@@ -194,6 +194,9 @@ void EskfEstimator::reset() {
   descent_last_gnss_fuse_us_ = 0;
   latest_descent_gnss_ = LatestGnssForDescent{};
   latest_descent_baro_ = LatestBaroForDescent{};
+  latest_fused_baro_valid_ = false;
+  latest_fused_baro_alt_m_ = 0.0f;
+  latest_fused_baro_ts_ = 0;
   preflight_baro_pressure_pa_ = 0;
   preflight_baro_valid_ = false;
   descent_filter_.configure(DescentNavFilter::Config{});
@@ -1687,6 +1690,9 @@ void EskfEstimator::processBaroObservation(uint8_t source,
       const float altitude_isa_m =
           static_cast<float>(eskf::pressureToAltitudeIsa(bout.pressure_pa));
       const float altitude_agl_m = altitude_isa_m - ground_isa_altitude_;
+      latest_fused_baro_valid_ = true;
+      latest_fused_baro_alt_m_ = altitude_agl_m;
+      latest_fused_baro_ts_ = ts;
 
       if (gps_origin_set_) {
         latest_descent_baro_.valid = true;
@@ -2541,6 +2547,15 @@ bool EskfEstimator::isEskfDiverged() const {
   }
 
   return false;
+}
+
+bool EskfEstimator::latestBaroAltitude(float &altitude_m,
+                                       uint64_t &timestamp_us) const {
+  if (!latest_fused_baro_valid_)
+    return false;
+  altitude_m = latest_fused_baro_alt_m_;
+  timestamp_us = latest_fused_baro_ts_;
+  return true;
 }
 
 bool EskfEstimator::isCoastPhase() const {

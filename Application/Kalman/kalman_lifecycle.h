@@ -15,7 +15,7 @@ void kalman_reset_lifecycle(void);
 
 /// Clear the liftoff latch and the Kalman-owned EventStore flags
 /// (apogee_detected, imu_liftoff_detected, vertical_acc_hold,
-/// catastrophic_failure) without changing the published FSM state.
+/// touchdown_detected, catastrophic_failure) without changing the published FSM state.
 void kalman_lifecycle_rearm(void);
 
 #ifdef __cplusplus

@@ -41,6 +41,7 @@ extern "C" void kalman_lifecycle_rearm(void) {
     event.apogee_detected = false;
     event.vertical_acc_hold = flight_computer::ACC_HOLD_NOT_ELAPSED;
     event.imu_liftoff_detected = false;
+    event.touchdown_detected = false;
     goat.eventStore.set(event);
 
     // if (eventStoreMutexHandle != nullptr) {
