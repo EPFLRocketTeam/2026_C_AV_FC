@@ -285,6 +285,12 @@ uint8_t CDC_Transmit_HS(uint8_t* Buf, uint16_t Len)
   uint8_t result = USBD_OK;
   /* USER CODE BEGIN 12 */
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceHS.pClassData;
+  /* pClassData stays NULL until a host configures the device (no USB cable
+   * in flight): reading TxState through it would read whatever sits at
+   * address 0x214 and could report the endpoint busy forever. */
+  if (hcdc == NULL){
+    return USBD_FAIL;
+  }
   if (hcdc->TxState != 0){
     return USBD_BUSY;
   }
