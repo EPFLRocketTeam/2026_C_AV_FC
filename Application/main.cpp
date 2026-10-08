@@ -705,19 +705,23 @@ static uint32_t lastRatioComputationTime = 0;
 static int nb_consumed_since_last_poll = 0;
 #if APP_PERF_TRACE
 // One line per report period: per-IMU frames, timestamp gaps and samples lost
-// in them, largest frame step, and hardware FIFO fill (see ImuModule /
-// InvIMU_Interface::FifoStats).
+// in them, largest frame step, hardware FIFO fill (see ImuModule /
+// InvIMU_Interface::FifoStats), and samples lost since boot (still meaningful
+// after a period where the serial output was not read).
 static void app_print_imu_acquisition(void) {
-    char line[384];
+    static uint32_t total_lost[4] = {};
+    char line[448];
     int n = snprintf(line, sizeof(line), "[IMU-ACQ]");
     for (size_t i = 0; i < 4; ++i) {
         const auto a = g_superloop.imuModule.takeAcqStats(i);
         const auto f = g_superloop.imuModule.takeFifoStats(i);
+        total_lost[i] += a.lost;
         if (n > 0 && n < (int)sizeof(line)) {
             n += snprintf(line + n, sizeof(line) - n,
-                          " %u:fr=%lu gap=%lu lost=%lu dt=%luus hwm=%u cap=%lu full=%lu",
+                          " %u:fr=%lu gap=%lu lost=%lu tot=%lu dt=%luus hwm=%u cap=%lu full=%lu",
                           (unsigned)i, (unsigned long)a.frames, (unsigned long)a.gaps,
-                          (unsigned long)a.lost, (unsigned long)a.max_dt_us,
+                          (unsigned long)a.lost, (unsigned long)total_lost[i],
+                          (unsigned long)a.max_dt_us,
                           (unsigned)f.count_hwm, (unsigned long)f.capped_reads,
                           (unsigned long)f.full_flags);
         }
