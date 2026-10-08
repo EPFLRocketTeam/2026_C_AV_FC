@@ -139,7 +139,10 @@ void EskfCore::freezeFlightBiasCovariance() {
 // ============================================================
 
 void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
-  if (!std::isfinite(dt) || dt <= 0 || diverged_)
+  // Only hard divergence (NaN, negative covariance) stops propagation. Soft
+  // NIS divergence keeps fusing baro with inflated R and needs the process
+  // noise added here to recover, so the state must keep propagating.
+  if (!std::isfinite(dt) || dt <= 0 || (diverged_ && !nis_soft_diverged_))
     return;
 
   eskf_scalar dt_used = dt;
@@ -441,8 +444,11 @@ void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
     getEskfLogger().logImuDynamics(imu_snap);
   }
 
-  // Check for numerical issues
-  checkNumericalHealth();
+  // Check for numerical issues. NIS is only evaluated after a measurement
+  // update: predict() runs at the IMU rate, and re-reading the last update's
+  // NIS here counted one high value once per IMU sample, declaring divergence
+  // ~10 samples after a single outlier.
+  checkNumericalHealth(false);
 }
 
 // ============================================================
@@ -2047,7 +2053,7 @@ void EskfCore::flushDeferredCovariancePropagation() {
 #endif
 }
 
-void EskfCore::checkNumericalHealth() {
+void EskfCore::checkNumericalHealth(bool check_nis) {
   // Check quaternion
   if (!math::quatIsFinite(state_.q)) {
     if (!diverged_) {
@@ -2102,6 +2108,9 @@ void EskfCore::checkNumericalHealth() {
   // NIS-based divergence is "soft": baro corrections continue with inflated R
   // so that b_baro can slowly adapt through process noise.  Recovery clears
   // the flag after sustained low NIS.
+  if (!check_nis) {
+    return;
+  }
   if (last_nis_ > cfg_.nis_divergence_threshold) {
     consecutive_high_nis_count_++;
     consecutive_low_nis_count_ = 0;
