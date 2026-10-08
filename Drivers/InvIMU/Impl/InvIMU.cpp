@@ -785,6 +785,9 @@ void InvIMU_STM32::tick() {
     // and also clears the status bits so they don't accumulate across calls.
     uint8_t int1_status_clr = 0;
     spi_read(0x19, &int1_status_clr, 1);
+    if (int1_status_clr & 0x01u) {  // INT1_STATUS0.int1_status_fifo_full
+        _fifo_stats.full_flags++;
+    }
 
     if (spi_write(REG_BANK_SEL, 0x00) != 0) {
         _status_flags |= IMU_STATUS_SPI_ERROR;
@@ -805,6 +808,7 @@ void InvIMU_STM32::tick() {
 
     // ICM-45686 FIFO_COUNT register map (LE): 0x12 = FIFO_COUNT_0 (LSB), 0x13 = FIFO_COUNT_1 (MSB)
     uint16_t frame_count = (uint16_t)((counts[1] << 8) | counts[0]);
+    if (frame_count > _fifo_stats.count_hwm) _fifo_stats.count_hwm = frame_count;
     if (frame_count == 0) return;
 
     // Errata AN-000364 §2.2: in STREAM mode read M-1 frames to avoid a torn frame.
@@ -816,6 +820,7 @@ void InvIMU_STM32::tick() {
     if (count > kRawBufferSize) {
         _status_flags |= IMU_STATUS_FIFO_OVERFLOW;
         count = (uint16_t)((kRawBufferSize / kFrameSize) * kFrameSize);
+        _fifo_stats.capped_reads++;
     }
 
     if (count == 0u) return;

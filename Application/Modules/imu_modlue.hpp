@@ -236,13 +236,62 @@ public:
     return sensor_state_[sensor_index].alignment_mismatch_count;
   }
 
+  /// Acquisition counters of one sensor since the last call, from the frame
+  /// timestamps: a step larger than 1.5 sample periods is a gap, and the
+  /// samples missing in it are counted as lost. FIFO timestamps wrap every
+  /// 65.5 ms, so a single gap longer than that is under-counted; the frame
+  /// count over the report period still shows it.
+  struct AcqStats {
+    uint32_t frames = 0;
+    uint32_t gaps = 0;
+    uint32_t lost = 0;
+    uint32_t max_dt_us = 0;
+  };
+
+  AcqStats takeAcqStats(size_t sensor_index) {
+    if (sensor_index >= kNumSensors) {
+      return AcqStats{};
+    }
+    const AcqStats s = sensor_state_[sensor_index].acq;
+    sensor_state_[sensor_index].acq = AcqStats{};
+    return s;
+  }
+
+  InvIMU_Interface::FifoStats takeFifoStats(size_t sensor_index) {
+    if (sensor_index >= kNumSensors || sensor_state_[sensor_index].failed) {
+      return InvIMU_Interface::FifoStats{};
+    }
+    return drivers_[sensor_index]->takeFifoStats();
+  }
+
 private:
+  // 16 x the 6.4 kHz sample period (156.25 us), to stay in integers.
+  static constexpr uint64_t kPeriodX16Us = 2500u;
+  static constexpr uint64_t kGapUs = (kPeriodX16Us * 3u) / 32u;  // 1.5 periods
+
+  void recordAcquisition(size_t sensor_index, uint64_t timestamp_us) {
+    auto &state = sensor_state_[sensor_index];
+    ++state.acq.frames;
+    if (state.last_timestamp_us == 0u || timestamp_us <= state.last_timestamp_us) {
+      return;
+    }
+    const uint64_t dt = timestamp_us - state.last_timestamp_us;
+    if (dt > state.acq.max_dt_us) {
+      state.acq.max_dt_us = (dt > UINT32_MAX) ? UINT32_MAX : (uint32_t) dt;
+    }
+    if (dt > kGapUs) {
+      ++state.acq.gaps;
+      state.acq.lost += (uint32_t) ((dt * 16u + kPeriodX16Us / 2u) / kPeriodX16Us - 1u);
+    }
+  }
+
   struct SensorRuntimeState {
     uint64_t last_timestamp_us = 0;
     uint32_t last_data_tick_ms = 0;
     uint32_t status_flags = IMU_STATUS_OK;
     uint32_t drop_count = 0;
     uint32_t alignment_mismatch_count = 0;
+    AcqStats acq{};
     bool healthy = false;
     bool failed = false;
   };
@@ -262,6 +311,7 @@ private:
     while (drivers_[sensor_index]->getFrame(frame)) {
       buffers_[sensor_index]->append(frame);
       g.navSensorStore.set_imu(sensor_index, frame);
+      recordAcquisition(sensor_index, frame.timestamp_us);
       sensor_state_[sensor_index].last_timestamp_us = frame.timestamp_us;
       ++produced_since_last_update_;
       ++produced;
