@@ -21,7 +21,10 @@ PREPARE_DOWNLINK(flight_computer::SensStatus) {
     (void) packet; (void) dump;
 }
 PREPARE_DOWNLINK(flight_computer::VehiculeOverview) {
-    // TODO no_cable_continuity ?
+    packet.rail_cable_status = 0;
+    if (dump.no_cable_continuity_engine) packet.rail_cable_status |= AV_CABLE_EXT1;
+    if (dump.no_cable_continuity_lox) packet.rail_cable_status |= AV_CABLE_EXT2;
+
     packet.pyro_status = 0;
 
     if (dump.pyros_on[0]) packet.pyro_status |= AV_PYRO_CH1;
