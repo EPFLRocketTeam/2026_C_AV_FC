@@ -11,14 +11,72 @@
 
 #include "Client/PostFlightV2/annotations.hpp"
 
+namespace prc {
+enum State : uint8_t {
+  MANUAL,
+
+  PRESSURIZE_ON,
+  REGULATE,
+  PRESSURIZE_OFF,
+  DEPRESSURIZE_ON,
+  DEPRESSURIZE_OFF,
+
+  /* ============== Error States ============== */
+  ABORT_ON_GROUND,
+  ABORT_IN_FLIGHT, // step 1: Safety + Ball closed, then rejoins PASSIVATE via a timer
+};
+enum class EngineState : uint8_t {
+  Idle,
+  ClearToIgnite,
+
+  // IGNITION SQ
+  IgnitionPrechill,       // open MO
+  IgnitionIgniter,        // close MO + igniter ON
+  IgnitionBurnStartMe,    // open ME + igniter OFF
+  IgnitionBurnStartMo,    // open MO
+
+  Burn,
+  BurnStopMe,             // close ME
+  BurnStopMo,             // close MO
+  WaitForPassivation,
+
+  /* PASSIVATION SQ */ 
+  PassivationSeparationDelay, // PASSIVATION SQ
+  PassivationEth,         // open ME
+  PassivationCloseMe,     // close ME
+  PassivationLox,         // open MO
+  Shutoff,                // close MO
+
+  // Reached from Shutoff on every route (nominal end-of-burn or
+  // abort-in-flight both converge on WaitForPassivation/Shutoff already).
+  // Opens both mains back up so FC's telemetry shows the tanks are empty --
+  // FC is the one that then commands the DPR boards to depressurize (see
+  // the FC-level FSM diagram), not this board. Terminal.
+  DepressurizeOpen,       // open MO + ME
+  DepressurizeClose,
+
+  AbortOnGround,
+  AbortOnGroundOxydant,   // close MO
+  AbortOnGroundEthanol,   // close ME -- then waits for RESET -> Idle
+
+  AbortInFlight,
+  AbortInFlightOxydant,   // close MO
+  AbortInFlightEthanol,   // close ME -- then times out into WaitForPassivation
+};
+
+};
+
 namespace flight_computer {
 
 struct bmp3_int_status {
   CSV_RENAME("fifo_watermark_interrupt")
+  CSV_DECODE_WITH(bool)
   uint8_t fifo_wm;
   CSV_RENAME("fifo_full_interrupt")
+  CSV_DECODE_WITH(bool)
   uint8_t fifo_full;
   CSV_RENAME("data_ready_interrupt")
+  CSV_DECODE_WITH(bool)
   uint8_t drdy;
 
   bmp3_int_status() : fifo_wm(0), fifo_full(0), drdy(0) {}
@@ -27,10 +85,13 @@ static_assert(sizeof(bmp3_int_status) == 3);
 
 struct bmp3_sens_status {
   CSV_RENAME("command_ready")
+  CSV_DECODE_WITH(bool)
   uint8_t cmd_rdy;
   CSV_RENAME("pressure_data_ready")
+  CSV_DECODE_WITH(bool)
   uint8_t drdy_press;
   CSV_RENAME("temperature_data_ready")
+  CSV_DECODE_WITH(bool)
   uint8_t drdy_temp;
 
   bmp3_sens_status() : cmd_rdy(0), drdy_press(0), drdy_temp(0) {}
@@ -39,10 +100,13 @@ static_assert(sizeof(bmp3_sens_status) == 3);
 
 struct bmp3_err_status {
   CSV_RENAME("fatal_error")
+  CSV_DECODE_WITH(bool)
   uint8_t fatal;
   CSV_RENAME("command_error")
+  CSV_DECODE_WITH(bool)
   uint8_t cmd;
   CSV_RENAME("config_error")
+  CSV_DECODE_WITH(bool)
   uint8_t conf;
 
   bmp3_err_status() : fatal(0), cmd(0), conf(0) {}
@@ -56,6 +120,7 @@ struct bmp3_status {
   CSV_RENAME("error")
   struct bmp3_err_status err;
   CSV_RENAME("power_on_reset")
+  CSV_DECODE_WITH(bool)
   uint8_t pwr_on_rst;
 
   bmp3_status() : intr{}, sensor{}, err{}, pwr_on_rst(0) {}
@@ -72,11 +137,17 @@ struct bmp3_data {
 static_assert(sizeof(bmp3_data) == 16);
 
 struct SensStatus {
+  CSV_DECODE_WITH(int)
   uint8_t adxl_status;
+  CSV_DECODE_WITH(int)
   uint8_t adxl_aux_status;
+  CSV_DECODE_WITH(int)
   uint8_t bmi_accel_status;
+  CSV_DECODE_WITH(int)
   uint8_t bmi_aux_accel_status;
+  CSV_DECODE_WITH(int)
   uint8_t bmi_gyro_status;
+  CSV_DECODE_WITH(int)
   uint8_t bmi_aux_gyro_status;
   bmp3_status bmp_status;
   bmp3_status bmp_aux_status;
@@ -89,7 +160,7 @@ struct SensStatus {
 
   SensStatus();
 };
-static_assert(sizeof(sens_status) == 12);
+static_assert(sizeof(SensStatus) == 32);
 
 struct FlightEventTimers {// TODO: Properly update the store test
   uint32_t flight_duration;
@@ -165,8 +236,11 @@ struct PropSensors {
   double chamber_temperature;
 
   // === STATE ===
+  CSV_DECODE_WITH(prc::State)
   uint8_t dpr_fuel_state;
+  CSV_DECODE_WITH(prc::State)
   uint8_t dpr_LOX_state;
+  CSV_DECODE_WITH(prc::EngineState)
   uint8_t engine_state;
 
   uint32_t timer_burn;

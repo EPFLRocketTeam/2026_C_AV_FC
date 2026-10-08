@@ -1,11 +1,14 @@
 #pragma once
 #include "Application/Kalman/kalman/eskf_logger.hpp"
+#include "Application/Data/data.hpp"
 #include "Drivers/Camera/CameraDump.hpp"
 #include <stdint.h>
 
 // ============================================================
 // Binary Log Record Types
 // ============================================================
+
+#include "Client/PostFlightV2/annotations.hpp"
 
 enum SdLogRecordType : uint8_t {
     SD_LOG_DATADUMP           = 0x01,
@@ -36,25 +39,33 @@ enum SdLogRecordType : uint8_t {
 
 #pragma pack(push, 1)
 struct SdLogHeader {
+    CSV_DECODE_WITH(int)
     uint8_t  magic;         // 0xAE
+    CSV_DECODE_WITH(SdLogRecordType)
     uint8_t  record_type;   // SdLogRecordType
     uint16_t length;        // payload length (bytes after this header)
     uint32_t timestamp_us;  // app_timebase_now_us() at log time (wraps at ~71 min)
 };
 
 struct SdLogFsmTransition {
+    CSV_DECODE_WITH(flight_computer::State)
     uint8_t prev_state;
+    CSV_DECODE_WITH(flight_computer::State)
     uint8_t new_state;
 };
 
 struct SdLogImuBatchHeader {
+    CSV_DECODE_WITH(int)
     uint8_t  sensor_index;   // 0-3
+    CSV_DECODE_WITH(int)
     uint8_t  sample_count;   // number of IMUData samples following
     uint16_t reserved;       // alignment padding
 };
 
 struct SdLogBaroSample {
+    CSV_DECODE_WITH(int)
     uint8_t  sensor_index;
+    CSV_IGNORE
     uint8_t  pad[3];
     float    pressure_pa;
     float    temperature_c;
@@ -62,14 +73,18 @@ struct SdLogBaroSample {
 };
 
 struct SdLogEskfEvent {
+    CSV_DECODE_WITH(eskf::EskfEventType)
     uint8_t event_type;  // EskfEventType
+    CSV_IGNORE
     uint8_t pad;
     float   value;
     uint64_t timestamp_us;
 };
 
 struct SdLogCorrection {
+    CSV_DECODE_WITH(eskf::EskfEventType)
     uint8_t event_type;
+    CSV_IGNORE
     uint8_t pad[3];
     float innovation;
     float nis;
@@ -77,14 +92,18 @@ struct SdLogCorrection {
 };
 
 struct SdLogGpsRejection {
+    CSV_DECODE_WITH(eskf::EskfEventType)
     uint8_t event_type;
+    CSV_IGNORE
     uint8_t pad[3];
     eskf::GpsRejectionInfo info;
     uint64_t timestamp_us;
 };
 
 struct SdLogRewind {
+    CSV_DECODE_WITH(eskf::EskfEventType)
     uint8_t event_type;
+    CSV_IGNORE
     uint8_t pad[3];
     eskf::RewindInfo info;
     uint64_t timestamp_us;
@@ -93,9 +112,13 @@ struct SdLogRewind {
 // Boot marker: logged once at initialization to delimit runs.
 struct SdLogBootMarker {
     uint32_t firmware_crc;       // Placeholder for FW identification
+    CSV_DECODE_WITH(int)
     uint8_t  imu_count;          // Number of healthy IMUs (0-4)
+    CSV_DECODE_WITH(int)
     uint8_t  baro_count;         // Number of healthy baros (0-4)
+    CSV_DECODE_WITH(int)
     uint8_t  gps_ok;             // 1 if GPS init succeeded
+    CSV_DECODE_WITH(int)
     uint8_t  sd_ok;              // 1 if SD init succeeded
     uint32_t boot_time_us;       // app_timebase_now_us() at marker write
     uint32_t reset_reason;       // RCC reset flags (RCC->RSR)

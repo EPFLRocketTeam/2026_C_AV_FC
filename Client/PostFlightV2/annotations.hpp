@@ -22,12 +22,20 @@ struct rename {
         return std::string_view(value, len);
     }
 };
+template<typename T>
+struct decode_with {
+  using target = T;
+
+  constexpr decode_with () {}
+};
 
 }
 
   #define CSV_IGNORE [[=csv::ignore]]
   #define CSV_RENAME(name) [[=csv::rename(name)]]
+  #define CSV_DECODE_WITH(type) [[=csv::decode_with<type>()]]
 #else
   #define CSV_IGNORE
   #define CSV_RENAME(name)
+  #define CSV_DECODE_WITH(type)
 #endif
