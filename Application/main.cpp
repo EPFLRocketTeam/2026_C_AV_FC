@@ -560,6 +560,44 @@ SdLogger& app_get_sd_logger () {
     return g_sd_logger;   
 }
 
+// ── GPS UART reception via circular DMA ─────────────────────────────────
+// Set up here rather than in CubeMX (.ioc / stm32h7xx_hal_msp.c) so that
+// regenerating the CubeMX code neither drops nor duplicates it. DMA1_Stream0
+// is otherwise unused. No DMA or USART6 interrupt is needed: the GPS driver
+// reads the DMA counter from the super loop. The ring is in .bss (AXI SRAM,
+// reachable by DMA1; the D-cache is not enabled).
+#ifndef APP_GPS_UART_DMA
+#define APP_GPS_UART_DMA 1
+#endif
+#ifndef APP_GPS_DMA_RX_BUFFER_SIZE
+#define APP_GPS_DMA_RX_BUFFER_SIZE 2048u  // ~0.7 s of UBX output at 16 Hz
+#endif
+
+#if APP_GPS_UART_DMA
+static DMA_HandleTypeDef g_hdma_usart6_rx;
+alignas(32) static uint8_t g_gps_dma_rx_buffer[APP_GPS_DMA_RX_BUFFER_SIZE];
+
+static bool app_gps_start_dma_rx(void) {
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    g_hdma_usart6_rx.Instance                 = DMA1_Stream0;
+    g_hdma_usart6_rx.Init.Request             = DMA_REQUEST_USART6_RX;
+    g_hdma_usart6_rx.Init.Direction           = DMA_PERIPH_TO_MEMORY;
+    g_hdma_usart6_rx.Init.PeriphInc           = DMA_PINC_DISABLE;
+    g_hdma_usart6_rx.Init.MemInc              = DMA_MINC_ENABLE;
+    g_hdma_usart6_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    g_hdma_usart6_rx.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
+    g_hdma_usart6_rx.Init.Mode                = DMA_CIRCULAR;
+    g_hdma_usart6_rx.Init.Priority            = DMA_PRIORITY_LOW;
+    g_hdma_usart6_rx.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&g_hdma_usart6_rx) != HAL_OK) {
+        return false;
+    }
+    __HAL_LINKDMA(&huart6, hdmarx, g_hdma_usart6_rx);
+    return g_superloop.gps.startDmaRx(g_gps_dma_rx_buffer,
+                                      sizeof(g_gps_dma_rx_buffer)) == GpsStatus::OK;
+}
+#endif
+
 extern "C" void app_super_loop_setup(void) {
     if (g_superloop.setup_done) {
         return;
@@ -659,6 +697,16 @@ extern "C" void app_super_loop_setup(void) {
     g_gps_init_ok = gps_state;
     if (!gps_state) {
         app_printf("[APP] WARNING: GPS init failed (non-fatal, GPS disabled)\r\n");
+    }
+#endif
+
+#if APP_GPS_UART_DMA && !FAKE_GNSS_ENABLE
+    if (gps_state) {
+        if (app_gps_start_dma_rx()) {
+            app_printf("[APP] GPS UART reception on circular DMA\r\n");
+        } else {
+            app_printf("[APP] WARNING: GPS DMA start failed, polling the UART\r\n");
+        }
     }
 #endif
 
@@ -954,6 +1002,13 @@ extern "C" void app_super_loop_iterate(void) {
         g_baro_status_flags[i] = g_superloop.baroModule.sensorStatusFlags(i);
     }
     (void)g_superloop.baroModule.takeProducedCount();
+#if APP_GPS_UART_DMA && !FAKE_GNSS_ENABLE
+    RUN_EVERY(1000) {
+        const auto rx = g_superloop.gps.takeRxStats();
+        app_printf("[GPS] bytes=%lu pvt=%lu ore=%lu\r\n", (unsigned long)rx.bytes,
+                   (unsigned long)rx.pvt, (unsigned long)rx.overruns);
+    }
+#endif
 #if !FAKE_GNSS_ENABLE
     if (g_gps_init_ok) {
         g_superloop.gpsModule.update(iter_now_ms);
