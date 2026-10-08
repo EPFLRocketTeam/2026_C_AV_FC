@@ -337,10 +337,10 @@ SX127X_TxPoll_t SX127X_txPoll(SX127X_t *module) {
 	if (module->status != TX) {
 		return SX127X_TX_IDLE;
 	}
-	/* DIO0 is mapped to TxDone; fall back to the flag over SPI in case the
-	 * pin is not wired. */
-	if (SX127X_hw_GetDIO0(module->hw)
-			|| (SX127X_SPIRead(module, LR_RegIrqFlags) & 0x08)) {
+	/* TxDone flag over SPI only: DIO0 may not be wired to the MCU, and a
+	 * floating pin reading high would end the transmission early. One read
+	 * per poll, and polls only happen while a packet is on air. */
+	if (SX127X_SPIRead(module, LR_RegIrqFlags) & 0x08) {
 		SX127X_clearLoRaIrq(module);
 		module->status = STANDBY;
 		return SX127X_TX_DONE;

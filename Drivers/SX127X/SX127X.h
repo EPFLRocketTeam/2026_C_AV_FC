@@ -489,7 +489,7 @@ uint8_t SX127X_RSSI(SX127X_t *module);
  *   SX127X_isPresent()  one register read, to detect a missing radio
  *   SX127X_txPrepare()  TX-side registers, once after SX127X_config()
  *   SX127X_txStart()    load the FIFO and start the transmission
- *   SX127X_txPoll()     report TxDone (DIO0 pin or RegIrqFlags)
+ *   SX127X_txPoll()     report TxDone (RegIrqFlags)
  *   SX127X_rxStart()    enter continuous RX after SX127X_config()
  */
 #define SX127X_VERSION_VALUE	0x12
