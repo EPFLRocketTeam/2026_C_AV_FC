@@ -1,6 +1,6 @@
 # Non-blocking telemetry: change summary and bench plan
 
-Branch `fix/telemetry-nonblocking` (on `feat/sd-decoder`). Related: `fix/usb-printf-nonblocking` (same base).
+Branch `fix/telemetry-nonblocking` (on `feat/sd-decoder`).
 
 ## Why
 
@@ -39,20 +39,17 @@ These expected rates match the measured ~24.8k and ~23k frames/s, which suggests
   - `APP_RADIO_BLOCKING_TX` sends with the former blocking call, for A/B runs on the same build.
   - `APP_RADIO_HOLD_IN_RESET` holds both radios in reset after init, to simulate an absent telemetry board without unplugging it.
 
-`fix/usb-printf-nonblocking`:
-- `CDC_Transmit_HS` no longer dereferences the CDC handle before a host has configured the device. It is NULL until then, for example in flight with no USB cable.
-- `_write` drops output when USB is not configured, waits at most ~2 ms on a busy endpoint instead of 100 ms, and drops at once while the endpoint stays stuck (host connected but not reading).
+USB logging is not changed here. With `ENABLE_USB_LOG` (`app_printf.h`) or the shell toggle off, `_write` returns before touching USB. With it on, a printf can still wait up to 100 ms when the host does not read the port, so keep the serial capture running during the runs below.
 
 ## Builds for the remote session
 
 | Build | How | Purpose |
 |---|---|---|
-| A | `test/remote-bench` as is (telemetry fix + USB fix + Kalman flight-readiness stack) | Candidate |
+| A | `feat/rekalman` (Kalman flight-readiness stack) + `fix/telemetry-nonblocking` | Candidate |
 | B | A with `APP_RADIO_BLOCKING_TX 1` (`tx_radio_module.hpp`) | Old radio behaviour, A/B |
 | C | A with `APP_RADIO_ENABLE 0` (`Core/Src/main.c`) | No radio, baseline |
 | D | A with `APP_RADIO_HOLD_IN_RESET 1` (`radio_process.cpp`) | Telemetry board missing |
 | E | A with `-DKALMAN_DEBUG_FORCE_FLIGHT=1` in the project defines (C and C++) | Estimator flight-mode CPU load |
-| F | `fix/telemetry-nonblocking` alone (no USB fix) | printf A/B for the unread-serial run |
 
 Flash and capture with `make -f makefile.targets deploy` (60 s) or `flash-remote`, then `serial`, from `Debug/`. Let each run go for at least 2 minutes. Summarise with `python3 Application/Tests/bench/perf_summary.py logs/uart_*.log` (the first 15 reports are skipped).
 
@@ -67,11 +64,11 @@ Flash and capture with `make -f makefile.targets deploy` (60 s) or `flash-remote
 3. **B, board present.** Expect `radio` ≈ 92 ms and ~0.8k frames/s lost in total. This confirms the cause and the counters, and `hwm` gives the real FIFO depth: ~409 frames for 8 KB, ~102 for 2 KB.
 4. **C.** Reference for the loop sections without radio.
 5. **D.** Expect `tx=off rx=off`, `absent` counting, `radio` worst < 1 ms, and `lost` = 0.
-6. **A, then F, serial unread.** Flash, wait 60 s without reading the serial port, then start `serial`. Compare `tot` and the stall counters. A should not lose more than with the port read.
+6. **A, USB logging off.** Turn USB logging off with the shell command `logs usb fc` (false) for 60 s, then back on. The `tot` counter covers the silent period. This shows the cost of the serial output itself.
 7. **E.** Check `kal` and the loop maxima with the estimator in flight mode.
 
 ## Open points
 
 - The RX module's DIO0 and reset lines through the spine: the spine document lists only the TX ones; the RX reset is confirmed. Nothing here depends on DIO0.
 - The packet rate stays at 1 Hz. With the non-blocking path it could go up to roughly 1 packet per 100 ms if useful.
-- `[IMU STATUS]` and `[BARO STATUS]` print 12 lines every second. With the USB fix they cost little, but they could be folded into one line.
+- `[IMU STATUS]` and `[BARO STATUS]` print 12 lines every second, each a USB write; they could be folded into one line.
