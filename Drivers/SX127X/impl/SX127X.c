@@ -302,6 +302,69 @@ uint8_t SX127X_read(SX127X_t *module, uint8_t *rxBuf, uint8_t length) {
 	return length;
 }
 
+bool SX127X_isPresent(SX127X_t *module) {
+	return SX127X_SPIRead(module, REG_LR_VERSION) == SX127X_VERSION_VALUE;
+}
+
+void SX127X_txPrepare(SX127X_t *module) {
+	SX127X_SPIWrite(module, REG_LR_PADAC, 0x87);	//Tx for 20dBm
+	SX127X_SPIWrite(module, LR_RegHopPeriod, 0x00); //RegHopPeriod NO FHSS
+	SX127X_SPIWrite(module, REG_LR_DIOMAPPING1, 0x41); //DIO0=01 (TxDone)
+	SX127X_SPIWrite(module, LR_RegIrqFlagsMask, 0xF7); //Open TxDone interrupt
+	SX127X_clearLoRaIrq(module);
+	module->status = STANDBY;
+}
+
+int SX127X_txStart(SX127X_t *module, uint8_t *txBuf, uint8_t length) {
+	if (module->status == TX) {
+		return 0;
+	}
+	/* The FIFO is only accessible in standby; the radio returns there by
+	 * itself after TxDone, this covers the other cases. */
+	SX127X_standby(module);
+	module->packetLength = length;
+	SX127X_SPIWrite(module, LR_RegPayloadLength, length);
+	SX127X_SPIWrite(module, LR_RegFifoAddrPtr,
+			SX127X_SPIRead(module, LR_RegFifoTxBaseAddr));
+	SX127X_SPIBurstWrite(module, 0x00, txBuf, length);
+	SX127X_clearLoRaIrq(module);
+	SX127X_SPIWrite(module, LR_RegOpMode, 0x8b);	//Tx Mode
+	module->status = TX;
+	return 1;
+}
+
+SX127X_TxPoll_t SX127X_txPoll(SX127X_t *module) {
+	if (module->status != TX) {
+		return SX127X_TX_IDLE;
+	}
+	/* DIO0 is mapped to TxDone; fall back to the flag over SPI in case the
+	 * pin is not wired. */
+	if (SX127X_hw_GetDIO0(module->hw)
+			|| (SX127X_SPIRead(module, LR_RegIrqFlags) & 0x08)) {
+		SX127X_clearLoRaIrq(module);
+		module->status = STANDBY;
+		return SX127X_TX_DONE;
+	}
+	return SX127X_TX_BUSY;
+}
+
+void SX127X_rxStart(SX127X_t *module, uint8_t length) {
+	uint8_t addr;
+
+	module->packetLength = length;
+	SX127X_SPIWrite(module, REG_LR_PADAC, 0x84);	//Normal and RX
+	SX127X_SPIWrite(module, LR_RegHopPeriod, 0xFF);	//No FHSS
+	SX127X_SPIWrite(module, REG_LR_DIOMAPPING1, 0x01);//DIO=00,DIO1=00,DIO2=00, DIO3=01
+	SX127X_SPIWrite(module, LR_RegIrqFlagsMask, 0x3F);//Open RxDone interrupt & Timeout
+	SX127X_clearLoRaIrq(module);
+	SX127X_SPIWrite(module, LR_RegPayloadLength, length);
+	addr = SX127X_SPIRead(module, LR_RegFifoRxBaseAddr); //Read RxBaseAddr
+	SX127X_SPIWrite(module, LR_RegFifoAddrPtr, addr); //RxBaseAddr->FiFoAddrPtr
+	SX127X_SPIWrite(module, LR_RegOpMode, 0x8d);	//Continuous Rx Mode
+	module->readBytes = 0;
+	module->status = RX;
+}
+
 uint8_t SX127X_RSSI_LoRa(SX127X_t *module) {
 	uint32_t temp = 10;
 	temp = SX127X_SPIRead(module, LR_RegRssiValue); //Read RegRssiValue, Rssi value
