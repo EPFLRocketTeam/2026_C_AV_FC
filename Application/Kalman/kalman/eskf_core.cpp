@@ -888,6 +888,7 @@ void EskfCore::correctBaroAltitude(eskf_scalar alt_m, eskf_scalar R) {
   } else if (y < -kMaxBaroInn) {
     z = h - kMaxBaroInn;
   }
+  last_innovation_ = z - h;  // logged with the correction (after clamping)
 
 #if !ESKF_USE_CUSTOM_LINALG
   math::RowVector15 H = math::RowVector15::Zero();
@@ -991,6 +992,7 @@ void EskfCore::correctBaroWithSnapshot(eskf_scalar measured_alt,
   } else if (y < -kMaxBaroInn) {
     z = h - kMaxBaroInn;
   }
+  last_innovation_ = z - h;  // logged with the correction (after clamping)
 
   // Jacobian is same as normal baro (affects current state)
 #if !ESKF_USE_CUSTOM_LINALG
@@ -1162,6 +1164,7 @@ void EskfCore::correctHeadingWithEvent(eskf_scalar heading_rad, eskf_scalar R,
     innovation -= 2 * constants::kPi;
   while (innovation < -constants::kPi)
     innovation += 2 * constants::kPi;
+  last_innovation_ = innovation;
 
   // Jacobian: H affects yaw (δθ_z at index 8)
   // For small angles, Δheading ≈ δθ_z
@@ -1485,6 +1488,7 @@ void EskfCore::correctSideslip(eskf_scalar R_lateral) {
   // h = v_body[1] (current lateral velocity)
   eskf_scalar z = 0;
   eskf_scalar h = v_body[1];
+  last_innovation_ = z - h;
 
   // Yaw-only sideslip Jacobian (decoupled update).
   // h = e_y^T * R_nb^T * v_ned
