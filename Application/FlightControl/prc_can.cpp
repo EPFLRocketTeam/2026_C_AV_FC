@@ -170,6 +170,12 @@ void OnDprLoxPublishCable (void*, pi::payload::cable_info cable) noexcept {
     cable.get_no_cable_continuity()
   );
 }
+void OnDprLoxBVState (void*, pi::payload::ball_valve_position bv_state) noexcept {
+  GOATStore::get_instance().valvesStore.set_ball_valve_LOX(bv_state.percent_open);
+}
+void OnDprEthBVState (void*, pi::payload::ball_valve_position bv_state) noexcept {
+  GOATStore::get_instance().valvesStore.set_ball_valve_fuel(bv_state.percent_open);
+}
 
 pi::context& Ctx() {
   static pi::context ctx = [] {
@@ -195,6 +201,8 @@ pi::context& Ctx() {
     driver.on_config_crc_prc_engine = OnConfigCrcEngine;
     driver.on_prc_publish_cable = OnPrcPublishCable;
     driver.on_dpr_lox_publish_cable = OnDprLoxPublishCable;
+    driver.on_dpr_lox_bv_state = OnDprLoxBVState;
+    driver.on_dpr_eth_bv_state = OnDprEthBVState;
     return pi::create_context(driver);
   }();
   return ctx;
