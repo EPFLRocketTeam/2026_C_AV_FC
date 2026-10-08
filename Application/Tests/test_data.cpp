@@ -193,7 +193,7 @@ TEST(GOATStoreTest, LiveDataDumpIntegrity)
     EXPECT_DOUBLE_EQ(dump.navigationData.altitude, 500.0);
     EXPECT_TRUE(dump.event.ignited);
     EXPECT_FLOAT_EQ(dump.batteries.lpb_voltage, 12.5f);
-    EXPECT_TRUE(dump.camsRecording.cam_sep);
+    EXPECT_TRUE(dump.camsRecording.cam_sepmech);
     EXPECT_EQ(dump.uplinkCmd.id, 10);
 
     // 3. Mutate the stores directly and verify the dump does NOT see the change
@@ -217,7 +217,7 @@ TEST(GOATStoreTest, LiveDataDumpIntegrity)
     EXPECT_DOUBLE_EQ(dump.navigationData.altitude, 500.0);
     EXPECT_TRUE(dump.event.ignited);
     EXPECT_FLOAT_EQ(dump.batteries.lpb_voltage, 12.5f);
-    EXPECT_TRUE(dump.camsRecording.cam_sep);
+    EXPECT_TRUE(dump.camsRecording.cam_sepmech);
     EXPECT_EQ(dump.uplinkCmd.id, 10);
 
     // 4. Verify that get_ref() DOES return a live reference to data_
@@ -243,7 +243,7 @@ TEST(GOATStoreTest, DataDumpContainsAllStores)
     EXPECT_EQ(dump.navigationData.altitude, 0.0);
     EXPECT_EQ(dump.event.ignited, false);
     EXPECT_EQ(dump.batteries.lpb_voltage, 0.0f);
-    EXPECT_EQ(dump.camsRecording.cam_sep, false);
+    EXPECT_EQ(dump.camsRecording.cam_sepmech, false);
     EXPECT_EQ(dump.uplinkCmd.id, 0);
 }
 
@@ -258,7 +258,7 @@ TEST(GOATStoreTest, DataDumpCanBeMutated)
     dump->navigationData.altitude = 1000.0;
     dump->event.ignited = true;
     dump->batteries.lpb_voltage = 12.5f;
-    dump->camsRecording.cam_sep = true;
+    dump->camsRecording.cam_sepmech = true;
     dump->uplinkCmd.id = 5;
 
     const DataDump& result = *goat.get_ref();
@@ -268,7 +268,7 @@ TEST(GOATStoreTest, DataDumpCanBeMutated)
     EXPECT_DOUBLE_EQ(result.navigationData.altitude, 1000.0);
     EXPECT_TRUE(result.event.ignited);
     EXPECT_FLOAT_EQ(result.batteries.lpb_voltage, 12.5f);
-    EXPECT_TRUE(result.camsRecording.cam_sep);
+    EXPECT_TRUE(result.camsRecording.cam_sepmech);
     EXPECT_EQ(result.uplinkCmd.id, 5);
 }
 
@@ -904,9 +904,9 @@ TEST(CamsRecordingStoreTest, DefaultConstructedIsFalse)
     CamsRecordingStore store;
     const auto& data = store.get();
 
-    EXPECT_FALSE(data.cam_sep);
-    EXPECT_FALSE(data.cam_up);
-    EXPECT_FALSE(data.cam_down);
+    EXPECT_FALSE(data.cam_sepmech);
+    EXPECT_FALSE(data.cam_aero_top);
+    EXPECT_FALSE(data.cam_aero_bot);
 }
 
 TEST(CamsRecordingStoreTest, SetAndGetFullStruct)
@@ -914,16 +914,16 @@ TEST(CamsRecordingStoreTest, SetAndGetFullStruct)
     CamsRecordingStore store;
 
     CamsRecording data;
-    data.cam_sep = true;
-    data.cam_up = false;
-    data.cam_down = true;
+    data.cam_sepmech = true;
+    data.cam_aero_top = false;
+    data.cam_aero_bot = true;
 
     store.set(data);
     const auto& result = store.get();
 
-    EXPECT_TRUE(result.cam_sep);
-    EXPECT_FALSE(result.cam_up);
-    EXPECT_TRUE(result.cam_down);
+    EXPECT_TRUE(result.cam_sepmech);
+    EXPECT_FALSE(result.cam_aero_top);
+    EXPECT_TRUE(result.cam_aero_bot);
 }
 
 TEST(CamsRecordingStoreTest, HelperSettersAndGettersWork)
@@ -931,12 +931,12 @@ TEST(CamsRecordingStoreTest, HelperSettersAndGettersWork)
     CamsRecordingStore store;
 
     store.set_cam_sep(true);
-    store.set_cam_up(false);
-    store.set_cam_down(true);
+    store.set_cam_aero_top(false);
+    store.set_cam_aero_bot(true);
 
     EXPECT_TRUE(store.get_cam_sep());
-    EXPECT_FALSE(store.get_cam_up());
-    EXPECT_TRUE(store.get_cam_down());
+    EXPECT_FALSE(store.get_cam_aero_top());
+    EXPECT_TRUE(store.get_cam_aero_bot());
 }
 
 TEST(UplinkCmdStoreTest, DefaultConstructedIsZero)

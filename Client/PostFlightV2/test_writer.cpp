@@ -1,59 +1,69 @@
-#include "sd_logger.hpp"
-#include <string.h>
 
-extern "C" {
-#include "stm32hal.h"
-#include "app_timebase.h"
-}
+#include "types.hpp"
+
+#include <bits/stdc++.h>
+using namespace std;
+
+
+class SdLogger {
+public:
+    void logDataDump(flight_computer::DataDump data);
+    void logCameraDump (const CameraDump& dump);
+    void logFsmTransition(flight_computer::State prev, flight_computer::State next);
+    void logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUData* samples, size_t count);
+    void logBaroRaw(SdLogBaroSample sample);
+    void logBootMarker(SdLogBootMarker marker);
+    void logSdHealth(SdLogSdHealth health);
+    void logAppMetrics(const SdLogAppMetrics& metrics);
+    void logUbxRaw(const uint8_t* ubx_packet, uint16_t length);
+
+    void logState(const eskf::StateSnapshot& snapshot);
+    void logStateCritical(const eskf::StateSnapshot& snapshot);
+    void logCovariance(const eskf::CovarianceSnapshot& snapshot);
+    void logEvent(eskf::EskfEventType event, uint64_t timestamp_us, float value);
+    void logGpsRejection(eskf::EskfEventType event, uint64_t timestamp_us,
+                         const eskf::GpsRejectionInfo& info);
+    void logRewind(eskf::EskfEventType event, uint64_t timestamp_us,
+                   const eskf::RewindInfo& info);
+    void logCorrection(eskf::EskfEventType event, uint64_t timestamp_us,
+                       float innovation, float nis);
+    void logRailShadow(const eskf::RailShadowSnapshot& snapshot);
+    void logFlightShadow(const eskf::FlightShadowSnapshot& snapshot);
+    void logImuPipeline(const eskf::ImuPipelineSnapshot& snapshot);
+    void logImuDynamics(const eskf::ImuDynamicsSnapshot& snapshot);
+
+    SdLogger () : outfile("log.bin") {}
+
+    uint32_t time = 0;
+private:
+    void writeRecord(SdLogRecordType type, const void* payload, uint16_t payload_len);
+
+    std::ofstream outfile;
+};
 
 // ============================================================
 // Core write method — framed binary record to Plume
 // ============================================================
 
 void SdLogger::writeRecord(SdLogRecordType type, const void* payload, uint16_t payload_len) {
-    if (sd_ == nullptr) return;
-
     SdLogHeader hdr;
     hdr.magic        = SD_LOG_MAGIC;
     hdr.record_type  = static_cast<uint8_t>(type);
     hdr.length       = payload_len;
-    hdr.timestamp_us = (uint32_t)app_timebase_now_us();
+    hdr.timestamp_us = (uint32_t)time ++;
 
     const uint32_t t0 = hdr.timestamp_us;
 
-    // Write header + payload as a single contiguous write.
-    // Plume's ring buffer handles the byte-level copy.
-    uint8_t buf[sizeof(SdLogHeader) + 1024];  // stack buffer for small records
-    uint8_t result;
-    if (sizeof(SdLogHeader) + payload_len <= sizeof(buf)) {
-        memcpy(buf, &hdr, sizeof(hdr));
-        memcpy(buf + sizeof(hdr), payload, payload_len);
-        result = sd_->write(buf, sizeof(hdr) + payload_len);
-    } else {
-        // Large record: write header then payload separately
-        sd_->beginTransaction();
-        sd_->write(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr));
-        result = sd_->write(reinterpret_cast<const uint8_t*>(payload), payload_len);
-        sd_->endTransaction();
-    }
-
-    const uint32_t elapsed_us = (uint32_t)app_timebase_now_us() - t0;
-    if (elapsed_us > max_write_time_us_) max_write_time_us_ = elapsed_us;
-
-    write_count_++;
-    if (result != 0) {
-        write_fail_count_++;
-    } else {
-        bytes_written_ += sizeof(hdr) + payload_len;
-    }
+    outfile.write((char*) &hdr, sizeof(hdr));
+    outfile.write((char*) payload, payload_len);
 }
 
 // ============================================================
 // DataDump and FSM Logging
 // ============================================================
 
-void SdLogger::logDataDump(const void* data, uint16_t size) {
-    writeRecord(SD_LOG_DATADUMP, data, size);
+void SdLogger::logDataDump(flight_computer::DataDump data) {
+    writeRecord(SD_LOG_DATADUMP, &data, sizeof(data));
 }
 
 void SdLogger::logFsmTransition(flight_computer::State prev, flight_computer::State next) {
@@ -141,8 +151,6 @@ void SdLogger::logImuDynamics(const eskf::ImuDynamicsSnapshot& snapshot) {
 // ============================================================
 
 void SdLogger::logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUData* samples, size_t count) {
-    if (sd_ == nullptr || count == 0) return;
-
     SdLogImuBatchHeader batch_hdr;
     batch_hdr.sensor_index = static_cast<uint8_t>(sensor_index);
     batch_hdr.sample_count = static_cast<uint8_t>(count);
@@ -155,41 +163,16 @@ void SdLogger::logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUDat
     hdr.magic        = SD_LOG_MAGIC;
     hdr.record_type  = static_cast<uint8_t>(SD_LOG_IMU_RAW);
     hdr.length       = payload_len;
-    hdr.timestamp_us = (uint32_t)app_timebase_now_us();
+    hdr.timestamp_us = time ++;
 
     // Write header, batch header, then samples (3 separate writes to avoid
     // large stack copy — Plume concatenates them into the arena).
-    sd_->beginTransaction();
-    sd_->write(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr));
-    sd_->write(reinterpret_cast<const uint8_t*>(&batch_hdr), sizeof(batch_hdr));
-    sd_->write(reinterpret_cast<const uint8_t*>(samples), count * sizeof(Drivers::InvIMU::IMUData));
-    sd_->endTransaction();
-
-    imu_batch_count_++;
-    // Check if the transaction was rolled back by inspecting write results.
-    // endTransaction() handles rollback internally — we detect failure by checking
-    // whether the arena bytes changed.  Simpler: check the last write result.
-    // Actually: SDCardInterface::write returns non-zero on failure and marks the
-    // transaction failed.  The most reliable indicator is that write() returned OK
-    // for the third (largest) call.  But SDCardInterface::endTransaction() already
-    // rolled back if any write failed.  We piggy-back on the transactionFailed flag.
-    if (sd_->lastTransactionFailed()) {
-        imu_batch_fail_++;
-    } else {
-        imu_bytes_ok_ += sizeof(hdr) + sizeof(batch_hdr) + count * sizeof(Drivers::InvIMU::IMUData);
-    }
+    outfile.write((char*) &hdr, sizeof(hdr));
+    outfile.write((char*) &batch_hdr, sizeof(batch_hdr));
+    outfile.write((char*) samples, count * sizeof(Drivers::InvIMU::IMUData));
 }
 
-void SdLogger::logBaroRaw(size_t sensor_index, const Drivers::BMP390::BaroData& sample) {
-    if (sd_ == nullptr) return;
-
-    SdLogBaroSample record;
-    record.sensor_index = static_cast<uint8_t>(sensor_index);
-    record.pad[0] = record.pad[1] = record.pad[2] = 0;
-    record.pressure_pa   = sample.pressure_pa;
-    record.temperature_c = sample.temperature_c;
-    record.timestamp_us  = sample.timestamp_us;
-
+void SdLogger::logBaroRaw(SdLogBaroSample record) {
     writeRecord(SD_LOG_BARO_RAW, &record, sizeof(record));
 }
 
@@ -197,48 +180,66 @@ void SdLogger::logBaroRaw(size_t sensor_index, const Drivers::BMP390::BaroData& 
 // Boot Marker, Health, Metrics, UBX Raw
 // ============================================================
 
-void SdLogger::logBootMarker(uint8_t imu_count, uint8_t baro_count, bool gps_ok) {
-    if (sd_ == nullptr) return;
-
-    SdLogBootMarker marker;
-    marker.firmware_crc = 0;  // placeholder
-    marker.imu_count    = imu_count;
-    marker.baro_count   = baro_count;
-    marker.gps_ok       = gps_ok ? 1 : 0;
-    marker.sd_ok        = 1;  // if we're logging, SD is OK
-    marker.boot_time_us = (uint32_t)app_timebase_now_us();
-    marker.reset_reason = RCC->RSR;
-
+void SdLogger::logBootMarker(SdLogBootMarker marker) {
     writeRecord(SD_LOG_BOOT_MARKER, &marker, sizeof(marker));
 }
 
-void SdLogger::logSdHealth() {
-    if (sd_ == nullptr) return;
-
-    SdLogSdHealth health;
-    health.bytes_written     = bytes_written_;
-    health.write_count       = write_count_;
-    health.write_fail_count  = write_fail_count_;
-    health.arena_used_bytes  = static_cast<uint32_t>(sd_->arena_used_bytes());
-    health.arena_total_bytes = static_cast<uint32_t>(sd_->arena_total_bytes());
-    health.max_write_time_us = max_write_time_us_;
-    health.tick_count        = tick_count_;
-    health.disk_remaining_kb = static_cast<uint32_t>(sd_->disk_size_remaining() / 1024);
-
+void SdLogger::logSdHealth(SdLogSdHealth health) {
     writeRecord(SD_LOG_SD_HEALTH, &health, sizeof(health));
 }
 
 void SdLogger::logAppMetrics(const SdLogAppMetrics& metrics) {
-    if (sd_ == nullptr) return;
     writeRecord(SD_LOG_APP_METRICS, &metrics, sizeof(metrics));
 }
 
 void SdLogger::logUbxRaw(const uint8_t* ubx_packet, uint16_t length) {
-    if (sd_ == nullptr || ubx_packet == nullptr || length == 0) return;
+    if (ubx_packet == nullptr || length == 0) return;
     writeRecord(SD_LOG_UBX_RAW, ubx_packet, length);
 }
 
 void SdLogger::logCameraDump (const CameraDump& dump) {
-    if (sd_ == nullptr) return;
     writeRecord(SD_LOG_CAMERA, &dump, sizeof(dump));
+}
+
+using namespace flight_computer;
+
+int main (void) {
+    SdLogger logger;
+
+    logger.logDataDump(DataDump{ .av_state = State::ASCENT });
+    logger.logAppMetrics(SdLogAppMetrics{1});
+    logger.logBaroRaw(SdLogBaroSample{2});
+    logger.logBootMarker(SdLogBootMarker{3});
+    logger.logCameraDump(CameraDump{ .aero_bot = { .cameraState = camera::ABORT_ON_START } });
+    logger.logCorrection(eskf::EskfEventType::AeroBlindExited, 1, 1., 2.);
+    logger.logCovariance(eskf::CovarianceSnapshot{ 6 });
+    logger.logEvent(eskf::EskfEventType::BaroInnovationClamped, 12, 1.3);
+    logger.logFlightShadow(eskf::FlightShadowSnapshot{ 7 });
+    logger.logFsmTransition(State::BURN, State::ASCENT);
+    logger.logGpsRejection(eskf::EskfEventType::BaroQueueFlushed, 13, eskf::GpsRejectionInfo{42});
+    logger.logImuDynamics(eskf::ImuDynamicsSnapshot{.accel_body = {0.1, 0.2, 0.3}});
+    logger.logImuPipeline(eskf::ImuPipelineSnapshot{.accel_body = {0.4, 0.2, 0.1}});
+    //logger.logImuRawBatch
+
+    logger.logRailShadow(eskf::RailShadowSnapshot{ .ground_pressure_pa = 15.2 });
+    logger.logRewind(eskf::EskfEventType::FilterDiverged, 8, eskf::RewindInfo{ .baro_replayed = 4200 });
+    logger.logSdHealth(SdLogSdHealth{ .arena_total_bytes = 515151515 });
+    logger.logState(eskf::StateSnapshot{ .b_acc = { 1.2, 1.3, 2.3 } });
+    logger.logStateCritical(eskf::StateSnapshot{ .b_acc = { 1.4, 1.3, 0.3 } });
+
+    Drivers::InvIMU::IMUData samples[100];
+    for (size_t off = 0; off < 100; off ++) {
+        samples[off] = Drivers::InvIMU::IMUData{
+            .accel_x = (float) off,
+            .accel_y = (float) 2 * off,
+            .accel_z = - (float) off,
+            .gyro_x = 0,
+            .gyro_y = 0,
+            .gyro_z = 0,
+            .temperature = 0,
+            .timestamp_us = 12000
+        };
+    }
+    logger.logImuRawBatch(2, samples, sizeof(samples) / sizeof(Drivers::InvIMU::IMUData));
+    logger.logUbxRaw((uint8_t*) "hello, world !", 15);
 }

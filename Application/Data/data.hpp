@@ -9,40 +9,123 @@
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
 #include "Drivers/InvIMU/InvIMU.h"
 
+#include "Client/PostFlightV2/annotations.hpp"
+
+namespace prc {
+enum State : uint8_t {
+  MANUAL,
+
+  PRESSURIZE_ON,
+  REGULATE,
+  PRESSURIZE_OFF,
+  DEPRESSURIZE_ON,
+  DEPRESSURIZE_OFF,
+
+  /* ============== Error States ============== */
+  ABORT_ON_GROUND,
+  ABORT_IN_FLIGHT, // step 1: Safety + Ball closed, then rejoins PASSIVATE via a timer
+};
+enum class EngineState : uint8_t {
+  Idle,
+  ClearToIgnite,
+
+  // IGNITION SQ
+  IgnitionPrechill,       // open MO
+  IgnitionIgniter,        // close MO + igniter ON
+  IgnitionBurnStartMe,    // open ME + igniter OFF
+  IgnitionBurnStartMo,    // open MO
+
+  Burn,
+  BurnStopMe,             // close ME
+  BurnStopMo,             // close MO
+  WaitForPassivation,
+
+  /* PASSIVATION SQ */ 
+  PassivationSeparationDelay, // PASSIVATION SQ
+  PassivationEth,         // open ME
+  PassivationCloseMe,     // close ME
+  PassivationLox,         // open MO
+  Shutoff,                // close MO
+
+  // Reached from Shutoff on every route (nominal end-of-burn or
+  // abort-in-flight both converge on WaitForPassivation/Shutoff already).
+  // Opens both mains back up so FC's telemetry shows the tanks are empty --
+  // FC is the one that then commands the DPR boards to depressurize (see
+  // the FC-level FSM diagram), not this board. Terminal.
+  DepressurizeOpen,       // open MO + ME
+  DepressurizeClose,
+
+  AbortOnGround,
+  AbortOnGroundOxydant,   // close MO
+  AbortOnGroundEthanol,   // close ME -- then waits for RESET -> Idle
+
+  AbortInFlight,
+  AbortInFlightOxydant,   // close MO
+  AbortInFlightEthanol,   // close ME -- then times out into WaitForPassivation
+};
+
+};
+
 namespace flight_computer {
 
 struct bmp3_int_status {
+  CSV_RENAME("fifo_watermark_interrupt")
+  CSV_DECODE_WITH(bool)
   uint8_t fifo_wm;
+  CSV_RENAME("fifo_full_interrupt")
+  CSV_DECODE_WITH(bool)
   uint8_t fifo_full;
+  CSV_RENAME("data_ready_interrupt")
+  CSV_DECODE_WITH(bool)
   uint8_t drdy;
 
   bmp3_int_status() : fifo_wm(0), fifo_full(0), drdy(0) {}
 };
+static_assert(sizeof(bmp3_int_status) == 3);
 
 struct bmp3_sens_status {
+  CSV_RENAME("command_ready")
+  CSV_DECODE_WITH(bool)
   uint8_t cmd_rdy;
+  CSV_RENAME("pressure_data_ready")
+  CSV_DECODE_WITH(bool)
   uint8_t drdy_press;
+  CSV_RENAME("temperature_data_ready")
+  CSV_DECODE_WITH(bool)
   uint8_t drdy_temp;
 
   bmp3_sens_status() : cmd_rdy(0), drdy_press(0), drdy_temp(0) {}
 };
+static_assert(sizeof(bmp3_sens_status) == 3);
 
 struct bmp3_err_status {
+  CSV_RENAME("fatal_error")
+  CSV_DECODE_WITH(bool)
   uint8_t fatal;
+  CSV_RENAME("command_error")
+  CSV_DECODE_WITH(bool)
   uint8_t cmd;
+  CSV_RENAME("config_error")
+  CSV_DECODE_WITH(bool)
   uint8_t conf;
 
   bmp3_err_status() : fatal(0), cmd(0), conf(0) {}
 };
+static_assert(sizeof(bmp3_sens_status) == 3);
 
 struct bmp3_status {
+  CSV_RENAME("interrupts")
   struct bmp3_int_status intr;
   struct bmp3_sens_status sensor;
+  CSV_RENAME("error")
   struct bmp3_err_status err;
+  CSV_RENAME("power_on_reset")
+  CSV_DECODE_WITH(bool)
   uint8_t pwr_on_rst;
 
   bmp3_status() : intr{}, sensor{}, err{}, pwr_on_rst(0) {}
 };
+static_assert(sizeof(bmp3_status) == 10);
 
 struct bmp3_data {
   double temperature;
@@ -51,16 +134,25 @@ struct bmp3_data {
   bmp3_data() : temperature(0.0), pressure(0.0) {}
   bmp3_data(double temp, double press) : temperature(temp), pressure(press) {}
 };
+static_assert(sizeof(bmp3_data) == 16);
 
 struct SensStatus {
+  CSV_DECODE_WITH(int)
   uint8_t adxl_status;
+  CSV_DECODE_WITH(int)
   uint8_t adxl_aux_status;
+  CSV_DECODE_WITH(int)
   uint8_t bmi_accel_status;
+  CSV_DECODE_WITH(int)
   uint8_t bmi_aux_accel_status;
+  CSV_DECODE_WITH(int)
   uint8_t bmi_gyro_status;
+  CSV_DECODE_WITH(int)
   uint8_t bmi_aux_gyro_status;
   bmp3_status bmp_status;
   bmp3_status bmp_aux_status;
+
+  float imu_data_rate;
 
   // uint8_t no_cable_continuity; // TODO: Properly update the store
   // uint8_t flight_duration;     // TODO: Properly update the store
@@ -68,6 +160,7 @@ struct SensStatus {
 
   SensStatus();
 };
+static_assert(sizeof(SensStatus) == 32);
 
 struct FlightEventTimers {// TODO: Properly update the store test
   uint32_t flight_duration;
@@ -76,14 +169,17 @@ struct FlightEventTimers {// TODO: Properly update the store test
 
   FlightEventTimers();
 };
+static_assert(sizeof(FlightEventTimers) == 12);
 
 struct VehiculeOverview {// TODO: Properly update the store test
-  uint8_t no_cable_continuity;
+  bool no_cable_continuity_engine;
+  bool no_cable_continuity_lox;
 
   bool pyros_on[4];
 
   VehiculeOverview();
 };
+static_assert(sizeof(VehiculeOverview) == 6);
 
 struct adxl375_data {
   float x;
@@ -93,7 +189,7 @@ struct adxl375_data {
   adxl375_data() : x(0.0f), y(0.0f), z(0.0f) {}
   adxl375_data(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
 };
-
+static_assert(sizeof(adxl375_data) == 12);
 
 
 struct NavSensors {
@@ -107,6 +203,7 @@ struct NavSensors {
 
   NavSensors();
 };
+static_assert(sizeof(NavSensors) == 248);
 
 struct PropSensors {
   // === FUEL ===
@@ -139,14 +236,18 @@ struct PropSensors {
   double chamber_temperature;
 
   // === STATE ===
+  CSV_DECODE_WITH(prc::State)
   uint8_t dpr_fuel_state;
+  CSV_DECODE_WITH(prc::State)
   uint8_t dpr_LOX_state;
+  CSV_DECODE_WITH(prc::EngineState)
   uint8_t engine_state;
 
   uint32_t timer_burn;
 
   PropSensors();
 };
+static_assert(sizeof(PropSensors) == 16 * 8 + 8);
 
 struct Valves {
   bool main_LOX_open, main_fuel_open;
@@ -158,6 +259,7 @@ struct Valves {
 
   Valves();
 };
+static_assert(sizeof(Valves) == 16);
 
 struct Vector3 {
   double x;
@@ -169,6 +271,7 @@ struct Vector3 {
 
   inline double norm() const { return std::sqrt(x * x + y * y + z * z); }
 };
+static_assert(sizeof(Vector3) == 24);
 
 struct NavigationData {
   Vector3 position_kalman;
@@ -182,12 +285,17 @@ struct NavigationData {
 
   NavigationData();
 };
+static_assert(sizeof(NavigationData) == 128);
 
 struct Batteries {
-  float lpb_voltage;
-	float lpb_current;
-	float vout_5v_voltage;
-	float vout_5v_current;
+  float lpb1_voltage;
+	float lpb1_current;
+  float lpb2_voltage;
+	float lpb2_current;
+	float vout1_5v_voltage;
+	float vout1_5v_current;
+	float vout2_5v_voltage;
+	float vout2_5v_current;
 	float hpb_main_voltage;
 	float hpb_main_current;
 	float hpb_backup_voltage;
@@ -197,14 +305,16 @@ struct Batteries {
 
   Batteries();
 };
+static_assert(sizeof(Batteries) == 14 * 4);
 
 struct CamsRecording {
-  bool cam_sep;
-  bool cam_up;
-  bool cam_down;
+  bool cam_sepmech;
+  bool cam_aero_top;
+  bool cam_aero_bot;
 
   CamsRecording();
 };
+static_assert(sizeof(CamsRecording) == 3);
 
 struct UplinkCmd {
   uint8_t id;
@@ -212,6 +322,7 @@ struct UplinkCmd {
 
   UplinkCmd();
 };
+static_assert(sizeof(UplinkCmd) == 2);
 
 /**
  * @brief Generic base class for all data stores.
@@ -257,17 +368,29 @@ class BatteriesStore : public IStore<Batteries> {
 public:
   BatteriesStore();
 
-  float get_lpb_voltage () const;
-  void set_lpb_voltage (float value);
+  float get_lpb1_voltage () const;
+  void set_lpb1_voltage (float value);
+  
+  float get_lpb2_voltage () const;
+  void set_lpb2_voltage (float value);
 
-  float get_lpb_current () const;
-  void set_lpb_current (float value);
+  float get_lpb1_current () const;
+  void set_lpb1_current (float value);
+  
+  float get_lpb2_current () const;
+  void set_lpb2_current (float value);
 
-  float get_vout_5v_voltage () const;
-  void set_vout_5v_voltage (float value);
+  float get_vout1_5v_voltage () const;
+  void set_vout1_5v_voltage (float value);
 
-  float get_vout_5v_current () const;
-  void set_vout_5v_current (float value);
+  float get_vout1_5v_current () const;
+  void set_vout1_5v_current (float value);
+  
+  float get_vout2_5v_voltage () const;
+  void set_vout2_5v_voltage (float value);
+
+  float get_vout2_5v_current () const;
+  void set_vout2_5v_current (float value);
 
   float get_hpb_main_voltage () const;
   void set_hpb_main_voltage (float value);
@@ -306,8 +429,11 @@ class VehiculeOverviewStore : public IStore<VehiculeOverview> {
 public:
   VehiculeOverviewStore();
 
-  uint8_t get_no_cable_continuity() const;
-  void set_no_cable_continuity(uint8_t value);
+  bool get_no_cable_continuity_engine () const;
+  void set_no_cable_continuity_engine (bool value);
+
+  bool get_no_cable_continuity_lox () const;
+  void set_no_cable_continuity_lox (bool value);
 
   bool get_pyro_ch1_on () const;
   bool get_pyro_ch2_on () const;
@@ -324,14 +450,14 @@ class CamsRecordingStore : public IStore<CamsRecording> {
 public:
   CamsRecordingStore();
 
-  bool get_cam_sep() const;
-  void set_cam_sep(bool value);
+  bool get_cam_sepmech() const;
+  void set_cam_sepmech(bool value);
 
-  bool get_cam_up() const;
-  void set_cam_up(bool value);
+  bool get_cam_aero_top() const;
+  void set_cam_aero_top(bool value);
 
-  bool get_cam_down() const;
-  void set_cam_down(bool value);
+  bool get_cam_aero_bot() const;
+  void set_cam_aero_bot(bool value);
 };
 
 class UplinkCmdStore : public IStore<UplinkCmd> {
@@ -372,6 +498,9 @@ public:
 
   bmp3_status get_bmp_aux_status() const;
   void set_bmp_aux_status(const bmp3_status &value);
+
+  float get_imu_rate () const;
+  void set_imu_rate (float value);
 };
 
 class NavSensorsStore : public IStore<NavSensors> {
@@ -627,6 +756,7 @@ struct DataDump {
   // AV monotonic timebase in milliseconds before AvState::update consumes it.
   uint32_t av_timestamp; // Y
   float av_fc_temp; // X
+  float ambient_temperature;
   GpsBasicFixData gps_state; // X
   SensStatus sensStatus; // X
   VehiculeOverview vehiculeOverview; // X
@@ -695,6 +825,9 @@ public:
 
   float getFcTemperature ();
   void setFcTemperature (float value);
+  
+  float getAmbientTemperature ();
+  void setAmbientTemperature (float value);
 
 private:
   mutable DataDump data_;

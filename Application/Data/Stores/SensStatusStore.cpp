@@ -38,3 +38,10 @@ void SensStatusStore::set_bmp_status(const bmp3_status& value) { data_.bmp_statu
 
 bmp3_status SensStatusStore::get_bmp_aux_status() const { return data_.bmp_aux_status; }
 void SensStatusStore::set_bmp_aux_status(const bmp3_status& value) { data_.bmp_aux_status = value; }
+
+float SensStatusStore::get_imu_rate () const {
+    return data_.imu_data_rate;
+}
+void SensStatusStore::set_imu_rate (float value) {
+    data_.imu_data_rate = value;
+}

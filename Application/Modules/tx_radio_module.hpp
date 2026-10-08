@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Application/main.h"
 #include "Application/app_timebase.h"
 #include "Application/Data/data.hpp"
 #include "Drivers/SX127X/SX127X_capsule.hpp"
@@ -20,7 +21,10 @@ PREPARE_DOWNLINK(flight_computer::SensStatus) {
     (void) packet; (void) dump;
 }
 PREPARE_DOWNLINK(flight_computer::VehiculeOverview) {
-    // TODO no_cable_continuity ?
+    packet.rail_cable_status = 0;
+    if (dump.no_cable_continuity_engine) packet.rail_cable_status |= AV_CABLE_EXT1;
+    if (dump.no_cable_continuity_lox) packet.rail_cable_status |= AV_CABLE_EXT2;
+
     packet.pyro_status = 0;
 
     if (dump.pyros_on[0]) packet.pyro_status |= AV_PYRO_CH1;
@@ -52,8 +56,9 @@ PREPARE_DOWNLINK(flight_computer::PropSensors) {
 	packet.chamber_temp = dump.chamber_temperature;
 }
 PREPARE_DOWNLINK(flight_computer::Valves) {
-    packet.valve_dpr_fuel = dump.ball_valve_fuel;
-    packet.valve_dpr_LOX  = dump.ball_valve_LOX;
+    // 100% -> degree of opening
+    packet.valve_dpr_fuel = dump.ball_valve_fuel * 0.9;
+    packet.valve_dpr_LOX  = dump.ball_valve_LOX * 0.9;
 
     packet.valves_state = 0;
     if (!dump.main_LOX_open)    packet.valves_state |= AV_VALVE_MAIN_LOX;
@@ -72,10 +77,14 @@ PREPARE_DOWNLINK(flight_computer::Event) {
     (void) packet; (void) dump;
 }
 PREPARE_DOWNLINK(flight_computer::Batteries) {
-    packet.lpb_voltage = dump.lpb_voltage;
-	packet.lpb_current = dump.lpb_current;
-	packet.vout_5v_voltage = dump.vout_5v_voltage;
-	packet.vout_5v_current = dump.vout_5v_current;
+    packet.lpb1_voltage = dump.lpb1_voltage;
+	packet.lpb1_current = dump.lpb1_current;
+    packet.lpb2_voltage = dump.lpb2_voltage;
+	packet.lpb2_current = dump.lpb2_current;
+	packet.vout1_5v_voltage = dump.vout1_5v_voltage;
+	packet.vout1_5v_current = dump.vout1_5v_current;
+	packet.vout2_5v_voltage = dump.vout2_5v_voltage;
+	packet.vout2_5v_current = dump.vout2_5v_current;
 	packet.hpb_main_voltage = dump.hpb_main_voltage;
 	packet.hpb_main_current = dump.hpb_main_current;
 	packet.hpb_backup_voltage = dump.hpb_backup_voltage;
@@ -86,9 +95,9 @@ PREPARE_DOWNLINK(flight_computer::Batteries) {
 PREPARE_DOWNLINK(flight_computer::CamsRecording) {
     packet.cam_rec = 0;
     
-    if (dump.cam_down) packet.cam_rec |= AV_CAMERA_AERO_BOT;
-    if (dump.cam_up)   packet.cam_rec |= AV_CAMERA_AERO_TOP;
-    if (dump.cam_sep)  packet.cam_rec |= AV_CAMERA_SEPMEC;
+    if (dump.cam_aero_bot) packet.cam_rec |= AV_CAMERA_AERO_BOT;
+    if (dump.cam_aero_top)   packet.cam_rec |= AV_CAMERA_AERO_TOP;
+    if (dump.cam_sepmech)  packet.cam_rec |= AV_CAMERA_SEPMEC;
 }
 PREPARE_DOWNLINK(flight_computer::UplinkCmd) {
     (void) packet; (void) dump;
@@ -98,6 +107,12 @@ PREPARE_DOWNLINK(flight_computer::DataDump) {
     packet.av_state     = static_cast<uint8_t>(dump.av_state);
     packet.av_fc_temp   = dump.av_fc_temp;
     packet.av_timestamp = dump.av_timestamp;
+
+    packet.sd_fail_count = app_get_sd_fail_count();
+    packet.remaining_disk_size = app_get_remaining_disk_size();
+    packet.average_imu_rate = app_get_current_imu_rate();
+
+    packet.ambient_temp = dump.ambient_temperature;
     
     prepare_downlink_packet(packet, dump.gps_state);
     prepare_downlink_packet(packet, dump.sensStatus);

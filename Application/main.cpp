@@ -6,6 +6,7 @@
 #include "Modules/baro_module.hpp"
 #include "Modules/imu_modlue.hpp"
 #include "Modules/gps_module.hpp"
+#include "Application/Modules/battery_module.hpp"
 #include "plume_driver.hpp"
 #include "Modules/sd_logger.hpp"
 #include "Modules/fc_temp_module.hpp"
@@ -13,6 +14,7 @@
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Config/config.hpp"
 #include "Application/FlightControl/fc_shell.hpp"
+#include "Application/app_logger.hpp"
 #include "Drivers/Camera/CameraPlatform.hpp"
 
 
@@ -36,6 +38,7 @@ extern "C" {
 extern SPI_HandleTypeDef hspi4;
 extern SPI_HandleTypeDef hspi5;
 extern UART_HandleTypeDef huart6;
+extern I2C_HandleTypeDef hi2c2;
 extern SD_HandleTypeDef hsd1;
 
 using Drivers::InvIMU::Config;
@@ -411,6 +414,8 @@ struct SuperLoopContext {
     RingBuffer<GpsBasicFixData, 100>* gpsRing[1] = {&gpsData};
     GpsModule gpsModule{gpsArr, gpsRing};
 
+    BatteryModule batteryModule{&hi2c2};
+
     bool setup_done = false;
     bool ready = false;
 };
@@ -550,6 +555,10 @@ static void baro_raw_spi_test() {
     app_printf("[RAW-BARO-TEST] Done.\r\n");
 }
 
+SdLogger& app_get_sd_logger () {
+    return g_sd_logger;   
+}
+
 extern "C" void app_super_loop_setup(void) {
     if (g_superloop.setup_done) {
         return;
@@ -634,6 +643,10 @@ extern "C" void app_super_loop_setup(void) {
         app_printf("WARNING: No barometers initialized\r\n");
     }
 
+    if (!g_superloop.batteryModule.init()) {
+        printf("WARNING: not all battery rails initialized\r\n");
+    }
+
     bool gps_state = g_superloop.gpsModule.init();
 #if FAKE_GNSS_ENABLE   /////
     app_printf("[APP] FAKE_GNSS_ENABLE=1: skipping real GPS init, using synthetic 16Hz GNSS\r\n");
@@ -691,6 +704,8 @@ extern "C" void app_super_loop_setup(void) {
 
 static int nb_superloops = 0;
 static int nb_consumed = 0;
+static uint32_t lastRatioComputationTime = 0;
+static int nb_consumed_since_last_poll = 0;
 extern "C" void app_super_loop_iterate(void) {
 	FC_Shell_Tick();
     RUN_EVERY(100)
@@ -702,6 +717,7 @@ extern "C" void app_super_loop_iterate(void) {
 
 	//app_printf("Buzzer advancing ---------------------------------------------\r\n");
 	g_superloop.buzzer.tick(HAL_GetTick());
+	g_superloop.batteryModule.update(HAL_GetTick());
     // A buzzer that was never started (start() is commented out in setup)
     // produces no vibrations to wait for; without this, liftoff detection
     // would never be enabled.
@@ -887,7 +903,9 @@ extern "C" void app_super_loop_iterate(void) {
         nb_consumed = 0;
     }
 
-    nb_consumed += g_superloop.imuModule.takeProducedCount();
+
+    size_t producedCount = g_superloop.imuModule.takeProducedCount();
+    nb_consumed += producedCount;
     g_superloop.baroModule.update(iter_now_ms);
     for (size_t i = 0; i < 4; ++i) {
         g_baro_healthy[i] = g_superloop.baroModule.sensorHealthy(i) ? 1u : 0u;
@@ -921,4 +939,52 @@ extern "C" void app_super_loop_iterate(void) {
     const uint64_t elapsed_us = iteration_end_us - iteration_start_us;
     kalman_note_main_loop_iteration_us(static_cast<uint32_t>(elapsed_us));
     g_metrics_tracker.recordLoop(static_cast<uint32_t>(elapsed_us));
+}
+
+extern "C" uint64_t app_get_remaining_disk_size (void) {
+    return g_sd_interface.disk_size_remaining();
+}
+extern "C" uint64_t app_get_sd_fail_count (void) {
+    return g_sd_logger.writeFailCount() + g_sd_logger.imuBatchFail();
+}
+extern "C" float app_get_current_imu_rate (void) {
+    float ratio = 0;
+    if (lastRatioComputationTime != 0) {
+        uint32_t deltaTime = HAL_GetTick() - lastRatioComputationTime;
+
+        ratio = ((float) nb_consumed_since_last_poll) / ((float) deltaTime);
+    }
+
+    flight_computer::GOATStore::get_instance()
+        .sensStatusStore
+        .set_imu_rate(ratio);
+
+    nb_consumed_since_last_poll = 0;
+    lastRatioComputationTime = HAL_GetTick();
+
+    return ratio;
+}
+extern "C" void app_open_parachute () {
+    app_set_pyro_status(1, true);
+    app_set_pyro_status(2, true);
+    app_set_pyro_status(3, true);
+    app_set_pyro_status(4, true);
+}
+extern "C" void app_set_pyro_status (int pyro_id, bool enabled) {
+    auto &store = flight_computer::GOATStore::get_instance().vehiculeOverviewStore;
+    auto target = enabled ? GPIO_PIN_SET : GPIO_PIN_RESET;
+
+    if (pyro_id == 1) {
+        store.set_pyro_ch1_on(enabled);
+        HAL_GPIO_WritePin(PYROS_1_GPIO_Port, PYROS_1_Pin, target);
+    } else if (pyro_id == 2) {
+        store.set_pyro_ch2_on(enabled);
+        HAL_GPIO_WritePin(PYROS_2_GPIO_Port, PYROS_2_Pin, target);
+    } else if (pyro_id == 3) {
+        store.set_pyro_ch3_on(enabled);
+        HAL_GPIO_WritePin(PYROS_3_GPIO_Port, PYROS_3_Pin, target);
+    } else if (pyro_id == 4) {
+        store.set_pyro_ch4_on(enabled);
+        HAL_GPIO_WritePin(PYROS_4_GPIO_Port, PYROS_4_Pin, target);
+    }
 }

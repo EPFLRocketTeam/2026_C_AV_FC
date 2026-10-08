@@ -4,7 +4,7 @@
 using namespace flight_computer;
 
 VehiculeOverview::VehiculeOverview()
-    : no_cable_continuity(0) {
+    : no_cable_continuity_lox(0), no_cable_continuity_engine(0) {
     pyros_on[0] = false;
     pyros_on[1] = false;
     pyros_on[2] = false;
@@ -13,8 +13,19 @@ VehiculeOverview::VehiculeOverview()
 
 VehiculeOverviewStore::VehiculeOverviewStore() {}
 
-uint8_t VehiculeOverviewStore::get_no_cable_continuity() const { return data_.no_cable_continuity; }
-void VehiculeOverviewStore::set_no_cable_continuity(uint8_t value) { data_.no_cable_continuity = value; }
+bool VehiculeOverviewStore::get_no_cable_continuity_engine () const {
+    return data_.no_cable_continuity_engine;
+}
+void VehiculeOverviewStore::set_no_cable_continuity_engine (bool value) {
+    data_.no_cable_continuity_engine = value;
+}
+
+bool VehiculeOverviewStore::get_no_cable_continuity_lox () const {
+    return data_.no_cable_continuity_lox;
+}
+void VehiculeOverviewStore::set_no_cable_continuity_lox (bool value) {
+    data_.no_cable_continuity_lox = value;
+}
 
 bool VehiculeOverviewStore::get_pyro_ch1_on () const { return data_.pyros_on[0]; }
 bool VehiculeOverviewStore::get_pyro_ch2_on () const { return data_.pyros_on[1]; }
