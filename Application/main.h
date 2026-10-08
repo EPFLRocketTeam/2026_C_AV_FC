@@ -10,6 +10,7 @@ extern "C" {
 
 void simple_radio_init(void);
 void simple_radio_tick(void);
+void simple_radio_print_stats(void);
 
 
 void app_super_loop_setup(void);

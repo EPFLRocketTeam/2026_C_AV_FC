@@ -182,7 +182,22 @@ void simple_radio_init(void) {
 void simple_radio_tick(void) {
 	rx_module.update(0);
 
+	tx_module.tick();
 	if (tx_module.should_send()) {
 		tx_module.send(flight_computer::GOATStore::get_instance().get());
 	}
+}
+
+void simple_radio_print_stats(void) {
+	const TxRadioStats t = tx_module.takeStats();
+	const RxRadioStats r = rx_module.takeStats();
+	app_printf("[RADIO] tx=%s start=%lu sent=%lu busy=%lu absent=%lu tmo=%lu "
+			"reconf=%lu air=%lums | rx=%s pkt=%lu reconf=%lu\r\n",
+			tx_module.present() ? "on" : "off",
+			(unsigned long) t.started, (unsigned long) t.sent,
+			(unsigned long) t.skipped_busy, (unsigned long) t.skipped_absent,
+			(unsigned long) t.timeouts, (unsigned long) t.reconfigs,
+			(unsigned long) t.max_airtime_ms,
+			rx_module.present() ? "on" : "off",
+			(unsigned long) r.packets, (unsigned long) r.reconfigs);
 }
