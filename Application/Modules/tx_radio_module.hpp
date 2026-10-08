@@ -56,8 +56,9 @@ PREPARE_DOWNLINK(flight_computer::PropSensors) {
 	packet.chamber_temp = dump.chamber_temperature;
 }
 PREPARE_DOWNLINK(flight_computer::Valves) {
-    packet.valve_dpr_fuel = dump.ball_valve_fuel;
-    packet.valve_dpr_LOX  = dump.ball_valve_LOX;
+    // 100% -> degree of opening
+    packet.valve_dpr_fuel = dump.ball_valve_fuel * 0.9;
+    packet.valve_dpr_LOX  = dump.ball_valve_LOX * 0.9;
 
     packet.valves_state = 0;
     if (!dump.main_LOX_open)    packet.valves_state |= AV_VALVE_MAIN_LOX;
