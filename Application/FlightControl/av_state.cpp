@@ -6,6 +6,7 @@
 #include "Application/Kalman/kalman_lifecycle.h"
 #include "Drivers/STM32HAL/stm32hal.h"
 #include "Application/app_printf.h"
+#include "Application/main.h"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 
 extern "C" {
@@ -262,6 +263,9 @@ void AvState::update(const DataDump &dump) {
            stateToString(previous_state).c_str(),
            stateToString(currentState).c_str());
     kalman_on_state_change(static_cast<uint32_t>(currentState));
+
+    if (currentState == State::INIT) app_on_state_becomes_init();
+    if (currentState == State::ARMED) app_on_state_becomes_armed();
 
     if (currentState == State::ARMED && previous_state == State::ASCENT
      && config::get().ColdflowMode) {

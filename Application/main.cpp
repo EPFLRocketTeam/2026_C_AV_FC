@@ -1101,3 +1101,10 @@ extern "C" void app_set_pyro_status (int pyro_id, bool enabled) {
         HAL_GPIO_WritePin(PYROS_4_GPIO_Port, PYROS_4_Pin, target);
     }
 }
+
+extern "C" void app_on_state_becomes_init () {
+    g_sd_logger.setLogRate(false);
+}
+extern "C" void app_on_state_becomes_armed () {
+    g_sd_logger.setLogRate(true);
+}

@@ -2726,6 +2726,10 @@ void EskfEstimator::logFlightShadowIfDue(uint64_t timestamp_us) {
 
 void EskfEstimator::logImuPipelineIfDue(const eskf::VirtualImuOutput &vout,
                                         eskf_scalar dt_s) {
+  if (!eskf::getEskfLogger().imuPipelineEnabled()) {
+    return;
+  }
+
   // Decimate during flight to avoid constructing 600+ byte snapshot at IMU rate.
   // Pre-flight: every sample. In-flight: every 64th sample (~100Hz at 6.4kHz).
   if (in_flight_) {
