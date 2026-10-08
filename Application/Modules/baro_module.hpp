@@ -136,6 +136,18 @@ public:
     return sensor_state_[sensor_index].drop_count;
   }
 
+  /* Count number of sensors that were healthy at some point after time healthyTimeoutUs */
+  uint8_t previouslyHealthyCount (uint64_t healthyMinTimeUs) {
+    uint8_t res = 0;
+    for (size_t i = 0; i < kNumSensors; ++i) {
+      if (state.last_healthy_time_us >= healthyMinTimeUs) {
+        res ++;
+      }
+    }
+
+    return res;
+  }
+
 private:
   enum class CommandState : uint8_t { IDLE, PENDING };
 
@@ -148,6 +160,8 @@ private:
     bool pending = false;
     bool healthy = false;
     bool last_sample_valid = false;
+    
+    uint64_t last_healthy_time_us = 0;
   };
 
   void triggerConversions(uint32_t tick_ms, flight_computer::GOATStore &g) {
@@ -163,6 +177,9 @@ private:
       state.pending = true;
       state.status_flags = drivers_[i]->getStatus();
       state.healthy = isHealthyStatus(i, tick_ms);
+      if (state.healthy) {
+        state.last_healthy_time_us = trigger_ts;
+      }
       any_pending = true;
     }
 
@@ -213,6 +230,9 @@ private:
 
       state.status_flags = drivers_[i]->getStatus();
       state.healthy = isHealthyStatus(i, tick_ms);
+      if (state.healthy) {
+        state.last_healthy_time_us = trigger_ts_us_;
+      }
     }
 
     if (!any_pending) {
@@ -243,6 +263,9 @@ private:
       state.status_flags |= Drivers::BMP390::BMP390_STATUS_NOT_READY;
       state.last_sample_valid = false;
       state.healthy = isHealthyStatus(i, tick_ms);
+      if (state.healthy) {
+        state.last_healthy_time_us = trigger_ts_us_;
+      }
       ++state.drop_count;
     }
   }

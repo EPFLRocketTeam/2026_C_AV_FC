@@ -111,6 +111,7 @@ PREPARE_DOWNLINK(flight_computer::DataDump) {
     packet.sd_fail_count = app_get_sd_fail_count();
     packet.remaining_disk_size = app_get_remaining_disk_size();
     packet.average_imu_rate = app_get_current_imu_rate();
+    packet.baro_count = app_get_current_baro_count();
 
     packet.ambient_temp = dump.ambient_temperature;
     
