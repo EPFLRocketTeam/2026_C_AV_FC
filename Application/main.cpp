@@ -25,6 +25,7 @@ void fsm_tick(void);
 extern "C" {
 #include "Application/main.h"
 #include "Application/Kalman/kalman_process.h"
+#include "Application/Kalman/kalman_lifecycle.h"
 #include "Drivers/InvIMU/InvIMU.h"
 }
 #include "Drivers/InvIMU/InvIMU.hpp"
@@ -761,6 +762,48 @@ static int nb_superloops = 0;
 static int nb_consumed = 0;
 static uint32_t lastRatioComputationTime = 0;
 static int nb_consumed_since_last_poll = 0;
+#ifndef APP_BENCH_BULK_LOG
+#define APP_BENCH_BULK_LOG 0
+#endif
+#ifndef APP_BENCH_BULK_LOG_DELAY_MS
+#define APP_BENCH_BULK_LOG_DELAY_MS 0
+#endif
+#ifndef APP_BENCH_FORCE_FLIGHT
+#define APP_BENCH_FORCE_FLIGHT 0
+#endif
+#ifndef APP_BENCH_RESET_MS
+#define APP_BENCH_RESET_MS 0
+#endif
+
+// Bench load controls leave the real FSM in INIT.
+static void app_bench_tick(void) {
+#if APP_BENCH_BULK_LOG
+    static bool bulk_started = false;
+    if (!bulk_started && HAL_GetTick() >= APP_BENCH_BULK_LOG_DELAY_MS) {
+        g_sd_logger.setLogRate(true);
+        app_printf("[BENCH] bulk logging enabled; FSM unchanged\r\n");
+        bulk_started = true;
+    }
+#endif
+#if APP_BENCH_FORCE_FLIGHT
+    static bool flight_started = false;
+    if (!flight_started && HAL_GetTick() >= 20000u) {
+        kalman_on_liftoff(HAL_GetTick());
+        app_printf("[BENCH] estimator liftoff requested at %lums; FSM unchanged\r\n",
+                   (unsigned long)HAL_GetTick());
+        flight_started = true;
+    }
+#endif
+#if APP_BENCH_RESET_MS
+    static bool reset_requested = false;
+    if (!reset_requested && HAL_GetTick() >= APP_BENCH_RESET_MS) {
+        app_printf("[BENCH] reset accepted=%u at %lums\r\n",
+                   (unsigned)kalman_request_reset(), (unsigned long)HAL_GetTick());
+        reset_requested = true;
+    }
+#endif
+}
+
 #if APP_PERF_TRACE
 // One line per report period: per-IMU frames, timestamp gaps and samples lost
 // in them, largest frame step, hardware FIFO fill (see ImuModule /
@@ -795,6 +838,7 @@ extern "C" void app_super_loop_iterate(void) {
     app_perf_loop_mark();
     uint64_t perf_t0 = app_perf_begin();
 	FC_Shell_Tick();
+    app_bench_tick();
     app_perf_end(APP_PERF_SHELL, perf_t0);
 
     perf_t0 = app_perf_begin();
@@ -1065,7 +1109,72 @@ extern "C" void app_super_loop_iterate(void) {
         app_perf_print();
         app_print_imu_acquisition();
         simple_radio_print_stats();
+        const auto health = KalmanHealthStore::instance().get();
+        const auto &dump = flight_computer::GOATStore::get_instance().get();
+        app_printf("[BENCH] ms=%lu state=%u liftoff=%u apogee=%u div=%u "
+                   "consumed=%lu drop=%lu behind=%lu ring=%lu,%lu,%lu,%lu "
+                   "acc=%.3f,%.3f,%.3f alt=%.3f vz=%.3f sd_fail=%llu\r\n",
+                   (unsigned long)HAL_GetTick(), (unsigned)dump.av_state,
+                   (unsigned)dump.event.imu_liftoff_detected,
+                   (unsigned)dump.event.apogee_detected, (unsigned)health.diverged,
+                   (unsigned long)health.imu_samples_consumed,
+                   (unsigned long)health.yieldable_imu_drops,
+                   (unsigned long)health.kalman_behind_us,
+                   (unsigned long)health.imu_ring_hwm[0], (unsigned long)health.imu_ring_hwm[1],
+                   (unsigned long)health.imu_ring_hwm[2], (unsigned long)health.imu_ring_hwm[3],
+                   (double)dump.navigationData.accel.x, (double)dump.navigationData.accel.y,
+                   (double)dump.navigationData.accel.z, (double)-dump.navigationData.position_kalman.z,
+                   (double)-dump.navigationData.speed.z, (unsigned long long)app_get_sd_fail_count());
         app_perf_end(APP_PERF_REPORT, perf_t0);
+#ifndef UNIT_TEST_ENV
+        app_printf("[BARO-ACQ] read=%lu,%lu,%lu,%lu trigger=%lu,%lu,%lu,%lu healthy=%u,%u,%u,%u\r\n",
+                   (unsigned long)g_superloop.baro1.stats().numReads,
+                   (unsigned long)g_superloop.baro2.stats().numReads,
+                   (unsigned long)g_superloop.baro3.stats().numReads,
+                   (unsigned long)g_superloop.baro4.stats().numReads,
+                   (unsigned long)g_superloop.baro1.stats().numTriggers,
+                   (unsigned long)g_superloop.baro2.stats().numTriggers,
+                   (unsigned long)g_superloop.baro3.stats().numTriggers,
+                   (unsigned long)g_superloop.baro4.stats().numTriggers,
+                   g_baro_healthy[0], g_baro_healthy[1], g_baro_healthy[2], g_baro_healthy[3]);
+#endif
+        AppImuRingBuffer* rings[] = {&imuData1, &imuData2, &imuData3, &imuData4};
+        const uint64_t now_us = app_timebase_now_us();
+        app_printf("[IMU-TIME] now=%llu", (unsigned long long)now_us);
+        for (unsigned i = 0; i < 4; ++i) {
+            const auto* front = rings[i]->get(0);
+            const auto* back = rings[i]->size() ? rings[i]->get(rings[i]->size() - 1) : nullptr;
+            app_printf(" %u:age=%ld,%ld size=%lu", i,
+                       front ? (long)((int64_t)now_us - (int64_t)front->timestamp_us) : 0L,
+                       back ? (long)((int64_t)now_us - (int64_t)back->timestamp_us) : 0L,
+                       (unsigned long)rings[i]->size());
+        }
+        app_printf("\r\n");
+#ifndef UNIT_TEST_ENV
+        app_printf("[IMU-CLOCK] age=%ld,%ld,%ld,%ld err=%ld,%ld,%ld,%ld repair=%lu,%lu,%lu,%lu write=%llu,%llu,%llu,%llu scale_ppm=%ld,%ld,%ld,%ld wraps=%lu,%lu,%lu,%lu\r\n",
+                   (long)((int64_t)now_us - (int64_t)g_superloop.invImu1.lastFrameTimestampUs()),
+                   (long)((int64_t)now_us - (int64_t)g_superloop.invImu2.lastFrameTimestampUs()),
+                   (long)((int64_t)now_us - (int64_t)g_superloop.invImu3.lastFrameTimestampUs()),
+                   (long)((int64_t)now_us - (int64_t)g_superloop.invImu4.lastFrameTimestampUs()),
+                   (long)g_superloop.invImu1.lastOffsetErrUs(), (long)g_superloop.invImu2.lastOffsetErrUs(),
+                   (long)g_superloop.invImu3.lastOffsetErrUs(), (long)g_superloop.invImu4.lastOffsetErrUs(),
+                   (unsigned long)g_superloop.invImu1.monotonicRepairCount(),
+                   (unsigned long)g_superloop.invImu2.monotonicRepairCount(),
+                   (unsigned long)g_superloop.invImu3.monotonicRepairCount(),
+                   (unsigned long)g_superloop.invImu4.monotonicRepairCount(),
+                   (unsigned long long)g_superloop.invImu1.getWriteCount(),
+                   (unsigned long long)g_superloop.invImu2.getWriteCount(),
+                   (unsigned long long)g_superloop.invImu3.getWriteCount(),
+                   (unsigned long long)g_superloop.invImu4.getWriteCount(),
+                   (long)g_superloop.invImu1.timestampScalePpm(),
+                   (long)g_superloop.invImu2.timestampScalePpm(),
+                   (long)g_superloop.invImu3.timestampScalePpm(),
+                   (long)g_superloop.invImu4.timestampScalePpm(),
+                   (unsigned long)g_superloop.invImu1.recoveredTimestampWraps(),
+                   (unsigned long)g_superloop.invImu2.recoveredTimestampWraps(),
+                   (unsigned long)g_superloop.invImu3.recoveredTimestampWraps(),
+                   (unsigned long)g_superloop.invImu4.recoveredTimestampWraps());
+#endif
     }
 #endif
 }

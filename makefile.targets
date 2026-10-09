@@ -1,23 +1,81 @@
-REMOTE    = mkezzedd@100.126.7.111
-FIRMWARE  = 2026_C_AV_FC.bin
-SERIAL    = /dev/serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_377733713333-if00
-BAUD      = 115200
-LOG_DIR   = logs
-LOG_FILE  = $(LOG_DIR)/uart_$(shell date +%Y%m%d_%H%M%S).log
+PROJECT_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+REMOTE       ?= mkezzedd@100.82.126.32
+FIRMWARE     ?= $(PROJECT_ROOT)/Debug/2026_C_AV_FC.bin
+SERIAL       ?= /dev/serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_3053385C3035-if00
+BAUD         ?= 115200
+LOG_DIR      ?= $(PROJECT_ROOT)/logs/bench
+RUN          ?= candidate
+CAPTURE_SECS ?= 145
+LOG_FILE     ?= $(LOG_DIR)/$(RUN)_$(shell date +%Y%m%d_%H%M%S).log
+CUBEIDE      ?= $(HOME)/st/stm32cubeide_1.19.0/headless-build.sh
+BUILD_WS     ?= $(HOME)/.cache/2026_C_AV_FC/cubeide-bench
+BUILD_FLAGS  ?=
+SSH          := ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3
+
+.PHONY: build flash-remote serial deploy _deploy-locked baro-tests clock-tests imu-tests math-tests usb-keepalive
+build:
+	@mkdir -p "$(LOG_DIR)"
+	"$(CUBEIDE)" -data "$(BUILD_WS)" -no-indexer -import "$(PROJECT_ROOT)" -cleanBuild 2026_C_AV_FC/Debug $(BUILD_FLAGS) > "$(LOG_DIR)/build_$(RUN).log" 2>&1
+	@test -s "$(FIRMWARE)"
+	@cp "$(FIRMWARE)" "$(LOG_DIR)/$(RUN).bin"
+	@printf 'source=%s\nbuild_flags=%s\n' "$$(git -C '$(PROJECT_ROOT)' rev-parse HEAD)" "$(BUILD_FLAGS)" > "$(LOG_DIR)/$(RUN).build-meta"
+	@sha256sum "$(LOG_DIR)/$(RUN).bin" >> "$(LOG_DIR)/$(RUN).build-meta"
+	@git -C "$(PROJECT_ROOT)" diff >> "$(LOG_DIR)/$(RUN).build-meta"
+	@tail -n 5 "$(LOG_DIR)/build_$(RUN).log"
+
+clock-tests:
+	@mkdir -p "$(LOG_DIR)" "$(PROJECT_ROOT)/Debug"
+	g++ -std=c++20 -O2 -Wall -Wextra -I"$(PROJECT_ROOT)" $(addprefix $(PROJECT_ROOT)/Application/Tests/bench/,test_fifo_clock.cpp test_imu_group_alignment.cpp) -lgtest -lgtest_main -lpthread -o "$(PROJECT_ROOT)/Debug/fifo_clock_tests"
+	"$(PROJECT_ROOT)/Debug/fifo_clock_tests" > "$(LOG_DIR)/clock_tests.log" 2>&1
+	@tail -n 3 "$(LOG_DIR)/clock_tests.log"
+
+baro-tests:
+	@mkdir -p "$(LOG_DIR)" "$(PROJECT_ROOT)/Debug"
+	g++ -std=c++20 -O2 -DUNIT_TEST_ENV -I"$(PROJECT_ROOT)" -I"$(PROJECT_ROOT)/Application/Tests/host_replay/inc" -I"$(PROJECT_ROOT)/Application/Config/2026_C_AV_FLIGHT_PARAMS" -I"$(PROJECT_ROOT)/Application/Config/2026_C_AV_FLIGHT_PARAMS/2026_C_AV_CONFMAN" -I"$(PROJECT_ROOT)/Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET/include" $(addprefix $(PROJECT_ROOT)/,Application/Tests/test_baro_module.cpp Drivers/BMP390/Tests/Mock/BMP390_test.cpp Drivers/BMP390/Impl/BMP390_mock.cpp Drivers/STM32HAL/Simulations/stm32sim_ticks.cpp Application/Data/data.cpp Application/Data/gps_store.cpp Application/Tests/bench/baro_test_support.cpp) $(wildcard $(PROJECT_ROOT)/Application/Data/Stores/*.cpp) -lgtest -lgtest_main -lpthread -o "$(PROJECT_ROOT)/Debug/baro_module_tests" > "$(LOG_DIR)/build_baro_tests.log" 2>&1
+	"$(PROJECT_ROOT)/Debug/baro_module_tests" > "$(LOG_DIR)/baro_tests.log" 2>&1
+	@tail -n 3 "$(LOG_DIR)/baro_tests.log"
+
+imu-tests:
+	@mkdir -p "$(LOG_DIR)" "$(PROJECT_ROOT)/Debug"
+	g++ -std=c++20 -O2 -DUNIT_TEST_ENV -I"$(PROJECT_ROOT)" -I"$(PROJECT_ROOT)/Application/Tests/host_replay/inc" -I"$(PROJECT_ROOT)/Application/Config/2026_C_AV_FLIGHT_PARAMS" -I"$(PROJECT_ROOT)/Application/Config/2026_C_AV_FLIGHT_PARAMS/2026_C_AV_CONFMAN" -I"$(PROJECT_ROOT)/Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET/include" $(addprefix $(PROJECT_ROOT)/,Application/Tests/bench/test_imu_module.cpp Application/Tests/test_imu_module.cpp Drivers/InvIMU/Tests/Mock/InvIMU_test.cpp Drivers/InvIMU/Impl/InvIMU_mock.cpp Drivers/STM32HAL/Simulations/stm32sim_ticks.cpp Application/Data/data.cpp Application/Data/gps_store.cpp Application/Tests/bench/baro_test_support.cpp) $(wildcard $(PROJECT_ROOT)/Application/Data/Stores/*.cpp) -lgtest -lgtest_main -lpthread -o "$(PROJECT_ROOT)/Debug/imu_module_tests" > "$(LOG_DIR)/build_imu_tests.log" 2>&1
+	"$(PROJECT_ROOT)/Debug/imu_module_tests" > "$(LOG_DIR)/imu_tests.log" 2>&1
+	@tail -n 3 "$(LOG_DIR)/imu_tests.log"
+
+math-tests:
+	@mkdir -p "$(LOG_DIR)" "$(PROJECT_ROOT)/Debug"
+	g++ -std=c++20 -O2 -DUNIT_TEST_ENV -I"$(PROJECT_ROOT)" -I"$(PROJECT_ROOT)/Application/Tests/host_replay/inc" $(addprefix $(PROJECT_ROOT)/,Application/Tests/test_virtual_imu_shadow.cpp Application/Tests/test_virtual_imu_full.cpp Application/Tests/test_shadow_filter_full.cpp Application/Tests/test_eskf_core.cpp Application/Kalman/kalman/preprocessor/virtual_imu.cpp Application/Kalman/kalman/preprocessor/virtual_baro.cpp Application/Kalman/kalman/shadow_filter.cpp Application/Kalman/kalman/eskf_core.cpp Application/Kalman/kalman/eskf_math.cpp Application/Kalman/kalman/eskf_logger.cpp) -lgtest -lgtest_main -lpthread -o "$(PROJECT_ROOT)/Debug/kalman_math_tests" > "$(LOG_DIR)/build_math_full_tests.log" 2>&1
+	"$(PROJECT_ROOT)/Debug/kalman_math_tests" > "$(LOG_DIR)/math_full_tests.log" 2>&1
+	@tail -n 5 "$(LOG_DIR)/math_full_tests.log"
 
 flash-remote:
-	scp $(FIRMWARE) $(REMOTE):/tmp/firmware.bin
-	ssh $(REMOTE) "~/flash.sh /tmp/firmware.bin"
+	@test -s "$(FIRMWARE)"
+	scp "$(FIRMWARE)" "$(REMOTE):/tmp/firmware.bin"
+	$(SSH) $(REMOTE) '~/flash.sh /tmp/firmware.bin > /tmp/fc-flash.log 2>&1; result=$$?; cat /tmp/fc-flash.log; exit $$result'
+
+# The remote bench disables USB after 600 seconds; refresh during long soaks.
+usb-keepalive:
+	$(SSH) $(REMOTE) '~/usb_manager.sh keepalive > /tmp/fc-usb-keepalive.log 2>&1'
 
 serial:
-	@mkdir -p $(LOG_DIR)
+	@mkdir -p "$(LOG_DIR)"
 	@echo "Streaming UART → $(LOG_FILE)"
-	ssh $(REMOTE) "stty -F $(SERIAL) $(BAUD) raw && cat $(SERIAL)" >> $(LOG_FILE)
+	$(SSH) $(REMOTE) "stty -F '$(SERIAL)' $(BAUD) raw -echo; exec cat '$(SERIAL)'" >> "$(LOG_FILE)"
 
+# Hold a lease for BOTH flash and capture. A second deploy must not reset the
+# board mid-test or attach a competing serial reader. Use deploy, not the
+# internal _deploy-locked target, for bench runs.
 deploy:
-	@mkdir -p $(LOG_DIR)
+	@mkdir -p "$(LOG_DIR)"
+	flock -n -E 75 "$(LOG_DIR)/.deploy.lock" $(MAKE) --no-print-directory _deploy-locked LOG_FILE="$(LOG_FILE)"
+
+# Flash failures are fatal. Only timeout's expected 124 status is accepted.
+# Capture is attached as soon as USB re-enumerates to retain setup messages.
+_deploy-locked: flash-remote
+	@mkdir -p "$(LOG_DIR)"
 	$(eval LOGFILE := $(LOG_FILE))
-	scp $(FIRMWARE) $(REMOTE):/tmp/firmware.bin
-	@echo "Flashed. Streaming UART → $(LOGFILE) (30s timeout)"
-	timeout 60 ssh $(REMOTE) "~/flash.sh /tmp/firmware.bin && sleep 5 && stty -F $(SERIAL) $(BAUD) raw && cat $(SERIAL)" >> $(LOGFILE) || true
+	@printf 'run=%s checkout=%s firmware=%s capture_s=%s\n' "$(RUN)" "$$(git -C '$(PROJECT_ROOT)' rev-parse HEAD)" "$$(sha256sum '$(FIRMWARE)' | cut -d ' ' -f 1)" "$(CAPTURE_SECS)" > "$(LOGFILE).meta"
+	@test ! -f "$(LOG_DIR)/$(RUN).build-meta" || cat "$(LOG_DIR)/$(RUN).build-meta" >> "$(LOGFILE).meta"
+	@git -C "$(PROJECT_ROOT)" diff >> "$(LOGFILE).meta"
+	@echo "Streaming UART → $(LOGFILE) ($(CAPTURE_SECS)s)"
+	@timeout $(CAPTURE_SECS) $(SSH) $(REMOTE) "while test ! -e '$(SERIAL)'; do sleep 0.1; done; stty -F '$(SERIAL)' $(BAUD) raw -echo; exec cat '$(SERIAL)'" >> "$(LOGFILE)"; status=$$?; test $$status -eq 0 -o $$status -eq 124
 	@echo "Log saved: $(LOGFILE)"

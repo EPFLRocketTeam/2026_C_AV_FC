@@ -11,6 +11,21 @@ static constexpr uint8_t REG_WHO_AM_I       = 0x72;
 static constexpr uint32_t INV_IMU_SPI_TX_TIMEOUT_MS = 10u;
 static constexpr uint32_t INV_IMU_SPI_FIFO_RX_TIMEOUT_MS = 10u;
 
+#if APP_BENCH_IMU_INIT_TRACE
+// Buffer initialization traffic; printing during transactions would alter timing.
+struct InitTransfer { uint32_t us; uint8_t reg, len, value, write, rc; };
+static InitTransfer init_transfers[128];
+static unsigned init_transfer_count;
+static void trace_init_transfer(uint8_t reg, uint32_t len, const uint8_t* data,
+                                bool write, int rc) {
+    if (init_transfer_count < 128u) {
+        init_transfers[init_transfer_count++] = {
+            DWT->CYCCNT, reg, (uint8_t)len,
+            len ? data[0] : (uint8_t)0, (uint8_t)write, (uint8_t)rc};
+    }
+}
+#endif
+
 namespace Drivers {
 namespace InvIMU {
 
@@ -266,7 +281,26 @@ bool InvIMU_STM32::init() {
     _dev.transport.write_reg  = write_fns[_instance_idx];
     _dev.transport.sleep_us   = sleep_us;
     _dev.transport.serif_type = UI_SPI4;
-    if (inv_imu_adv_init(&_dev) != 0) return false;
+#if APP_BENCH_IMU_INIT_TRACE
+    init_transfer_count = 0;
+#endif
+    const int init_rc = inv_imu_adv_init(&_dev);
+    if (init_rc != 0) {
+        uint8_t who = 0, power = 0;
+        spi_read(REG_WHO_AM_I, &who, 1);
+        spi_read(0x10, &power, 1);
+        app_printf("[IMU-INIT] idx=%u SDK=%d flags=0x%lX who=0x%02X power=0x%02X\r\n",
+            (unsigned)_instance_idx, init_rc, (unsigned long)_status_flags,
+            (unsigned)who, (unsigned)power);
+#if APP_BENCH_IMU_INIT_TRACE
+        for (unsigned i = 0; i < init_transfer_count; ++i) {
+            const auto& t = init_transfers[i];
+            app_printf("[IMU-TRACE] us=%lu %c reg=%02X len=%u value=%02X rc=%u\r\n",
+                (unsigned long)t.us, t.write ? 'W' : 'R', t.reg, t.len, t.value, t.rc);
+        }
+#endif
+        return false;
+    }
     // NOTE: inv_imu_edmp_disable() is NOT called here. EDMP_APEX_EN1 is an MREG
     // register that requires MCLK to be running. MCLK only starts when accel/gyro
     // are enabled in LN mode (done in configure()). Calling it here would silently
@@ -925,6 +959,9 @@ int InvIMU_STM32::spi_read(uint8_t reg, uint8_t* data, uint32_t len) {
     }
     // Data starts at rx_buf[1], skipping the dummy byte clocked during address phase
     std::memcpy(data, &rx_buf[1], len);
+#if APP_BENCH_IMU_INIT_TRACE
+    trace_init_transfer(reg, len, data, false, rc);
+#endif
     return 0;
 }
 
