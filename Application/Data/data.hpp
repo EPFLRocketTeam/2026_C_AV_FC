@@ -172,7 +172,7 @@ struct FlightEventTimers {// TODO: Properly update the store test
 static_assert(sizeof(FlightEventTimers) == 12);
 
 struct VehiculeOverview {// TODO: Properly update the store test
-  bool no_cable_continuity_engine;
+  bool no_cable_continuity_eth;
   bool no_cable_continuity_lox;
 
   bool pyros_activated;
@@ -430,8 +430,8 @@ class VehiculeOverviewStore : public IStore<VehiculeOverview> {
 public:
   VehiculeOverviewStore();
 
-  bool get_no_cable_continuity_engine () const;
-  void set_no_cable_continuity_engine (bool value);
+  bool get_no_cable_continuity_eth () const;
+  void set_no_cable_continuity_eth (bool value);
 
   bool get_no_cable_continuity_lox () const;
   void set_no_cable_continuity_lox (bool value);

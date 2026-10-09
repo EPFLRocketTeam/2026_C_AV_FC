@@ -160,8 +160,8 @@ void OnConfigCrcDprLox (void*, pi::payload::config_crc crc) noexcept {
 void OnConfigCrcEngine (void*, pi::payload::config_crc crc) noexcept {
   config::internal::On_Crc(BoardIds::FP_ENGINE, crc.crc_buffer, crc.crc_commited);
 }
-void OnPrcPublishCable (void*, pi::payload::cable_info cable) noexcept {
-  GOATStore::get_instance().vehiculeOverviewStore.set_no_cable_continuity_engine(
+void OnDprEthPublishCable (void*, pi::payload::cable_info cable) noexcept {
+  GOATStore::get_instance().vehiculeOverviewStore.set_no_cable_continuity_eth(
     cable.get_no_cable_continuity()
   );
 }
@@ -199,7 +199,7 @@ pi::context& Ctx() {
     driver.on_config_crc_dpr_eth    = OnConfigCrcDprEth;
     driver.on_config_crc_dpr_lox    = OnConfigCrcDprLox;
     driver.on_config_crc_prc_engine = OnConfigCrcEngine;
-    driver.on_prc_publish_cable = OnPrcPublishCable;
+    driver.on_dpr_eth_publish_cable = OnDprEthPublishCable;
     driver.on_dpr_lox_publish_cable = OnDprLoxPublishCable;
     driver.on_dpr_lox_bv_state = OnDprLoxBVState;
     driver.on_dpr_eth_bv_state = OnDprEthBVState;

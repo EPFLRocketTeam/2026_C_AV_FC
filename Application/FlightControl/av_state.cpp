@@ -121,7 +121,7 @@ State AvState::fromIgnition(DataDump const &dump) {
   // (ACC_HOLD_NOT_ELAPSED) and the cable is still connected, stay in
   // IGNITION.
   // Cable is lost if and only if both cable fell.
-  const bool cable_lost = dump.vehiculeOverview.no_cable_continuity_engine
+  const bool cable_lost = dump.vehiculeOverview.no_cable_continuity_eth
                        && dump.vehiculeOverview.no_cable_continuity_lox;
   if (cable_lost || dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
     return State::BURN;
