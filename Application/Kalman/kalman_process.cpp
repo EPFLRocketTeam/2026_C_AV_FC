@@ -9,6 +9,7 @@
 #include "Application/Kalman/AppLayer/hw_calibration_data.hpp"
 #include "Application/Kalman/AppLayer/output_bridge.hpp"
 #include "Application/Kalman/kalman_health.hpp"
+#include "Application/Kalman/imu_group_alignment.hpp"
 #include "Application/Kalman/kalman_debug.hpp"
 #include "Application/Data/fsm.hpp"
 #include "Application/Data/data.hpp"
@@ -990,7 +991,7 @@ int kalman_loop() {
 	bool source_healthy[4] = {false, false, false, false};
 	size_t healthy_source_count = 0;
 	int drained = 0;
-	int align_discarded = 0;
+	uint32_t align_discarded = 0;
 	for (size_t i = 0; i < 4; ++i) {
 		source_healthy[i] =
 			(app_imu_sensor_healthy(static_cast<uint8_t>(i)) != 0U);
@@ -1008,72 +1009,14 @@ int kalman_loop() {
 	const uint64_t t_imu_drain_end = app_timebase_now_us();
 #endif
 
-	/* ── Aligned round-robin drain ──────────────────────────────────
-	 *
-	 *  Problem: ring buffers can be deeply unbalanced (overflow discards
-	 *  oldest samples unevenly). Source 1 may have data 17ms ahead of
-	 *  source 0, breaking the 500μs sync tolerance in processImuBatch.
-	 *
-	 *  Solution:
-	 *   1. Align all rings to the NEWEST oldest-sample within 200μs
-	 *      (well inside the 500μs sync tolerance in processImuBatch).
-	 *   2. Round-robin drain 1 sample per source per iteration.
-	 *   3. Stop when ANY healthy ring empties (prevents partial groups).
-	 *      Leftover samples in longer rings survive to next tick.
-	 * ─────────────────────────────────────────────────────────────── */
-
-	// Step 1: Find the latest front timestamp across all healthy rings.
-	uint64_t align_ts = 0;
-	for (size_t i = 0; i < 4; ++i) {
-		if (!source_healthy[i]) continue;
-		const IMUData *front = buffers[i]->get(0);
-		if (front && front->timestamp_us > align_ts) {
-			align_ts = front->timestamp_us;
-		}
-	}
-
-	// Step 2: Discard old samples to align all rings.
-	//         The inter-IMU timestamp offset from sequential SPI reads
-	//         can be 100-170μs (varies by boot). Since this overlaps the
-	//         156μs FSYNC period, a threshold < period cannot reliably
-	//         distinguish same-edge from adjacent-edge. Use 200μs:
-	//         empirically gives staleSkip=0, soloFlush=0 in steady state.
-	static constexpr uint64_t kDrainAlignToleranceUs = 200;
-	if (align_ts > 0) {
-		const uint64_t align_floor = (align_ts > kDrainAlignToleranceUs) ? (align_ts - kDrainAlignToleranceUs) : 0u;
-		for (size_t i = 0; i < 4; ++i) {
-			if (!source_healthy[i]) continue;
-			IMUData discard;
-			while (buffers[i]->size() > 0) {
-				const IMUData *front = buffers[i]->get(0);
-				if (!front || front->timestamp_us >= align_floor) break;
-				buffers[i]->pop(discard);
-				drained++;
-				align_discarded++;
-			}
-		}
-		// If alignment discarded data, stale pending in the estimator
-		// might reference old timestamps. Reset to prevent poisoning.
-		if (align_discarded > 0) {
-			kalman.estimator.resetPendingImuGroup();
-		}
-	}
-
-	// Step 3: Round-robin drain — stop when ANY healthy ring empties.
-	// TODO: guard added because healthy_source_count can be 0 on the first
-	// tick(s) after boot (no IMU has produced a frame yet), which spun this
-	// loop forever with the old unguarded for(;;). Not present upstream on
-	// fix/fc-flight-test-plume since that branch never hit the race.
-
-	//for (;;) {
+	// Align every group, not just the first front in this loop. Internal
+	// FIFO loss gaps must never feed the estimator's solo-source fallback.
 	while (healthy_source_count > 0) {
-		// Check all healthy sources still have data.
-		bool all_have_data = true;
-		for (size_t i = 0; i < 4; ++i) {
-			if (!source_healthy[i]) continue;
-			if (buffers[i]->size() == 0) { all_have_data = false; break; }
-		}
-		if (!all_have_data) break;
+		const uint32_t before = align_discarded;
+		const bool ready = app::alignImuFronts(buffers, source_healthy, align_discarded);
+		drained += align_discarded - before;
+		if (align_discarded != before) kalman.estimator.resetPendingImuGroup();
+		if (!ready) break;
 
 		// Pop one sample from each healthy source.
 		for (size_t i = 0; i < 4; ++i) {

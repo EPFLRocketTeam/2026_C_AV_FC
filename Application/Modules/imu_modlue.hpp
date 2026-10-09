@@ -42,7 +42,10 @@ extern AppImuRingBuffer imuData4;
 #endif
 
 #ifndef APP_IMU_ALIGNMENT_SPIN_TRIES
-#define APP_IMU_ALIGNMENT_SPIN_TRIES 2u
+// Alignment belongs to the consumer, not to extra acquisition polls. Re-reading
+// a secondary during capped backlog can publish two bursts before any consumer
+// runs, overflowing the 128-sample app ring. Keep one bounded poll per source.
+#define APP_IMU_ALIGNMENT_SPIN_TRIES 0u
 #endif
 
 #ifndef APP_IMU_STALE_TIMEOUT_MS
@@ -246,6 +249,7 @@ public:
     uint32_t gaps = 0;
     uint32_t lost = 0;
     uint32_t max_dt_us = 0;
+    uint32_t ring_overwrites = 0;
   };
 
   AcqStats takeAcqStats(size_t sensor_index) {
@@ -309,6 +313,9 @@ private:
     size_t log_count = 0;
 
     while (drivers_[sensor_index]->getFrame(frame)) {
+      if (buffers_[sensor_index]->full()) {
+        ++sensor_state_[sensor_index].acq.ring_overwrites;
+      }
       buffers_[sensor_index]->append(frame);
       g.navSensorStore.set_imu(sensor_index, frame);
       recordAcquisition(sensor_index, frame.timestamp_us);

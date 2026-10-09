@@ -24,7 +24,7 @@ public:
     uint32_t statusFlags() const override;
     uint32_t dropCount() const override;
 
-    void onInterrupt() override;
+    void onInterrupt(uint64_t irq_us = 0) override;
     void tick() override;
     void onDmaComplete() override;
 

@@ -50,10 +50,9 @@ using Drivers::InvIMU::InvIMU_STM32;
 using Drivers::BMP390::BaroData;
 
 // ── FSYNC PWM on PD14 (TIM4_CH3, AF2) ────────────────────────────────────────
-// Generates a 6400 Hz square wave that the ICM-45686 uses as an external time
-// reference (FSYNC). This locks IMU FIFO timestamps to the MCU crystal,
-// eliminating the ~0.1 % clock drift between the IMU's internal RC oscillator
-// and the MCU's PLL-derived DWT cycle counter.
+// Generates 6400 Hz FSYNC tags, NOT an external sampling/timestamp clock.
+// The IMU counters remain free-running; FifoClock estimates their rate/phase
+// against FIFO-count observations on the common application timebase.
 static TIM_HandleTypeDef htim4_fsync;
 
 static bool fsync_pwm_init(uint32_t freq_hz) {
@@ -221,6 +220,14 @@ RingBuffer<BaroData, 100> baroData4;
 #ifndef APP_IMU_USE_DMA
 #define APP_IMU_USE_DMA 0u
 #endif
+#if APP_ENABLE_DCACHE && APP_IMU_USE_DMA
+#error "SPI DMA needs a separately audited non-cacheable buffer policy"
+#endif
+#ifndef APP_IMU_FAST_FIFO
+// The shared bus stays at 8 MHz for registers/BMP390. Only ICM FIFO bursts
+// temporarily use 16 MHz (below its 24 MHz limit) to leave estimator CPU time.
+#define APP_IMU_FAST_FIFO 1u
+#endif
 
 // Set to the matching GPIO pin number (e.g. GPIO_PIN_13) when EXTI is wired.
 // Keep at 0 when no hardware interrupt line is available.
@@ -348,6 +355,11 @@ Config makeImuConfig(SPI_HandleTypeDef* hspi, GPIO_TypeDef* cs_port, uint16_t cs
     cfg.cs_pin = cs_pin;
     cfg.use_dwt_timestamps = true;
     cfg.use_dma = (APP_IMU_USE_DMA != 0u);
+#if APP_IMU_FAST_FIFO
+    // SPI4/5 kernel clocks are HSI64: FIFO=16MHz, registers/barometers=8MHz.
+    // ICM-45686 DS-000577 section 3.5 permits up to 24MHz at this VDDIO.
+    cfg.fifo_spi_prescaler = SPI_BAUDRATEPRESCALER_4;
+#endif
     return cfg;
 }
 
@@ -617,7 +629,7 @@ extern "C" void app_super_loop_setup(void) {
 
     fcTemperatureModule.init();
 
-    // ── FSYNC: lock IMU timestamps to MCU crystal ──────────────────────────
+    // ── FSYNC tags; the IMU oscillators remain free-running ─────────────────
     // Start 6400 Hz PWM on PD14 → ICM-45686 INT2 (FSYNC input), then tell
     // the IMU to use it. Order matters: clock must be running before the IMU
     // is told to listen to it, otherwise the IMU sees no edges.
@@ -628,7 +640,7 @@ extern "C" void app_super_loop_setup(void) {
         if (!g_superloop.imuModule.sensorFailed(3)) g_superloop.invImu4.enableFsync();
         app_printf("[APP] FSYNC PWM started on PD14 @ 6400 Hz\r\n");
     } else {
-        app_printf("[APP] WARNING: FSYNC PWM init failed — IMU timestamps may drift\r\n");
+        app_printf("[APP] WARNING: FSYNC PWM init failed — FSYNC tags unavailable\r\n");
     }
     app_printf("[APP] Initializing SD Card...\n");
     if (hsd1.Instance == NULL) {
@@ -762,20 +774,23 @@ static int nb_consumed_since_last_poll = 0;
 // after a period where the serial output was not read).
 static void app_print_imu_acquisition(void) {
     static uint32_t total_lost[4] = {};
-    char line[448];
+    static uint32_t total_app_drops[4] = {};
+    char line[672];
     int n = snprintf(line, sizeof(line), "[IMU-ACQ]");
     for (size_t i = 0; i < 4; ++i) {
         const auto a = g_superloop.imuModule.takeAcqStats(i);
         const auto f = g_superloop.imuModule.takeFifoStats(i);
         total_lost[i] += a.lost;
+        total_app_drops[i] += a.ring_overwrites;
         if (n > 0 && n < (int)sizeof(line)) {
             n += snprintf(line + n, sizeof(line) - n,
-                          " %u:fr=%lu gap=%lu lost=%lu tot=%lu dt=%luus hwm=%u cap=%lu full=%lu",
+                          " %u:fr=%lu gap=%lu lost=%lu tot=%lu dt=%luus hwm=%u cap=%lu full=%lu app_drop=%lu app_tot=%lu",
                           (unsigned)i, (unsigned long)a.frames, (unsigned long)a.gaps,
                           (unsigned long)a.lost, (unsigned long)total_lost[i],
                           (unsigned long)a.max_dt_us,
                           (unsigned)f.count_hwm, (unsigned long)f.capped_reads,
-                          (unsigned long)f.full_flags);
+                          (unsigned long)f.full_flags, (unsigned long)a.ring_overwrites,
+                          (unsigned long)total_app_drops[i]);
         }
     }
     app_printf("%s\r\n", line);
