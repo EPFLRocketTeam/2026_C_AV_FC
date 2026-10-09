@@ -30,40 +30,37 @@ constexpr float kImuGyroLsb = (4000.0f / 524288.0f) * (3.14159265f / 180.0f);
 constexpr size_t kImuPackedSampleBytes = 17;
 constexpr size_t kImuPackedMaxSamples = 255;
 
-inline bool imuToCount(float value, float lsb, int32_t &count) {
-  const float q = std::nearbyint(value / lsb);
-  if (!(q >= -524288.0f && q <= 524287.0f)) {
+inline bool imuToCount(float value, float inv_lsb, float lsb, int32_t &count) {
+  const float q = value * inv_lsb;
+  if (!(q > -524288.5f && q < 524287.5f)) {
     return false;
   }
-  count = static_cast<int32_t>(q);
+  count = static_cast<int32_t>(q + (q >= 0.0f ? 0.5f : -0.5f));
   // Exact only if the decoder's count * lsb gives back the same float.
   return static_cast<float>(count) * lsb == value;
 }
 
-inline void imuPut20(uint8_t *p, unsigned index, int32_t value) {
-  const uint32_t v = static_cast<uint32_t>(value) & 0xFFFFFu;
-  const unsigned bit = index * 20u;
-  for (unsigned b = 0; b < 20u; ++b) {
-    const unsigned pos = bit + b;
-    if (v & (1u << b)) {
-      p[pos >> 3] |= static_cast<uint8_t>(1u << (pos & 7u));
-    }
+// Two 20-bit values per 5 bytes: value 2k in bits 0..19, 2k+1 in bits 20..39
+// of bytes 5k..5k+4 (little endian), i.e. one continuous bit stream.
+inline void imuPutPair(uint8_t *p, int32_t a, int32_t b) {
+  const uint64_t w = (static_cast<uint64_t>(static_cast<uint32_t>(a) & 0xFFFFFu)) |
+                     (static_cast<uint64_t>(static_cast<uint32_t>(b) & 0xFFFFFu) << 20);
+  for (unsigned i = 0; i < 5; ++i) {
+    p[i] = static_cast<uint8_t>(w >> (8u * i));
   }
 }
 
+inline int32_t imuSignExtend20(uint32_t v) {
+  return static_cast<int32_t>((v & 0x80000u) ? (v | 0xFFF00000u) : v);
+}
+
 inline int32_t imuGet20(const uint8_t *p, unsigned index) {
-  const unsigned bit = index * 20u;
-  uint32_t v = 0;
-  for (unsigned b = 0; b < 20u; ++b) {
-    const unsigned pos = bit + b;
-    if (p[pos >> 3] & (1u << (pos & 7u))) {
-      v |= 1u << b;
-    }
+  const uint8_t *q = p + 5u * (index / 2u);
+  uint64_t w = 0;
+  for (unsigned i = 0; i < 5; ++i) {
+    w |= static_cast<uint64_t>(q[i]) << (8u * i);
   }
-  if (v & 0x80000u) {
-    v |= 0xFFF00000u;
-  }
-  return static_cast<int32_t>(v);
+  return imuSignExtend20(static_cast<uint32_t>(w >> ((index & 1u) ? 20u : 0u)) & 0xFFFFFu);
 }
 
 inline float imuTemperatureFromRaw(int16_t raw) {
@@ -94,16 +91,20 @@ inline size_t packImuBatch(uint8_t sensor_index,
     if (s.timestamp_us < h.t0_us || s.timestamp_us - h.t0_us > 0xFFFFu) {
       return 0;
     }
-    const float values[6] = {s.accel_x, s.accel_y, s.accel_z,
-                             s.gyro_x,  s.gyro_y,  s.gyro_z};
-    std::memset(p, 0, kImuPackedSampleBytes);
-    for (unsigned k = 0; k < 6; ++k) {
-      int32_t count = 0;
-      if (!imuToCount(values[k], k < 3 ? kImuAccelLsb : kImuGyroLsb, count)) {
-        return 0;
-      }
-      imuPut20(p, k, count);
+    constexpr float kInvAccel = 1.0f / kImuAccelLsb;
+    constexpr float kInvGyro = 1.0f / kImuGyroLsb;
+    int32_t c[6];
+    if (!imuToCount(s.accel_x, kInvAccel, kImuAccelLsb, c[0]) ||
+        !imuToCount(s.accel_y, kInvAccel, kImuAccelLsb, c[1]) ||
+        !imuToCount(s.accel_z, kInvAccel, kImuAccelLsb, c[2]) ||
+        !imuToCount(s.gyro_x, kInvGyro, kImuGyroLsb, c[3]) ||
+        !imuToCount(s.gyro_y, kInvGyro, kImuGyroLsb, c[4]) ||
+        !imuToCount(s.gyro_z, kInvGyro, kImuGyroLsb, c[5])) {
+      return 0;
     }
+    imuPutPair(p, c[0], c[1]);
+    imuPutPair(p + 5, c[2], c[3]);
+    imuPutPair(p + 10, c[4], c[5]);
     const uint16_t dt = static_cast<uint16_t>(s.timestamp_us - h.t0_us);
     p[15] = static_cast<uint8_t>(dt & 0xFFu);
     p[16] = static_cast<uint8_t>(dt >> 8);
