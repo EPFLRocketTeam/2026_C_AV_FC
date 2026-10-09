@@ -121,6 +121,59 @@ static void MX_FDCAN2_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* DMA audit for this board: SDMMC IDMA uses ONLY the first 32 KiB AXI bounce
+ * region; GPS DMA1 uses the dedicated SRAM3 carve-out; USB DMA and SPI DMA
+ * are disabled. The SD arena is CPU-only (copied into the IDMA bounce buffer).
+ * Linker assertions pin the SD carve-out, so layout drift is a build error. */
+static void board_configure_data_cache(void)
+{
+#if APP_ENABLE_DCACHE
+  MPU_Region_InitTypeDef region = {0};
+  HAL_MPU_Disable();
+  region.Enable = MPU_REGION_ENABLE;
+  region.Number = MPU_REGION_NUMBER1;
+  region.BaseAddress = 0x24000000;
+  region.Size = MPU_REGION_SIZE_512KB;
+  region.AccessPermission = MPU_REGION_FULL_ACCESS;
+  region.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  region.TypeExtField = MPU_TEX_LEVEL1;
+  region.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+  region.IsCacheable = MPU_ACCESS_CACHEABLE;
+  region.IsBufferable = MPU_ACCESS_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&region);
+
+  /* Higher-numbered regions override the cached AXI region. TEX=1,C=B=0
+   * is normal non-cacheable memory (not device memory: memcpy may unalign). */
+  region.Number = MPU_REGION_NUMBER2;
+  region.Size = MPU_REGION_SIZE_32KB;
+  region.IsShareable = MPU_ACCESS_SHAREABLE;
+  region.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  region.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&region);
+  region.Number = MPU_REGION_NUMBER3;
+  region.BaseAddress = 0x30000000;
+#if APP_CACHE_SD_ARENA
+  region.Size = MPU_REGION_SIZE_256KB;
+  region.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+  region.IsCacheable = MPU_ACCESS_CACHEABLE;
+  region.IsBufferable = MPU_ACCESS_BUFFERABLE;
+#else
+  region.Size = MPU_REGION_SIZE_512KB;
+#endif
+  HAL_MPU_ConfigRegion(&region);
+  /* GPS is the only DMA client in D2. Reserve all SRAM3 for non-cacheable
+   * buffers, separate from the CPU-owned SD arena in SRAM1/2. */
+  region.Number = MPU_REGION_NUMBER4;
+  region.BaseAddress = 0x30040000;
+  region.Size = MPU_REGION_SIZE_32KB;
+  region.IsShareable = MPU_ACCESS_SHAREABLE;
+  region.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  region.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&region);
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+  SCB_EnableDCache();
+#endif
+}
 
 #ifdef OUTPUT_LOG
 int _write(int file, char *ptr, int len) {
@@ -181,7 +234,14 @@ int main(void)
   PeriphCommonClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  /* Instruction cache and the separately audited DMA-safe data policy. */
+#ifndef APP_ENABLE_ICACHE
+#define APP_ENABLE_ICACHE 1
+#endif
+#if APP_ENABLE_ICACHE
+  SCB_EnableICache();
+#endif
+  board_configure_data_cache();
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */

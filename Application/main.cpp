@@ -253,7 +253,8 @@ namespace {
 
 SDCardInterface g_sd_interface;
 const size_t g_sd_arena_length = 256 * 1024;
-/* Arena in RAM_D2 (SRAM1/2/3): non-cacheable, 288KB available.
+/* CPU-owned arena in D2 SRAM1/2. Optional caching is safe because IDMA never
+ * reads this memory: the driver copies it into the non-cacheable AXI bounce.
  * NOTE: SDMMC1 IDMA cannot access RAM_D2 directly.  The Plume driver
  * uses a 32KB bounce buffer in AXI SRAM (RAM_D1) for each DMA write.
  * Moved from RAM_D1 (nearly full) to absorb SD card GC pauses
@@ -576,8 +577,8 @@ SdLogger& app_get_sd_logger () {
 // Set up here rather than in CubeMX (.ioc / stm32h7xx_hal_msp.c) so that
 // regenerating the CubeMX code neither drops nor duplicates it. DMA1_Stream0
 // is otherwise unused. No DMA or USART6 interrupt is needed: the GPS driver
-// reads the DMA counter from the super loop. The ring is in .bss (AXI SRAM,
-// reachable by DMA1; the D-cache is not enabled).
+// reads the DMA counter from the super loop. The ring has a dedicated
+// non-cacheable SRAM3 carve-out, reachable by DMA1 even with arena caching.
 #ifndef APP_GPS_UART_DMA
 #define APP_GPS_UART_DMA 1
 #endif
@@ -587,7 +588,8 @@ SdLogger& app_get_sd_logger () {
 
 #if APP_GPS_UART_DMA
 static DMA_HandleTypeDef g_hdma_usart6_rx;
-alignas(32) static uint8_t g_gps_dma_rx_buffer[APP_GPS_DMA_RX_BUFFER_SIZE];
+alignas(32) static uint8_t g_gps_dma_rx_buffer[APP_GPS_DMA_RX_BUFFER_SIZE]
+    __attribute__((section(".gps_dma_rx")));
 
 static bool app_gps_start_dma_rx(void) {
     __HAL_RCC_DMA1_CLK_ENABLE();
@@ -674,16 +676,8 @@ extern "C" void app_super_loop_setup(void) {
            (unsigned)hspi4.State, (unsigned long)hspi4.ErrorCode,
            (unsigned)hspi5.State, (unsigned long)hspi5.ErrorCode);
 
-    // D-cache clean+invalidate before baro init as a safety measure.
-    // If D-cache holds stale data for the SPI handle structs (AXI SRAM),
-    // this ensures a clean state. Costs ~microseconds, runs once.
-    // TEMPORARY: disabled to test whether this call is faulting -- boot
-    // silently died right after the print before this block and right
-    // before the print after it, with nothing but this call in between.
-    // SCB_CleanInvalidateDCache();
-    // __DSB();
-    // __ISB();
-    app_printf("[APP] D-cache clean+invalidate done, starting baro init...\r\n");
+    // Blocking CPU SPI accesses are cache-coherent; no global cache flush.
+    app_printf("[APP] Starting barometer initialization...\r\n");
 
     // Raw SPI test: bypasses SDK, directly reads chip IDs from all 4 baros
     baro_raw_spi_test();
