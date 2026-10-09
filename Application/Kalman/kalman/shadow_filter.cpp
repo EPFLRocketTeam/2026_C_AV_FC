@@ -647,6 +647,9 @@ void FlightShadowFilter::reset(const eskf_scalar initial_q[4]) {
   last_known_dt_baro_ = 0.01; // Reset cached dt to default
 }
 
+#if defined(__GNUC__) && !defined(__clang__)
+__attribute__((optimize("O3")))
+#endif
 void FlightShadowFilter::predict(const eskf_scalar accel_body[3],
                                  const eskf_scalar gyro_body[3], eskf_scalar dt,
                                  uint64_t timestamp_us) {

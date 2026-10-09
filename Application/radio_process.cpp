@@ -117,8 +117,24 @@ void handleRxCommand(void* data) noexcept {
 }
 
 static void onPacketReceived(uint8_t packetId, uint8_t *payload, uint32_t length) {
-	app_printf("Decoded packet: id=0x%02X len=%lu payload=[%s]\r\n", packetId,
-			(unsigned long) length, (char*) payload);
+#if APP_RADIO_TEST_UPLINK
+    const bool valid = packetId == GSC_CMD && length == av_uplink_size &&
+                       payload[0] == 0 && payload[1] == 0;
+    app_printf("[UPLINK-LOOPBACK] decoded id=0x%02X len=%lu noop=%u\r\n",
+               packetId, (unsigned long)length, (unsigned)valid);
+    if (!valid) return; // Never execute other commands in this bench build.
+#endif
+#if APP_RADIO_LOOPBACK
+    // Valid Capsule frames prove the RF and SPI RX paths without executing
+    // any command received over the air in this bench-only configuration.
+    app_printf("[LOOPBACK] decoded id=0x%02X len=%lu valid=%u\r\n", packetId,
+               (unsigned long)length,
+               (unsigned)(packetId == CAPSULE_ID::AV_TELEMETRY && length == av_downlink_size));
+    return;
+#endif
+	// Capsule payloads are binary and need not contain a terminating NUL.
+	app_printf("Decoded packet: id=0x%02X len=%lu\r\n", packetId,
+			(unsigned long) length);
 
 
 	if (packetId == GSC_CMD && length == av_uplink_size) {

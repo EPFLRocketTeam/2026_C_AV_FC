@@ -145,20 +145,28 @@ void EskfYieldable::pushImu(const ImuFrame& imu, eskf_scalar dt) {
   const uint64_t pending = imu_push_seq_ - imu_read_seq_;
   if (pending > ESKF_IMU_BUFFER_SIZE) {
     const uint64_t lost = pending - ESKF_IMU_BUFFER_SIZE;
-    stats_.imu_drops += static_cast<uint32_t>(lost);
     imu_read_seq_ = imu_push_seq_ - ESKF_IMU_BUFFER_SIZE;
 
-    // Rate-limit overflow logging to 1 Hz to avoid log spam
-    constexpr uint64_t kOverflowLogIntervalUs = 1000000;
-    if (imu.timestamp_us - last_imu_overflow_log_us_ >= kOverflowLogIntervalUs) {
-      last_imu_overflow_log_us_ = imu.timestamp_us;
-      getEskfLogger().logEvent(EskfEventType::ImuBufferOverflow,
-                               imu.timestamp_us,
-                               static_cast<float>(stats_.imu_drops));
-    }
+    // While hibernating, this is a rolling preflight history, not an unread
+    // processing queue. Overwrite is intentional. Liftoff uses direct replay
+    // and LiftoffSnap initializes the state at the requested timestamp.
+    // Copying the complete rewind checkpoint on EVERY overwritten sample
+    // needlessly starves acquisition once this history first fills.
+    if (!hibernating_) {
+      stats_.imu_drops += static_cast<uint32_t>(lost);
 
-    // (M1) Data lost while caught up - update oldest checkpoint
-    oldest_checkpoint_ = captureRewindCheckpoint();
+      // Rate-limit overflow logging to 1 Hz to avoid log spam
+      constexpr uint64_t kOverflowLogIntervalUs = 1000000;
+      if (imu.timestamp_us - last_imu_overflow_log_us_ >= kOverflowLogIntervalUs) {
+        last_imu_overflow_log_us_ = imu.timestamp_us;
+        getEskfLogger().logEvent(EskfEventType::ImuBufferOverflow,
+                                 imu.timestamp_us,
+                                 static_cast<float>(stats_.imu_drops));
+      }
+
+      // (M1) Data lost while caught up - update oldest checkpoint
+      oldest_checkpoint_ = captureRewindCheckpoint();
+    }
   }
   
   // (I2) Track high-water mark

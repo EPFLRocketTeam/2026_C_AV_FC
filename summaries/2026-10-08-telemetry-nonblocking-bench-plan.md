@@ -49,9 +49,21 @@ USB logging is not changed here. With `ENABLE_USB_LOG` (`app_printf.h`) or the s
 | B | A with `APP_RADIO_BLOCKING_TX 1` (`tx_radio_module.hpp`) | Old radio behaviour, A/B |
 | C | A with `APP_RADIO_ENABLE 0` (`Core/Src/main.c`) | No radio, baseline |
 | D | A with `APP_RADIO_HOLD_IN_RESET 1` (`radio_process.cpp`) | Telemetry board missing |
-| E | A with `-DKALMAN_DEBUG_FORCE_FLIGHT=1` in the project defines (C and C++) | Estimator flight-mode CPU load |
+| E | A with `APP_BENCH_FORCE_FLIGHT=1` in the combined bench checkout | Estimator flight-mode CPU load, real FSM stays INIT |
 
-Flash and capture with `make -f makefile.targets deploy` (60 s) or `flash-remote`, then `serial`, from `Debug/`. Let each run go for at least 2 minutes. Summarise with `python3 Application/Tests/bench/perf_summary.py logs/uart_*.log` (the first 15 reports are skipped).
+From the project root, build and deploy the archived image:
+
+```sh
+make build RUN=A
+make deploy RUN=A FIRMWARE=logs/bench/A.bin CAPTURE_SECS=145
+python3 Application/Tests/bench/perf_summary.py logs/bench/A_*.log
+```
+
+For variants, use CubeIDE's separate `-D` argument syntax, for example
+`make build RUN=B BUILD_FLAGS='-D APP_RADIO_BLOCKING_TX=1'`.
+The first 15 reports are skipped; 145 seconds leaves more than two minutes of steady-state measurement. Build flags, source/diff and firmware hashes are archived under `logs/bench`. Do not reflash until the preceding capture has completed. Explicitly flashing the archived image also avoids a changing `Debug` binary during a background build.
+
+The older `KALMAN_DEBUG_FORCE_FLIGHT` switch only sets `g_uart_force_liftoff`, which the current FSM does not consume. It does not exercise flight load on this stack. The isolated bench hook instead calls the Kalman lifecycle API after 20 seconds without entering an actuator-driving flight state. Bulk logging is a separate switch, `APP_BENCH_BULK_LOG=1`; test it separately before combining loads.
 
 ## Runs and pass criteria
 
@@ -64,7 +76,7 @@ Flash and capture with `make -f makefile.targets deploy` (60 s) or `flash-remote
 3. **B, board present.** Expect `radio` ≈ 92 ms and ~0.8k frames/s lost in total. This confirms the cause and the counters, and `hwm` gives the real FIFO depth: ~409 frames for 8 KB, ~102 for 2 KB.
 4. **C.** Reference for the loop sections without radio.
 5. **D.** Expect `tx=off rx=off`, `absent` counting, `radio` worst < 1 ms, and `lost` = 0.
-6. **A, USB logging off.** Turn USB logging off with the shell command `logs usb fc` (false) for 60 s, then back on. The `tot` counter covers the silent period. This shows the cost of the serial output itself.
+6. **A, USB logging off.** Send `logs usb fc off` for 60 s, then `logs usb fc on`. The `tot` and cumulative IMU write counters cover the silent period. They verify acquisition continuity; per-report CPU maxima during silence are not retained by the current instrumentation.
 7. **E.** Check `kal` and the loop maxima with the estimator in flight mode.
 
 ## Open points

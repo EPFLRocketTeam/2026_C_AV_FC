@@ -38,7 +38,7 @@ def parse_radio(line):
 
 
 def summarise(path, skip):
-    perf, imu, radio = [], [], []
+    perf, imu, radio, gps, bench, sd, baro, clock = [], [], [], [], [], [], [], []
     with open(path, errors="replace") as f:
         for raw in f:
             line = raw.strip()
@@ -53,7 +53,21 @@ def summarise(path, skip):
             i = line.find("[RADIO] tx=")
             if i >= 0:
                 radio.append(parse_radio(line[i + 8:]))
+            if "[GPS] bytes=" in line:
+                gps.append({k: int(v) for k, v in KV.findall(line)})
+            if "[BENCH] ms=" in line:
+                bench.append({k: int(v) for k, v in KV.findall(line)})
+            if "[SD] wr=" in line:
+                sd.append(line)
+            if "[BARO-ACQ]" in line:
+                baro.append({k: [int(v) for v in values.split(',')]
+                             for k, values in re.findall(r"(read|trigger|healthy)=([\d,]+)", line)})
+            if "[IMU-CLOCK]" in line and "write=" in line:
+                clock.append([int(v) for v in re.search(r"write=([\d,]+)", line)[1].split(',')])
     perf, imu, radio = perf[skip:], imu[skip:], radio[skip:]
+    gps, bench = gps[skip:], bench[skip:]
+    baro = baro[skip:]
+    clock = clock[skip:]
 
     print(f"== {path}: {len(perf)} reports after skipping {skip}")
     if perf:
@@ -66,6 +80,8 @@ def summarise(path, skip):
         names = perf[0]["sections"].keys()
         worst = {n: max(p["sections"].get(n, 0) for p in perf) for n in names}
         print("section worst (us): " + " ".join(f"{n}={v}" for n, v in worst.items()))
+        if len(perf) > 1 and "ms" in perf[0]:
+            print(f"measured duration: {(perf[-1]['ms'] - perf[0]['ms']) / 1000:.3f}s")
     if imu:
         for idx in sorted(imu[0]):
             rows = [r[idx] for r in imu if idx in r]
@@ -76,7 +92,20 @@ def summarise(path, skip):
                   f"max dt {max(r.get('dt', 0) for r in rows)} us, "
                   f"fifo hwm {max(r.get('hwm', 0) for r in rows)} frames, "
                   f"capped {sum(r.get('cap', 0) for r in rows)}, "
-                  f"full {sum(r.get('full', 0) for r in rows)}")
+                  f"full {sum(r.get('full', 0) for r in rows)}, "
+                  f"app overwrites {sum(r.get('app_drop', 0) for r in rows)}")
+            if fr == 0:
+                print(f"  FAIL: imu {idx} produced no frames; zero loss is not a pass")
+            if len(imu) == len(perf) and len(perf) > 1 and "ms" in perf[0]:
+                seconds = (perf[-1]["ms"] - perf[0]["ms"]) / 1000.0
+                frames = sum(r[idx].get("fr", 0) for r in imu[1:] if idx in r)
+                if len(clock) == len(perf):
+                    frames = clock[-1][idx] - clock[0][idx]
+                if seconds > 0:
+                    print(f"  normalised rate: {frames / seconds:.1f} frames/s over {seconds:.3f}s")
+                print(f"  cumulative loss delta: {rows[-1].get('tot', 0) - rows[0].get('tot', 0)}")
+                if "app_tot" in rows[-1]:
+                    print(f"  cumulative app overwrite delta: {rows[-1]['app_tot'] - rows[0].get('app_tot', 0)}")
     if radio:
         tot = lambda k: sum(r.get(k, 0) for r in radio)
         print(f"radio tx: on {sum(r['tx_on'] for r in radio)}/{len(radio)}, "
@@ -85,6 +114,26 @@ def summarise(path, skip):
               f"max air {max(r.get('tx_air', 0) for r in radio)} ms")
         print(f"radio rx: on {sum(r['rx_on'] for r in radio)}/{len(radio)}, "
               f"packets {tot('rx_pkt')}, reconf {tot('rx_reconf')}")
+    if gps:
+        print(f"gps: bytes/report {sum(r.get('bytes', 0) for r in gps)/len(gps):.0f}, "
+              f"pvt/report {sum(r.get('pvt', 0) for r in gps)/len(gps):.2f}, "
+              f"overruns {sum(r.get('ore', 0) for r in gps)}")
+    if bench:
+        print(f"estimator: states {sorted(set(r.get('state') for r in bench))}, "
+              f"drop delta {bench[-1].get('drop', 0) - bench[0].get('drop', 0)}, "
+              f"max lag {max(r.get('behind', 0) for r in bench)} us, "
+              f"diverged reports {sum(r.get('div', 0) for r in bench)}, "
+              f"liftoff reports {sum(r.get('liftoff', 0) for r in bench)}, "
+              f"apogee reports {sum(r.get('apogee', 0) for r in bench)}")
+    if sd:
+        print(f"sd last: {sd[-1]}")
+    if baro:
+        for idx in range(len(baro[0]["read"])):
+            reads = baro[-1]["read"][idx] - baro[0]["read"][idx]
+            triggers = baro[-1]["trigger"][idx] - baro[0]["trigger"][idx]
+            healthy = sum(r["healthy"][idx] for r in baro)
+            print(f"baro {idx}: read delta {reads}, trigger delta {triggers}, "
+                  f"healthy {healthy}/{len(baro)} reports")
 
 
 def main(argv):

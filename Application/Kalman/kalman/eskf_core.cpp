@@ -6,6 +6,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#if APP_BENCH_PREDICT_PROFILE
+#include "stm32h7xx_hal.h"
+#include "app_printf.h"
+#endif
 
 namespace eskf {
 
@@ -139,6 +143,9 @@ void EskfCore::freezeFlightBiasCovariance() {
 // ============================================================
 
 void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
+#if APP_BENCH_PREDICT_PROFILE
+  const uint32_t profile_start = DWT->CYCCNT;
+#endif
   // Only hard divergence (NaN, negative covariance) stops propagation. Soft
   // NIS divergence keeps fusing baro with inflated R and needs the process
   // noise added here to recover, so the state must keep propagating.
@@ -326,6 +333,9 @@ void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
   // 5. Covariance Propagation (Sparse)
   // ----------------------------------------------------------------
 
+#if APP_BENCH_PREDICT_PROFILE
+  const uint32_t profile_cov_start = DWT->CYCCNT;
+#endif
 #if ESKF_COVARIANCE_DECIMATION > 1
   eskf_scalar F_step[kDimError][kDimError];
   computeF(F_step, accel_body, dt_used);
@@ -421,6 +431,9 @@ void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
   computeF(F, accel_body, dt_used);
   propagateCovariance(F, dt_used);
 #endif
+#if APP_BENCH_PREDICT_PROFILE
+  const uint32_t profile_cov_end = DWT->CYCCNT;
+#endif
 
   // Update timestamp
   state_.timestamp_us = imu.timestamp_us;
@@ -449,6 +462,19 @@ void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
   // NIS here counted one high value once per IMU sample, declaring divergence
   // ~10 samples after a single outlier.
   checkNumericalHealth(false);
+#if APP_BENCH_PREDICT_PROFILE
+  static uint32_t calls = 0, nominal = 0, covariance = 0, tail = 0;
+  nominal += profile_cov_start - profile_start;
+  covariance += profile_cov_end - profile_cov_start;
+  tail += DWT->CYCCNT - profile_cov_end;
+  if (++calls == 1000) {
+    const uint32_t cycles_us = SystemCoreClock / 1000000u;
+    app_printf("[PREDICT-PROFILE] calls=%lu nominal=%lu cov=%lu tail=%lu\r\n",
+        (unsigned long)calls, (unsigned long)(nominal / cycles_us),
+        (unsigned long)(covariance / cycles_us), (unsigned long)(tail / cycles_us));
+    calls = nominal = covariance = tail = 0;
+  }
+#endif
 }
 
 // ============================================================
@@ -1866,6 +1892,11 @@ void EskfCore::computeF(eskf_scalar F[kDimError][kDimError],
   // Bias rows (9-14): random walk, stay at identity (already set)
 }
 
+#if defined(__GNUC__) && !defined(__clang__)
+// Fixed-size sparse covariance loops dominate full-rate prediction on Cortex-M7.
+// Permit loop unrolling here while retaining IEEE maths (no fast-math).
+__attribute__((optimize("O3")))
+#endif
 void EskfCore::propagateCovariance(const eskf_scalar F[kDimError][kDimError],
                                    eskf_scalar dt) {
   // P = F * P * F' + Q_d

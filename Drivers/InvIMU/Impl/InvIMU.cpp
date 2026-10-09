@@ -11,6 +11,21 @@ static constexpr uint8_t REG_WHO_AM_I       = 0x72;
 static constexpr uint32_t INV_IMU_SPI_TX_TIMEOUT_MS = 10u;
 static constexpr uint32_t INV_IMU_SPI_FIFO_RX_TIMEOUT_MS = 10u;
 
+#if APP_BENCH_IMU_INIT_TRACE
+// Buffer initialization traffic; printing during transactions would alter timing.
+struct InitTransfer { uint32_t us; uint8_t reg, len, value, write, rc; };
+static InitTransfer init_transfers[128];
+static unsigned init_transfer_count;
+static void trace_init_transfer(uint8_t reg, uint32_t len, const uint8_t* data,
+                                bool write, int rc) {
+    if (init_transfer_count < 128u) {
+        init_transfers[init_transfer_count++] = {
+            DWT->CYCCNT, reg, (uint8_t)len,
+            len ? data[0] : (uint8_t)0, (uint8_t)write, (uint8_t)rc};
+    }
+}
+#endif
+
 namespace Drivers {
 namespace InvIMU {
 
@@ -266,7 +281,26 @@ bool InvIMU_STM32::init() {
     _dev.transport.write_reg  = write_fns[_instance_idx];
     _dev.transport.sleep_us   = sleep_us;
     _dev.transport.serif_type = UI_SPI4;
-    if (inv_imu_adv_init(&_dev) != 0) return false;
+#if APP_BENCH_IMU_INIT_TRACE
+    init_transfer_count = 0;
+#endif
+    const int init_rc = inv_imu_adv_init(&_dev);
+    if (init_rc != 0) {
+        uint8_t who = 0, power = 0;
+        spi_read(REG_WHO_AM_I, &who, 1);
+        spi_read(0x10, &power, 1);
+        app_printf("[IMU-INIT] idx=%u SDK=%d flags=0x%lX who=0x%02X power=0x%02X\r\n",
+            (unsigned)_instance_idx, init_rc, (unsigned long)_status_flags,
+            (unsigned)who, (unsigned)power);
+#if APP_BENCH_IMU_INIT_TRACE
+        for (unsigned i = 0; i < init_transfer_count; ++i) {
+            const auto& t = init_transfers[i];
+            app_printf("[IMU-TRACE] us=%lu %c reg=%02X len=%u value=%02X rc=%u\r\n",
+                (unsigned long)t.us, t.write ? 'W' : 'R', t.reg, t.len, t.value, t.rc);
+        }
+#endif
+        return false;
+    }
     // NOTE: inv_imu_edmp_disable() is NOT called here. EDMP_APEX_EN1 is an MREG
     // register that requires MCLK to be running. MCLK only starts when accel/gyro
     // are enabled in LN mode (done in configure()). Calling it here would silently
@@ -284,6 +318,7 @@ bool InvIMU_STM32::getFrame(IMUData& out_data) {
 }
 
 void InvIMU_STM32::configure(AccelRange ar, GyroRange gr, ODR odr) {
+    _clock.reset(156.25f * static_cast<float>(1u << (static_cast<uint8_t>(odr) - 3u)));
     auto tdk_accel_fsr = toAccelFsr(ar);
     auto tdk_gyro_fsr  = toGyroFsr(gr);
     auto tdk_accel_odr = toAccelOdr(odr);
@@ -309,6 +344,23 @@ void InvIMU_STM32::configure(AccelRange ar, GyroRange gr, ODR odr) {
     //   bits[1:0] = accel_mode (LN=3), bits[3:2] = gyro_mode (LN=3) -> 0x0F.
     spi_write(0x10, 0x0F);
     HAL_Delay(1);  // let MCLK stabilise before any MREG write
+    {
+        uint8_t pwr = 0;
+        spi_read(PWR_MGMT0, &pwr, 1);
+        // Verify that the mode write has committed before configuring the
+        // internal registers. Some resets need another bounded attempt.
+        for (unsigned retry = 0; pwr != 0x0F && retry < 3; ++retry) {
+            spi_write(PWR_MGMT0, 0x0F);
+            HAL_Delay(10);
+            spi_read(PWR_MGMT0, &pwr, 1);
+            app_printf("[IMU-CFG] source=%u retry=%u power=0x%02X\r\n", _instance_idx, retry, pwr);
+        }
+        if (pwr != 0x0F) {
+            _status_flags |= IMU_STATUS_SPI_ERROR;
+            app_printf("[IMU-CFG] source=%u power configuration failed\r\n", _instance_idx);
+            return;
+        }
+    }
 
     // MREG-backed bandwidth / averaging settings — must come after MCLK is up.
     inv_imu_set_accel_ln_bw(&_dev, toAccelBwDiv(_hw.accel_bw_div));
@@ -460,7 +512,7 @@ void InvIMU_STM32::enableFsync() {
     inv_imu_adv_set_int2_pin_usage(&_dev, IOC_PAD_SCENARIO_OVRD_INT2_CFG_OVRD_VAL_FSYNC);
     inv_imu_adv_configure_fsync_ap_tag(&_dev, FSYNC_CONFIG0_AP_FSYNC_TEMP);
 
-    // Enable FSYNC clock sync but keep regular FIFO timestamps.
+    // Enable FSYNC tagging, not clock synchronization; retain regular timestamps.
     // inv_imu_adv_enable_fsync() sets tmst_delta_en=1 which replaces the FIFO
     // timestamp field with FSYNC delay values, breaking per-sample timestamps.
     // Instead, enable tmst_fsync_en + tmst_en WITHOUT tmst_delta_en.
@@ -494,6 +546,13 @@ bool InvIMU_STM32::parseFrameInto(IMUData& out, const uint8_t* p, uint8_t /*fram
     // Empty packet: no accel AND no gyro bits set.
     if (!(header & 0x60u)) {
         _status_flags |= IMU_STATUS_EMPTY_PACKET;
+        return false;
+    }
+    // The active FIFO configuration is the 20-byte hires timestamp format.
+    // Padding/extended-header bytes are not a counter; never invent a time
+    // from them. A configuration/frame fault must be visible to callers.
+    if (!(header & 0x08u) || !hires || (header & 0x80u)) {
+        _status_flags |= IMU_STATUS_FRAME_ALIGN_ERR;
         return false;
     }
 
@@ -574,9 +633,7 @@ bool InvIMU_STM32::parseFrameInto(IMUData& out, const uint8_t* p, uint8_t /*fram
     int16_t raw_temp = (int16_t)((d[13] << 8) | d[12]);
     out.temperature = (raw_temp / 128.0f) + 25.0f + 273.15f;
 
-    // Timestamp: for 0x78 frames p[15..16] is the dedicated 16-bit FIFO timestamp.
-    // For 0xF0 frames (timestamp_bit=0) p[15..16] may be ES1 data or padding —
-    // use it anyway as a monotonic proxy counter for relative unwrapping.
+    // Dedicated 16-bit FIFO timestamp (resolution explicitly configured to 1us).
     uint16_t raw_ts = (uint16_t)((p[16] << 8) | p[15]);
     // Debug: dump first few raw timestamps to see if they're incrementing
     {
@@ -590,53 +647,53 @@ bool InvIMU_STM32::parseFrameInto(IMUData& out, const uint8_t* p, uint8_t /*fram
             ts_diag_count++;
         }
     }
-    if (!_timestamp_initialized) {
-        _last_fifo_ts          = raw_ts;
-        _last_unwrapped_ts     = 0;
-        _timestamp_initialized = true;
-        out.timestamp_us       = 0;
-        return true;
-    }
-    uint16_t delta = raw_ts - _last_fifo_ts;
-    _last_fifo_ts = raw_ts;
-    _last_unwrapped_ts += delta;
-    out.timestamp_us = _last_unwrapped_ts;
+    // Unwrapping/mapping requires the FIFO count and complete burst.
+    // Preserve the raw 16-bit counter until processPendingRx().
+    out.timestamp_us = raw_ts;
     return true;
 }
 
 void InvIMU_STM32::processPendingRx() {
     if (!_rx_pending) return;
     _rx_pending = false;
-    // D-Cache invalidation disabled: cache is not enabled (no SCB_EnableDCache() in main.c).
-    // DMA writes are directly visible to CPU without invalidation.
+    // The production FIFO path is a blocking CPU transfer, so its buffer is
+    // coherent with D-cache. SPI DMA is disabled; enabling it with caching
+    // requires a separate buffer/cache audit (enforced by the application).
     const uint16_t total_bytes = _last_dma_size;
 
     constexpr uint8_t frame_size = kFrameSize;
     const uint16_t n_frames = (uint16_t)(total_bytes / frame_size);
     if (n_frames == 0u) return;
     uint16_t parsed = 0u;
+    uint16_t last_valid_index = 0;
+    uint32_t span_ticks = 0;
     for (uint16_t i = 0; i < n_frames && parsed < (uint16_t)kMaxFrames; ++i) {
         const uint16_t off = (uint16_t)(i * frame_size);
         IMUData d{};
         if (parseFrameInto(d, &_dma_rx_buffer[off], frame_size)) {
+            if (parsed > 0) {
+                span_ticks += static_cast<uint16_t>(d.timestamp_us -
+                    _burst_buffer[parsed - 1u].timestamp_us);
+            }
             _burst_buffer[parsed++] = d;
+            last_valid_index = i;
         }
     }
     if (parsed == 0u) return;
-    const uint64_t last_fifo_us = _burst_buffer[parsed - 1u].timestamp_us;
-    const uint64_t anchor_us = _dma_irq_time_us;
-    if (!_fifo_to_abs_offset_initialized) {
-        _fifo_to_abs_offset_us = (int64_t)anchor_us - (int64_t)last_fifo_us;
-        _fifo_to_abs_offset_initialized = true;
-    }
-
-    // Snapshot the offset for this burst — all frames in THIS burst use
-    // the same offset, preserving FIFO-relative spacing.
-    const int64_t emit_offset_us = _fifo_to_abs_offset_us;
-
+    const auto mapped = _clock.map(static_cast<uint16_t>(_burst_buffer[0].timestamp_us),
+        static_cast<uint16_t>(_burst_buffer[parsed - 1u].timestamp_us), span_ticks,
+        _fifo_count_snapshot - last_valid_index - 1u, _dma_irq_time_us);
+    _last_offset_err_us = _clock.errorUs();
+    _offset_burst_count += parsed;
+    uint32_t relative_ticks = 0;
     for (uint16_t i = 0; i < parsed; ++i) {
         IMUData d = _burst_buffer[i];
-        uint64_t abs_ts = (uint64_t)((int64_t)d.timestamp_us + emit_offset_us);
+        if (i > 0) {
+            relative_ticks += static_cast<uint16_t>(d.timestamp_us -
+                _burst_buffer[i - 1u].timestamp_us);
+        }
+        uint64_t abs_ts = mapped.first_us + static_cast<uint64_t>(
+            static_cast<float>(relative_ticks) * mapped.tick_us + 0.5f);
         // Last-resort monotonicity guard: use FIFO delta as repair spacing
         // instead of +1µs, preserving realistic sample intervals.
         if (_last_emitted_ts_us > 0 && abs_ts <= _last_emitted_ts_us) {
@@ -668,73 +725,8 @@ void InvIMU_STM32::processPendingRx() {
         _ring_write_count++;
     }
 
-    // Update offset estimate for FUTURE bursts only (slewed, not instant).
-    // The current burst was emitted with the snapshot; this correction
-    // applies to the next burst.
-    {
-        const int64_t predicted_irq = (int64_t)last_fifo_us + _fifo_to_abs_offset_us;
-        const int64_t err = (int64_t)anchor_us - predicted_irq;
-        _last_offset_err_us = (int32_t)err;
-
-        // Convergence-aware outlier gate with burst-count warmup:
-        // Phase 1 (warmup): first N bursts run freely so the slew can converge
-        //   from the initial ~-43ms offset error.
-        // Phase 2 (locked): gate active. Reject |err| > threshold.
-        // Phase 3 (re-acquire): if reject streak exceeds limit, assume timing
-        //   regime changed. Reset warmup to allow re-convergence.
-        constexpr int64_t kOutlierGateUs = 5000;
-        constexpr uint32_t kWarmupFrames = 20000;  // ~6.25s at ~3200 frames/s
-        constexpr uint32_t kRejectStreakBeforeReconverge = 500; // ~1.5s of batches
-        const int64_t abs_err = (err >= 0) ? err : -err;
-
-        if (_offset_burst_count < kWarmupFrames) {
-            _offset_burst_count += parsed;
-        } else if (!_offset_gate_armed) {
-            _offset_gate_armed = true;
-        }
-
-        const bool reject = _offset_gate_armed && (abs_err > kOutlierGateUs);
-
-        if (reject) {
-            _offset_update_reject_count++;
-            _offset_reject_streak++;
-            const int32_t abs_max = (_max_rejected_err_us >= 0) ? _max_rejected_err_us : -_max_rejected_err_us;
-            if ((int32_t)abs_err > abs_max) {
-                _max_rejected_err_us = (int32_t)err;
-            }
-            // Re-convergence: if too many consecutive rejects, assume
-            // timing regime changed. Reset warmup + reopen gate.
-            if (_offset_reject_streak >= kRejectStreakBeforeReconverge) {
-                _offset_gate_armed = false;
-                _offset_burst_count = 0;
-                _offset_reject_streak = 0;
-            }
-        } else {
-            _offset_reject_streak = 0;
-
-            // Bounded/smoothed correction: divide by 4, clamp to ±32µs per batch.
-            // CONSTRAINT: per-batch correction MUST be < one ODR period (156µs at
-            // 6400Hz) to avoid monotonicity violations across batch boundaries.
-            // Frame-scaled correction was attempted but causes monoRepairs when
-            // the per-batch total exceeds 156µs. Fixed cap is the safe approach.
-            constexpr int64_t kCorrectionDivisor = 4;
-            constexpr int64_t kMaxCorrectionPerBatchUs = 32;
-            constexpr int64_t kErrDeadbandUs = 10;
-
-            if (err > kErrDeadbandUs || err < -kErrDeadbandUs) {
-                int64_t correction = err / kCorrectionDivisor;
-                if (correction > kMaxCorrectionPerBatchUs) {
-                    correction = kMaxCorrectionPerBatchUs;
-                } else if (correction < -kMaxCorrectionPerBatchUs) {
-                    correction = -kMaxCorrectionPerBatchUs;
-                }
-                _fifo_to_abs_offset_us += correction;
-            }
-        }
-
-        if (err > 500 || err < -500) {
-            _status_flags |= IMU_STATUS_TIMESTAMP_DESYNC;
-        }
+    if (_last_offset_err_us > 500 || _last_offset_err_us < -500) {
+        _status_flags |= IMU_STATUS_TIMESTAMP_DESYNC;
     }
 }
 
@@ -745,6 +737,7 @@ void InvIMU_STM32::onInterrupt(uint64_t irq_us) {
 //POLLING HELPER FUNCTION
 int InvIMU_STM32::spi_read_fifo(uint8_t reg, uint8_t* data, uint16_t len) {
     if (len == 0) return 0;
+    if (!_hw.hspi || _hw.hspi->State != HAL_SPI_STATE_READY) return -1;
 
     // STM32H7 full-duplex SPI (2LINES) does not reliably support
     // HAL_SPI_Transmit + HAL_SPI_Receive as separate calls in one CS assertion:
@@ -755,11 +748,21 @@ int InvIMU_STM32::spi_read_fifo(uint8_t reg, uint8_t* data, uint16_t len) {
     _tx_dummy_buf[0] = reg | 0x80u;
     // _tx_dummy_buf[1..len] are pre-zeroed dummy clock bytes.
 
+    // Both the register and FIFO paths are synchronous, and the application
+    // owns this bus from the super loop. Change MBR only with SPE disabled;
+    // restore it before any barometer can use the shared bus (BMP390 <=10MHz).
+    const uint32_t saved_prescaler = _hw.hspi->Instance->CFG1 & SPI_CFG1_MBR;
+    if (_hw.fifo_spi_prescaler != UINT32_MAX) {
+        MODIFY_REG(_hw.hspi->Instance->CFG1, SPI_CFG1_MBR, _hw.fifo_spi_prescaler);
+    }
+
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
     int rc = HAL_SPI_TransmitReceive(_hw.hspi, _tx_dummy_buf, data,
                                      (uint16_t)(len + 1u),
                                      INV_IMU_SPI_FIFO_RX_TIMEOUT_MS);
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
+
+    MODIFY_REG(_hw.hspi->Instance->CFG1, SPI_CFG1_MBR, saved_prescaler);
 
     if (rc != HAL_OK) {
         _status_flags |= IMU_STATUS_SPI_ERROR;
@@ -801,15 +804,20 @@ void InvIMU_STM32::tick() {
         _status_flags |= IMU_STATUS_SPI_ERROR;
         return;
     }
+    const uint64_t count_start_us = now_us(_hw.use_dwt_timestamps);
     if (spi_read(REG_FIFO_COUNTH, counts, 2) != 0) {
         _status_flags |= IMU_STATUS_SPI_ERROR;
         return;
     }
 
-    // ICM-45686 FIFO_COUNT register map (LE): 0x12 = FIFO_COUNT_0 (LSB), 0x13 = FIFO_COUNT_1 (MSB)
+    // DS-000577 section 15: the map describes big endian, but reset/default
+    // data AND FIFO count are little endian. This driver retains that default.
+    // Timestamp only the second (authoritative) count transaction.
     uint16_t frame_count = (uint16_t)((counts[1] << 8) | counts[0]);
+    _dma_irq_time_us = (count_start_us + now_us(_hw.use_dwt_timestamps)) / 2u;
+    _fifo_count_snapshot = frame_count;
     if (frame_count > _fifo_stats.count_hwm) _fifo_stats.count_hwm = frame_count;
-    if (frame_count == 0) return;
+    if (frame_count <= 1u) return;
 
     // Errata AN-000364 §2.2: in STREAM mode read M-1 frames to avoid a torn frame.
     if (frame_count > 1u) frame_count--;
@@ -826,7 +834,6 @@ void InvIMU_STM32::tick() {
     if (count == 0u) return;
 
     _last_dma_size = count;
-    _dma_irq_time_us = _irq_time_us;
 
 #ifndef UNIT_TEST_ENV
     const bool dma_hw_ready = (_hw.hspi != nullptr) && (_hw.hspi->hdmarx != nullptr);
@@ -926,11 +933,15 @@ int InvIMU_STM32::spi_write_burst(uint8_t reg, const uint8_t* data, uint32_t len
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
     int rc = HAL_SPI_Transmit(_hw.hspi, tx_buf, len + 1, 100);
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
+#if APP_BENCH_IMU_INIT_TRACE
+    trace_init_transfer(reg, len, data, true, rc);
+#endif
     if (rc != HAL_OK) _status_flags |= IMU_STATUS_SPI_ERROR;
     return (rc == HAL_OK) ? 0 : -1;
 }
 
 int InvIMU_STM32::spi_read(uint8_t reg, uint8_t* data, uint32_t len) {
+    if (len > 64u) return -1;
     // Build a TX buffer: [reg | 0x80] + [dummy bytes]
     uint8_t tx_buf[65] = {};
     tx_buf[0] = reg | 0x80;
@@ -948,6 +959,9 @@ int InvIMU_STM32::spi_read(uint8_t reg, uint8_t* data, uint32_t len) {
     }
     // Data starts at rx_buf[1], skipping the dummy byte clocked during address phase
     std::memcpy(data, &rx_buf[1], len);
+#if APP_BENCH_IMU_INIT_TRACE
+    trace_init_transfer(reg, len, data, false, rc);
+#endif
     return 0;
 }
 

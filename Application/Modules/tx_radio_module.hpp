@@ -16,6 +16,10 @@
 #define APP_RADIO_BLOCKING_TX 0
 #endif
 
+#ifndef APP_RADIO_TEST_UPLINK
+#define APP_RADIO_TEST_UPLINK 0
+#endif
+
 #define PREPARE_DOWNLINK(type) \
     inline void prepare_downlink_packet (av_downlink_unpacked_t &packet, const type &dump)
 
@@ -180,9 +184,15 @@ public:
 
     bool init () {
     	//app_printf("driver: %p\n", driver_);
+#if APP_RADIO_TEST_UPLINK
+      driver_->init(864.34e6, SX127X_POWER_11DBM, SX127X_LORA_SF_8,
+        SX127X_LORA_BW_125KHZ, SX127X_LORA_CR_4_7, SX127X_LORA_CRC_EN,
+        av_uplink_size);
+#else
 	  driver_->init(866.34e6, SX127X_POWER_20DBM, SX127X_LORA_SF_7,
 	  	SX127X_LORA_BW_250KHZ, SX127X_LORA_CR_4_7, SX127X_LORA_CRC_EN,
 	  	av_downlink_size);
+#endif
 	  //app_printf("init is ok.\n");
 	  present_ = driver_->isPresent();
 	  if (present_) {
@@ -253,6 +263,19 @@ public:
 
     bool send (const flight_computer::DataDump &dump) {
         const uint32_t now = app_timebase_now_ms();
+#if APP_RADIO_TEST_UPLINK
+        (void)dump;
+        next_time = now + ms_between_send;
+        if (tx_busy_) { ++stats_.skipped_busy; return false; }
+        if (!usable()) { ++stats_.skipped_absent; return false; }
+        // Order 0 is not an actuator or FSM command: the dispatcher ignores it.
+        const av_uplink_t noop = {0, 0};
+        if (!driver_->startTransmit(GSC_CMD, (uint8_t*)&noop, av_uplink_size)) return false;
+        tx_busy_ = true;
+        tx_start_ms_ = now;
+        ++stats_.started;
+        return true;
+#endif
         next_time = now + ms_between_send;
 
         av_downlink_unpacked_t packet;

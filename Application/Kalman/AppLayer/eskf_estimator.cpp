@@ -162,6 +162,7 @@ void EskfEstimator::configureCalibration(const appcfg::CalibrationConfig &cfg) {
 }
 
 void EskfEstimator::reset() {
+  imu_pipeline_log_limiter_.reset();
   resetCoastState();
   initialized_ = false;
   in_flight_ = false;
@@ -1243,6 +1244,9 @@ void EskfEstimator::updateInFlightImuOutageState(
 
 void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
                                           size_t group_count) {
+#if APP_BENCH_KAL_PROFILE
+  const uint64_t profile_start = app_timebase_now_us();
+#endif
   if (!group || group_count == 0)
     return;
 
@@ -1277,9 +1281,12 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
   constexpr eskf_scalar kTempScale = 1.0 / 2.07;
   constexpr eskf_scalar kTempOffsetK = 25.0 + 273.15; // 25°C in Kelvin
 
-  eskf_sensor_t accel_data[ESKF_MAX_IMUS][kMaxBatchSize * 3] = {};
-  eskf_sensor_t gyro_data[ESKF_MAX_IMUS][kMaxBatchSize * 3] = {};
-  eskf_scalar temp_data[ESKF_MAX_IMUS][kMaxBatchSize] = {};
+  // Only present sources and [0, safe_count) are passed to VirtualImu; each
+  // element in that range is written below. Do not clear sixteen samples per
+  // source when the synchronized runtime usually supplies just one.
+  eskf_sensor_t accel_data[ESKF_MAX_IMUS][kMaxBatchSize * 3];
+  eskf_sensor_t gyro_data[ESKF_MAX_IMUS][kMaxBatchSize * 3];
+  eskf_scalar temp_data[ESKF_MAX_IMUS][kMaxBatchSize];
   bool source_present[ESKF_MAX_IMUS] = {};
 
 #if APP_IMU_LOG_FORMAT == 0
@@ -1362,10 +1369,17 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
   const eskf_scalar *gyro_bias_body =
       in_flight_ ? filter_.state().b_gyro : rail_shadow_.gyroBias();
   eskf::VirtualImuOutput vout_buffer[kMaxBatchSize];
+#if APP_BENCH_KAL_PROFILE
+  const uint64_t profile_vimu_start = app_timebase_now_us();
+#endif
   size_t out_count = virtual_imu_.process(accel_ptrs, gyro_ptrs, temp_ptrs,
                                           statuses, safe_count, t0_us,
                                           vout_buffer, kMaxBatchSize, dt_us,
                                           gyro_bias_body);
+
+#if APP_BENCH_KAL_PROFILE
+  const uint64_t profile_vimu_end = app_timebase_now_us();
+#endif
 
   // Push processed frames to filter and shadow filters
   for (size_t i = 0; i < out_count; ++i) {
@@ -1449,6 +1463,20 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
     }
   }
 
+#if APP_BENCH_KAL_PROFILE
+  static uint32_t calls = 0, samples = 0, setup_us = 0, vimu_us = 0, post_us = 0;
+  ++calls;
+  samples += out_count;
+  setup_us += profile_vimu_start - profile_start;
+  vimu_us += profile_vimu_end - profile_vimu_start;
+  post_us += app_timebase_now_us() - profile_vimu_end;
+  RUN_EVERY(1000) {
+    app_printf("[KAL-PROFILE] calls=%lu samples=%lu setup=%lu vimu=%lu post=%lu\r\n",
+        (unsigned long)calls, (unsigned long)samples, (unsigned long)setup_us,
+        (unsigned long)vimu_us, (unsigned long)post_us);
+    calls = samples = setup_us = vimu_us = post_us = 0;
+  }
+#endif
   output_dirty_ = true;
 }
 
@@ -2770,13 +2798,11 @@ void EskfEstimator::logImuPipelineIfDue(const eskf::VirtualImuOutput &vout,
     return;
   }
 
-  // Decimate during flight to avoid constructing 600+ byte snapshot at IMU rate.
-  // Pre-flight: every sample. In-flight: every 64th sample (~100Hz at 6.4kHz).
-  if (in_flight_) {
-    static uint16_t imu_pipeline_log_counter = 0;
-    if (++imu_pipeline_log_counter < 64) return;
-    imu_pipeline_log_counter = 0;
-  }
+  // Bound the diagnostic stream in BOTH modes. At 6.4 kHz, preflight snapshots
+  // alone previously added >2.2 MB/s and exhausted the arena while ARMED.
+  // Use sample time (not polling/burst time); raw logging and physics remain
+  // full-rate. Per-instance limiter state is cleared by reset().
+  if (!imu_pipeline_log_limiter_.shouldLog(vout.frame.timestamp_us)) return;
 
   eskf::ImuPipelineSnapshot snapshot;
   for (int i = 0; i < 3; ++i) {

@@ -14,13 +14,14 @@ public:
     bool     ping()                                              override;
     void     configure(OsrPressure osr_p, OsrTemp osr_t,
                        IIRFilter filter)                         override;
-    void     triggerMeasurement()                                override;
+    bool     triggerMeasurement()                                override;
     bool     getFrame(BaroData& out)                             override;
     uint32_t getStatus() const                                   override;
 
     // ===== Injectable behaviour =====
     bool     init_returns     = true;
     bool     ping_returns     = true;
+    bool     trigger_returns  = true;
     bool     getFrame_returns = true;
     int      not_ready_cycles = 0;   // getFrame() returns false this many times before yielding data
     BaroData inject_data      = {};

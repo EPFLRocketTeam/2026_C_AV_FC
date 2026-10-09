@@ -317,6 +317,8 @@ private:
   eskf::BaroHealthState last_logged_baro_health_[ESKF_MAX_BAROS] = {};
   bool last_logged_imu_salvage_ = false;
   bool last_logged_baro_salvage_ = false;
+  eskf::LogRateLimiter imu_pipeline_log_limiter_{
+      ESKF_APP_IMU_PIPELINE_LOG_INTERVAL_US};
 
   LiftoffSnapshot last_liftoff_snapshot_{};
   bool has_liftoff_snapshot_ = false;

@@ -112,6 +112,15 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
+/* Shared C/C++ policy: the application rejects unaudited SPI DMA when the
+ * board enables data caching. Kept here so both checks see the same default. */
+#ifndef APP_ENABLE_DCACHE
+#define APP_ENABLE_DCACHE 1
+#endif
+#ifndef APP_CACHE_SD_ARENA
+#define APP_CACHE_SD_ARENA 1
+#endif
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

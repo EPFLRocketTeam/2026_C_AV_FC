@@ -12,6 +12,10 @@
 
 extern RingBuffer<GpsBasicFixData, 100> gpsData;
 
+#ifndef APP_RADIO_LOOPBACK
+#define APP_RADIO_LOOPBACK 0
+#endif
+
 #ifndef APP_GPS_POLL_TIMEOUT_MS
 #define APP_GPS_POLL_TIMEOUT_MS 0u
 #endif
@@ -34,9 +38,15 @@ public:
       : Module(drivers, buffers) {}
 
   bool init() override {
+#if APP_RADIO_LOOPBACK
+      drivers_[0]->init(866.34e6, SX127X_POWER_11DBM, SX127X_LORA_SF_7,
+        SX127X_LORA_BW_250KHZ, SX127X_LORA_CR_4_7, SX127X_LORA_CRC_EN,
+        av_downlink_size);
+#else
 	  drivers_[0]->init(864.34e6, SX127X_POWER_11DBM, SX127X_LORA_SF_8,
 	  	SX127X_LORA_BW_125KHZ, SX127X_LORA_CR_4_7, SX127X_LORA_CRC_EN,
 	  	av_uplink_size);
+#endif
 
 	  next_check_ms_ = app_timebase_now_ms() + kCheckPeriodMs;
 	  present_ = drivers_[0]->isPresent();

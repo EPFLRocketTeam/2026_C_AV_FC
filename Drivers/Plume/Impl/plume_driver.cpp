@@ -216,8 +216,8 @@ uint8_t plume_stm32_write_block (SD_HandleTypeDef* hsd, struct plume_context* co
     /* Copy arena data (RAM_D2) into AXI SRAM bounce buffer for IDMA. */
     memcpy(s_dma_bounce, buffer, 512);
 
-    /* Flush D-cache so IDMA reads committed data from AXI SRAM. */
-    // SCB_CleanDCache_by_Addr((uint32_t*)s_dma_bounce, 512);
+    /* Board MPU makes the AXI bounce region non-cacheable for IDMA. */
+    __DMB(); // Publish CPU writes before starting the peripheral DMA reader.
 
     s_sd_timing.last_batch_size = 1;
     s_sd_timing.total_blocks += 1;
@@ -261,8 +261,8 @@ uint8_t plume_stm32_write_blocks (SD_HandleTypeDef* hsd, struct plume_context* c
     /* Copy arena data (RAM_D2) into AXI SRAM bounce buffer for IDMA. */
     memcpy(s_dma_bounce, buffer, num_blocks * 512);
 
-    /* Flush D-cache for the entire batch so IDMA sees committed data. */
-    // SCB_CleanDCache_by_Addr((uint32_t*)s_dma_bounce, num_blocks * 512);
+    /* Board MPU makes the AXI bounce region non-cacheable for IDMA. */
+    __DMB(); // Publish CPU writes before starting the peripheral DMA reader.
 
     /* ── Record batch size and DMA start timestamp ── */
     s_sd_timing.last_batch_size = num_blocks;

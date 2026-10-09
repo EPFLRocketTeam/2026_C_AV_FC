@@ -67,8 +67,8 @@ extern "C" void app_perf_print(void) {
 	// One line, one write: each printf is a USB transfer that can wait.
 	char line[320];
 	int n = snprintf(line, sizeof(line),
-			"[PERF] it=%lu avg=%luus max=%luus >5ms=%lu >16ms=%lu >64ms=%lu |",
-			(unsigned long) g_loop.count, (unsigned long) avg,
+			"[PERF] ms=%lu it=%lu avg=%luus max=%luus >5ms=%lu >16ms=%lu >64ms=%lu |",
+			(unsigned long)app_timebase_now_ms(), (unsigned long) g_loop.count, (unsigned long) avg,
 			(unsigned long) g_loop.max_us, (unsigned long) g_loop.over_5ms,
 			(unsigned long) g_loop.over_16ms, (unsigned long) g_loop.over_64ms);
 	for (int i = 0; i < APP_PERF_SECTION_COUNT; ++i) {
