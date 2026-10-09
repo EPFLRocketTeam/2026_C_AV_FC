@@ -162,6 +162,8 @@ void EskfEstimator::configureCalibration(const appcfg::CalibrationConfig &cfg) {
 }
 
 void EskfEstimator::reset() {
+  imu_pipeline_log_limiter_.reset();
+  resetCoastState();
   initialized_ = false;
   in_flight_ = false;
   rail_shadow_initialized_ = false;
@@ -194,6 +196,9 @@ void EskfEstimator::reset() {
   descent_last_gnss_fuse_us_ = 0;
   latest_descent_gnss_ = LatestGnssForDescent{};
   latest_descent_baro_ = LatestBaroForDescent{};
+  latest_fused_baro_valid_ = false;
+  latest_fused_baro_alt_m_ = 0.0f;
+  latest_fused_baro_ts_ = 0;
   preflight_baro_pressure_pa_ = 0;
   preflight_baro_valid_ = false;
   descent_filter_.configure(DescentNavFilter::Config{});
@@ -672,6 +677,7 @@ void EskfEstimator::onLiftoff(uint32_t liftoff_ms) {
   latest_descent_gnss_ = LatestGnssForDescent{};
   latest_descent_baro_ = LatestBaroForDescent{};
 
+  resetCoastState();
   in_flight_ = true;
   liftoff_ms_ = liftoff_ms;
   liftoff_us_ = static_cast<uint64_t>(liftoff_ms) * 1000ULL;
@@ -1238,6 +1244,9 @@ void EskfEstimator::updateInFlightImuOutageState(
 
 void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
                                           size_t group_count) {
+#if APP_BENCH_KAL_PROFILE
+  const uint64_t profile_start = app_timebase_now_us();
+#endif
   if (!group || group_count == 0)
     return;
 
@@ -1272,9 +1281,12 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
   constexpr eskf_scalar kTempScale = 1.0 / 2.07;
   constexpr eskf_scalar kTempOffsetK = 25.0 + 273.15; // 25°C in Kelvin
 
-  eskf_sensor_t accel_data[ESKF_MAX_IMUS][kMaxBatchSize * 3] = {};
-  eskf_sensor_t gyro_data[ESKF_MAX_IMUS][kMaxBatchSize * 3] = {};
-  eskf_scalar temp_data[ESKF_MAX_IMUS][kMaxBatchSize] = {};
+  // Only present sources and [0, safe_count) are passed to VirtualImu; each
+  // element in that range is written below. Do not clear sixteen samples per
+  // source when the synchronized runtime usually supplies just one.
+  eskf_sensor_t accel_data[ESKF_MAX_IMUS][kMaxBatchSize * 3];
+  eskf_sensor_t gyro_data[ESKF_MAX_IMUS][kMaxBatchSize * 3];
+  eskf_scalar temp_data[ESKF_MAX_IMUS][kMaxBatchSize];
   bool source_present[ESKF_MAX_IMUS] = {};
 
 #if APP_IMU_LOG_FORMAT == 0
@@ -1357,10 +1369,17 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
   const eskf_scalar *gyro_bias_body =
       in_flight_ ? filter_.state().b_gyro : rail_shadow_.gyroBias();
   eskf::VirtualImuOutput vout_buffer[kMaxBatchSize];
+#if APP_BENCH_KAL_PROFILE
+  const uint64_t profile_vimu_start = app_timebase_now_us();
+#endif
   size_t out_count = virtual_imu_.process(accel_ptrs, gyro_ptrs, temp_ptrs,
                                           statuses, safe_count, t0_us,
                                           vout_buffer, kMaxBatchSize, dt_us,
                                           gyro_bias_body);
+
+#if APP_BENCH_KAL_PROFILE
+  const uint64_t profile_vimu_end = app_timebase_now_us();
+#endif
 
   // Push processed frames to filter and shadow filters
   for (size_t i = 0; i < out_count; ++i) {
@@ -1382,7 +1401,7 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
 
       // Push IMU sample to ESKF ring buffer at full rate.
       filter_.pushImu(vout.frame, dt_s);
-      last_body_accel_x_ = vout.frame.accel[0];
+      updateCoastState(vout.frame.accel[0], vout.frame.timestamp_us, dt_s);
 
       if (!in_flight_) {
         // Use pre-lever-arm accel for rail shadow to avoid bias-induced drift.
@@ -1444,6 +1463,20 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
     }
   }
 
+#if APP_BENCH_KAL_PROFILE
+  static uint32_t calls = 0, samples = 0, setup_us = 0, vimu_us = 0, post_us = 0;
+  ++calls;
+  samples += out_count;
+  setup_us += profile_vimu_start - profile_start;
+  vimu_us += profile_vimu_end - profile_vimu_start;
+  post_us += app_timebase_now_us() - profile_vimu_end;
+  RUN_EVERY(1000) {
+    app_printf("[KAL-PROFILE] calls=%lu samples=%lu setup=%lu vimu=%lu post=%lu\r\n",
+        (unsigned long)calls, (unsigned long)samples, (unsigned long)setup_us,
+        (unsigned long)vimu_us, (unsigned long)post_us);
+    calls = samples = setup_us = vimu_us = post_us = 0;
+  }
+#endif
   output_dirty_ = true;
 }
 
@@ -1566,7 +1599,7 @@ void EskfEstimator::processBufferedImuBatch(const PendingImuBatch &batch) {
 
       // Push IMU sample to ESKF ring buffer at full rate.
       filter_.pushImu(vout.frame, dt_s);
-      last_body_accel_x_ = vout.frame.accel[0];
+      updateCoastState(vout.frame.accel[0], vout.frame.timestamp_us, dt_s);
 
       if (!in_flight_) {
         // Use pre-lever-arm accel for rail shadow to avoid bias-induced drift.
@@ -1687,6 +1720,9 @@ void EskfEstimator::processBaroObservation(uint8_t source,
       const float altitude_isa_m =
           static_cast<float>(eskf::pressureToAltitudeIsa(bout.pressure_pa));
       const float altitude_agl_m = altitude_isa_m - ground_isa_altitude_;
+      latest_fused_baro_valid_ = true;
+      latest_fused_baro_alt_m_ = altitude_agl_m;
+      latest_fused_baro_ts_ = ts;
 
       if (gps_origin_set_) {
         latest_descent_baro_.valid = true;
@@ -2543,14 +2579,61 @@ bool EskfEstimator::isEskfDiverged() const {
   return false;
 }
 
-bool EskfEstimator::isCoastPhase() const {
-  if (!in_flight_)
+bool EskfEstimator::latestBaroAltitude(float &altitude_m,
+                                       uint64_t &timestamp_us) const {
+  if (!latest_fused_baro_valid_)
     return false;
+  altitude_m = latest_fused_baro_alt_m_;
+  timestamp_us = latest_fused_baro_ts_;
+  return true;
+}
 
-  // Coast phase = body-X acceleration is negative (drag > thrust)
-  // During motor burn, body_accel_x > 0 (thrust > drag)
-  // After MECO, body_accel_x < 0 (drag > thrust)
-  return last_body_accel_x_ < 0;
+bool EskfEstimator::isCoastPhase() const {
+  return in_flight_ && coast_latched_;
+}
+
+// Coast phase = motor off. It used to be "this raw body-X sample < 0" (drag >
+// thrust), which is not robust: in early coast vibration flips its sign
+// hundreds of times per second, and once drag is small (near apogee, or a
+// low-energy flight) an IMU bias of ~0.1 m/s^2 or a tail-first slide keeps it
+// positive, blocking every apogee decision. Instead detect thrust off: the
+// filtered specific force stays below kCoastMaxSpecificForce for
+// kCoastConfirmUs, then latch (the motor does not relight). Thrust gives
+// ~+5 g, the pad ~+1 g; coast is drag plus bias, well below 1 m/s^2 except at
+// high speed where drag is negative anyway.
+void EskfEstimator::updateCoastState(eskf_scalar body_accel_x,
+                                     uint64_t timestamp_us, eskf_scalar dt_s) {
+  constexpr eskf_scalar kCoastFilterTauS = 0.05;
+  constexpr eskf_scalar kCoastMaxSpecificForce = 1.0;  // m/s^2
+  constexpr uint64_t kCoastConfirmUs = 100000;
+
+  last_body_accel_x_ = body_accel_x;
+  if (!in_flight_ || coast_latched_) {
+    return;
+  }
+  if (!coast_filter_init_ || !(dt_s > 0)) {
+    coast_accel_filt_ = body_accel_x;
+    coast_filter_init_ = true;
+  } else {
+    coast_accel_filt_ +=
+        (dt_s / (kCoastFilterTauS + dt_s)) * (body_accel_x - coast_accel_filt_);
+  }
+  if (coast_accel_filt_ >= kCoastMaxSpecificForce) {
+    coast_below_since_us_ = 0;
+    return;
+  }
+  if (coast_below_since_us_ == 0) {
+    coast_below_since_us_ = timestamp_us;
+  } else if (timestamp_us - coast_below_since_us_ >= kCoastConfirmUs) {
+    coast_latched_ = true;
+  }
+}
+
+void EskfEstimator::resetCoastState() {
+  coast_accel_filt_ = 0;
+  coast_filter_init_ = false;
+  coast_below_since_us_ = 0;
+  coast_latched_ = false;
 }
 
 eskf_scalar EskfEstimator::bodyAccelX() const { return last_body_accel_x_; }
@@ -2711,13 +2794,15 @@ void EskfEstimator::logFlightShadowIfDue(uint64_t timestamp_us) {
 
 void EskfEstimator::logImuPipelineIfDue(const eskf::VirtualImuOutput &vout,
                                         eskf_scalar dt_s) {
-  // Decimate during flight to avoid constructing 600+ byte snapshot at IMU rate.
-  // Pre-flight: every sample. In-flight: every 64th sample (~100Hz at 6.4kHz).
-  if (in_flight_) {
-    static uint16_t imu_pipeline_log_counter = 0;
-    if (++imu_pipeline_log_counter < 64) return;
-    imu_pipeline_log_counter = 0;
+  if (!eskf::getEskfLogger().imuPipelineEnabled()) {
+    return;
   }
+
+  // Bound the diagnostic stream in BOTH modes. At 6.4 kHz, preflight snapshots
+  // alone previously added >2.2 MB/s and exhausted the arena while ARMED.
+  // Use sample time (not polling/burst time); raw logging and physics remain
+  // full-rate. Per-instance limiter state is cleared by reset().
+  if (!imu_pipeline_log_limiter_.shouldLog(vout.frame.timestamp_us)) return;
 
   eskf::ImuPipelineSnapshot snapshot;
   for (int i = 0; i < 3; ++i) {

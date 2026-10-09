@@ -679,7 +679,7 @@ struct Event {
   bool timer_launch_delay; // TODO: update the store
   bool cut_off_detected;   // TODO: update the store
   bool apogee_detected;    // TODO: update the store
-  bool touchdown_detected; // TODO: update the store
+  bool touchdown_detected; // Set by the Kalman touchdown detector (DESCENT)
 
   /// Liftoff acceleration-hold evaluation result.
   /// Written by the Kalman subsystem once the FSM enters IGNITION.

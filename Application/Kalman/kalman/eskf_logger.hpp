@@ -392,6 +392,10 @@ public:
     (void)snapshot;
   }
 
+  /// Whether logImuPipeline() records are wanted right now. The estimator
+  /// skips building the (large, IMU-rate) snapshot when this is false.
+  virtual bool imuPipelineEnabled() const { return true; }
+
   /// Log in-flight IMU integration debug snapshot.
   /// @param snapshot IMU dynamics debug snapshot
   virtual void logImuDynamics(const ImuDynamicsSnapshot &snapshot) {
@@ -420,6 +424,7 @@ public:
   void logFlightShadow(const FlightShadowSnapshot &) override {}
   void logImuPipeline(const ImuPipelineSnapshot &) override {}
   void logImuDynamics(const ImuDynamicsSnapshot &) override {}
+  bool imuPipelineEnabled() const override { return false; }
 };
 
 // ============================================================

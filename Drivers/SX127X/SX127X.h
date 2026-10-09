@@ -479,6 +479,80 @@ uint8_t SX127X_RSSI_LoRa(SX127X_t *module);
  */
 uint8_t SX127X_RSSI(SX127X_t *module);
 
+/*
+ * Non-blocking API, for use from the super loop.
+ *
+ * The blocking calls above re-run SX127X_config() (15 ms delay) and poll the
+ * radio until the packet is on air (~75 ms per downlink) or a timeout expires
+ * (3000 polls, then a 100 ms reset), which starves the IMU FIFO servicing.
+ * These calls only touch a few registers and return immediately:
+ *   SX127X_isPresent()  one register read, to detect a missing radio
+ *   SX127X_txPrepare()  TX-side registers, once after SX127X_config()
+ *   SX127X_txStart()    load the FIFO and start the transmission
+ *   SX127X_txPoll()     report TxDone (RegIrqFlags)
+ *   SX127X_rxStart()    enter continuous RX after SX127X_config()
+ */
+#define SX127X_VERSION_VALUE	0x12
+
+typedef enum {
+	SX127X_TX_IDLE, SX127X_TX_BUSY, SX127X_TX_DONE
+} SX127X_TxPoll_t;
+
+/**
+ * \brief Check that a radio answers on the bus
+ *
+ * \param[in]  module	Pointer to LoRa structure
+ *
+ * \return     true if RegVersion reads SX127X_VERSION_VALUE
+ */
+bool SX127X_isPresent(SX127X_t *module);
+
+/**
+ * \brief Set the TX-side registers
+ *
+ * PA config, DIO0 mapped to TxDone, IRQ mask. Call once after
+ * SX127X_config() / SX127X_init().
+ *
+ * \param[in]  module	Pointer to LoRa structure
+ */
+void SX127X_txPrepare(SX127X_t *module);
+
+/**
+ * \brief Load the FIFO and start a transmission without waiting
+ *
+ * \param[in]  module	Pointer to LoRa structure
+ * \param[in]  txBuf    Data buffer with data to be sent
+ * \param[in]  length   Length of message to be sent
+ *
+ * \return     1 if the transmission was started
+ *             0 if a transmission is still in progress
+ */
+int SX127X_txStart(SX127X_t *module, uint8_t *txBuf, uint8_t length);
+
+/**
+ * \brief Check whether the current transmission has finished
+ *
+ * On TxDone the IRQ flags are cleared and the radio is back in standby.
+ *
+ * \param[in]  module	Pointer to LoRa structure
+ *
+ * \return     SX127X_TX_DONE once per finished transmission
+ *             SX127X_TX_BUSY while on air
+ *             SX127X_TX_IDLE if no transmission was started
+ */
+SX127X_TxPoll_t SX127X_txPoll(SX127X_t *module);
+
+/**
+ * \brief Enter continuous reception without waiting
+ *
+ * Same register sequence as SX127X_LoRaEntryRx() minus the configuration
+ * and the wait for an ongoing reception. Call after SX127X_config().
+ *
+ * \param[in]  module	Pointer to LoRa structure
+ * \param[in]  length   Length of message to be received
+ */
+void SX127X_rxStart(SX127X_t *module, uint8_t length);
+
 /**
  * \brief Enter standby mode
  *

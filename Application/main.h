@@ -10,6 +10,7 @@ extern "C" {
 
 void simple_radio_init(void);
 void simple_radio_tick(void);
+void simple_radio_print_stats(void);
 
 
 void app_super_loop_setup(void);
@@ -21,6 +22,8 @@ void app_set_pyro_status (int pyro_id, bool enabled);
 uint64_t app_get_remaining_disk_size (void);
 uint64_t app_get_sd_fail_count (void);
 float app_get_current_imu_rate (void);
+void app_on_state_becomes_init (void);
+void app_on_state_becomes_armed (void);
 
 // Bridge functions called from HAL callbacks in Core/Src/main.c.
 void app_on_imu_exti(uint16_t gpio_pin);

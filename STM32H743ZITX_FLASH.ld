@@ -103,6 +103,9 @@ SECTIONS
     . = ALIGN(32);
   } >RAM_D1
 
+  ASSERT(ADDR(.axi_sram) == 0x24000000, "SD DMA MPU region must start at AXI SRAM base")
+  ASSERT(SIZEOF(.axi_sram) <= 0x8000, "SD DMA buffers exceed the non-cacheable 32KiB MPU carve-out")
+
   .ARM.extab (READONLY) : /* The READONLY keyword is only supported in GCC11 and later, remove it if using GCC10 or earlier. */
   {
     *(.ARM.extab* .gnu.linkonce.armextab.*)
@@ -173,8 +176,8 @@ SECTIONS
   /* RAM_D2 BSS — large ring-buffer storage for the Plume SD arena.
    * NOTE: SDMMC1 IDMA *cannot* directly access RAM_D2 — it can only
    * reach AXI SRAM (RAM_D1).  The Plume driver uses a bounce buffer
-   * in .bss (RAM_D1) and memcpy's data here before each DMA write.
-   * Non-cacheable by default (no MPU region).
+   * in .axi_sram (RAM_D1) and copies arena data there before each DMA write.
+   * This arena is CPU-owned and may be cached; IDMA only sees its bounce copy.
    * Startup code must zero this section (see _sram_d2_bss / _eram_d2_bss). */
   .ram_d2_bss (NOLOAD) :
   {
@@ -183,8 +186,20 @@ SECTIONS
     *(.ram_d2_bss)
     *(.ram_d2_bss*)
     . = ALIGN(32);
+  } >RAM_D2
+  ASSERT(ADDR(.ram_d2_bss) + SIZEOF(.ram_d2_bss) <= 0x30040000,
+         "CPU D2 data overlaps GPS DMA MPU carve-out")
+
+  /* MPU reserves SRAM3 for GPS DMA. Extend the existing D2 zero-fill range
+   * through this section, preserving startup initialization of both buffers. */
+  .gps_dma_rx 0x30040000 (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.gps_dma_rx*)
+    . = ALIGN(32);
     _eram_d2_bss = .;
   } >RAM_D2
+  ASSERT(SIZEOF(.gps_dma_rx) <= 0x8000, "GPS DMA buffers exceed SRAM3 carve-out")
 
   /* DTCM BSS — zero-wait-state, non-cacheable RAM for timing-critical globals.
    * Placed before the stack (stack grows down from end of DTCM).
@@ -220,5 +235,3 @@ SECTIONS
 
   .ARM.attributes 0 : { *(.ARM.attributes) }
 }
-
-

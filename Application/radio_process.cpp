@@ -117,8 +117,24 @@ void handleRxCommand(void* data) noexcept {
 }
 
 static void onPacketReceived(uint8_t packetId, uint8_t *payload, uint32_t length) {
-	app_printf("Decoded packet: id=0x%02X len=%lu payload=[%s]\r\n", packetId,
-			(unsigned long) length, (char*) payload);
+#if APP_RADIO_TEST_UPLINK
+    const bool valid = packetId == GSC_CMD && length == av_uplink_size &&
+                       payload[0] == 0 && payload[1] == 0;
+    app_printf("[UPLINK-LOOPBACK] decoded id=0x%02X len=%lu noop=%u\r\n",
+               packetId, (unsigned long)length, (unsigned)valid);
+    if (!valid) return; // Never execute other commands in this bench build.
+#endif
+#if APP_RADIO_LOOPBACK
+    // Valid Capsule frames prove the RF and SPI RX paths without executing
+    // any command received over the air in this bench-only configuration.
+    app_printf("[LOOPBACK] decoded id=0x%02X len=%lu valid=%u\r\n", packetId,
+               (unsigned long)length,
+               (unsigned)(packetId == CAPSULE_ID::AV_TELEMETRY && length == av_downlink_size));
+    return;
+#endif
+	// Capsule payloads are binary and need not contain a terminating NUL.
+	app_printf("Decoded packet: id=0x%02X len=%lu\r\n", packetId,
+			(unsigned long) length);
 
 
 	if (packetId == GSC_CMD && length == av_uplink_size) {
@@ -128,6 +144,11 @@ static void onPacketReceived(uint8_t packetId, uint8_t *payload, uint32_t length
 	}
 }
 
+
+// Bench switch: 1 keeps both radios in reset once initialised.
+#ifndef APP_RADIO_HOLD_IN_RESET
+#define APP_RADIO_HOLD_IN_RESET 0
+#endif
 
 extern SPI_HandleTypeDef hspi2;
 extern SPI_HandleTypeDef hspi1;
@@ -177,12 +198,35 @@ void simple_radio_init(void) {
 	app_printf("driver: %p\n", &tx);
 	tx_module.init();
 	app_printf("Done.\n");
+
+#if APP_RADIO_HOLD_IN_RESET
+	// Bench only: hold both radios in reset after init, so the downlink and
+	// uplink see the radio disappear (as with the telemetry board unplugged).
+	HAL_GPIO_WritePin((GPIO_TypeDef*) SX127X_TX_hw.reset.port, SX127X_TX_hw.reset.pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin((GPIO_TypeDef*) SX127X_RX_hw.reset.port, SX127X_RX_hw.reset.pin, GPIO_PIN_RESET);
+	app_printf("[RADIO] APP_RADIO_HOLD_IN_RESET: radios held in reset\r\n");
+#endif
 }
 
 void simple_radio_tick(void) {
 	rx_module.update(0);
 
+	tx_module.tick();
 	if (tx_module.should_send()) {
 		tx_module.send(flight_computer::GOATStore::get_instance().get());
 	}
+}
+
+void simple_radio_print_stats(void) {
+	const TxRadioStats t = tx_module.takeStats();
+	const RxRadioStats r = rx_module.takeStats();
+	app_printf("[RADIO] tx=%s start=%lu sent=%lu busy=%lu absent=%lu tmo=%lu "
+			"reconf=%lu air=%lums | rx=%s pkt=%lu reconf=%lu\r\n",
+			tx_module.present() ? "on" : "off",
+			(unsigned long) t.started, (unsigned long) t.sent,
+			(unsigned long) t.skipped_busy, (unsigned long) t.skipped_absent,
+			(unsigned long) t.timeouts, (unsigned long) t.reconfigs,
+			(unsigned long) t.max_airtime_ms,
+			rx_module.present() ? "on" : "off",
+			(unsigned long) r.packets, (unsigned long) r.reconfigs);
 }

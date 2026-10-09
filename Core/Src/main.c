@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
+#include "../../Application/app_perf.h"
 #include "../../Drivers/InvIMU/Tests/Hardware/imu_manual_test.h"
 #include "../../Drivers/BMP390/Tests/Manual/bmp390_manual_test.h"
 #include "../../Drivers/UBX_GPS/Tests/Hardware/gps_manual_test.h"
@@ -55,6 +56,15 @@
  * (or link to the default stub that discards output).
  */
 #define OUTPUT_LOG
+
+/**
+ * APP_RADIO_ENABLE: runs simple_radio_tick() (telemetry downlink + uplink
+ * commands) in the super loop. The radio driver no longer blocks the loop
+ * during a transmission, so it can stay on during IMU acquisition.
+ */
+#ifndef APP_RADIO_ENABLE
+#define APP_RADIO_ENABLE 1
+#endif
 
 /*  CAN bus test between 2026_C_AV_PRC and 2026_C_AV_FC (PD0=RX, PD1=TX on both boards).  */
 #define CANBUS_TEST_TX_ID   0x101u   /*  FC -> PRC  */
@@ -111,6 +121,59 @@ static void MX_FDCAN2_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* DMA audit for this board: SDMMC IDMA uses ONLY the first 32 KiB AXI bounce
+ * region; GPS DMA1 uses the dedicated SRAM3 carve-out; USB DMA and SPI DMA
+ * are disabled. The SD arena is CPU-only (copied into the IDMA bounce buffer).
+ * Linker assertions pin the SD carve-out, so layout drift is a build error. */
+static void board_configure_data_cache(void)
+{
+#if APP_ENABLE_DCACHE
+  MPU_Region_InitTypeDef region = {0};
+  HAL_MPU_Disable();
+  region.Enable = MPU_REGION_ENABLE;
+  region.Number = MPU_REGION_NUMBER1;
+  region.BaseAddress = 0x24000000;
+  region.Size = MPU_REGION_SIZE_512KB;
+  region.AccessPermission = MPU_REGION_FULL_ACCESS;
+  region.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  region.TypeExtField = MPU_TEX_LEVEL1;
+  region.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+  region.IsCacheable = MPU_ACCESS_CACHEABLE;
+  region.IsBufferable = MPU_ACCESS_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&region);
+
+  /* Higher-numbered regions override the cached AXI region. TEX=1,C=B=0
+   * is normal non-cacheable memory (not device memory: memcpy may unalign). */
+  region.Number = MPU_REGION_NUMBER2;
+  region.Size = MPU_REGION_SIZE_32KB;
+  region.IsShareable = MPU_ACCESS_SHAREABLE;
+  region.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  region.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&region);
+  region.Number = MPU_REGION_NUMBER3;
+  region.BaseAddress = 0x30000000;
+#if APP_CACHE_SD_ARENA
+  region.Size = MPU_REGION_SIZE_256KB;
+  region.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+  region.IsCacheable = MPU_ACCESS_CACHEABLE;
+  region.IsBufferable = MPU_ACCESS_BUFFERABLE;
+#else
+  region.Size = MPU_REGION_SIZE_512KB;
+#endif
+  HAL_MPU_ConfigRegion(&region);
+  /* GPS is the only DMA client in D2. Reserve all SRAM3 for non-cacheable
+   * buffers, separate from the CPU-owned SD arena in SRAM1/2. */
+  region.Number = MPU_REGION_NUMBER4;
+  region.BaseAddress = 0x30040000;
+  region.Size = MPU_REGION_SIZE_32KB;
+  region.IsShareable = MPU_ACCESS_SHAREABLE;
+  region.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  region.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+  HAL_MPU_ConfigRegion(&region);
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+  SCB_EnableDCache();
+#endif
+}
 
 #ifdef OUTPUT_LOG
 int _write(int file, char *ptr, int len) {
@@ -171,7 +234,14 @@ int main(void)
   PeriphCommonClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  /* Instruction cache and the separately audited DMA-safe data policy. */
+#ifndef APP_ENABLE_ICACHE
+#define APP_ENABLE_ICACHE 1
+#endif
+#if APP_ENABLE_ICACHE
+  SCB_EnableICache();
+#endif
+  board_configure_data_cache();
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -260,7 +330,13 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  //HAL_Delay(1000);
 	  //app_printf("In tick.\n");
-	  // simple_radio_tick();
+#if APP_RADIO_ENABLE
+	  {
+	    const uint64_t perf_t0 = app_perf_begin();
+	    simple_radio_tick();
+	    app_perf_end(APP_PERF_RADIO, perf_t0);
+	  }
+#endif
 	  /*
 	  	  app_printf("flag: %i\r\n", flag);
 	  	  if (!flag) {
@@ -330,6 +406,7 @@ int main(void)
 	     *  entries instead of the newest one. Each frame is decoded via
 	     *  prc_intranet (see Application/FlightControl/prc_can.cpp); ids it
 	     *  doesn't recognize are silently ignored. */
+	    const uint64_t perf_can_t0 = app_perf_begin();
 	    while (HAL_FDCAN_GetRxFifoFillLevel(&hfdcan1, FDCAN_RX_FIFO0) > 0)
 	    {
 	      FDCAN_RxHeaderTypeDef rxHeader;
@@ -358,6 +435,7 @@ int main(void)
 	      app_printf("[CAN] WARNING: RX FIFO0 overflow, frame(s) rejected (count=%lu)\r\n",
 	             (unsigned long)rf0l_count);
 	    }
+	    app_perf_end(APP_PERF_CAN, perf_can_t0);
 
 	  }
 
@@ -856,7 +934,9 @@ static void MX_SPI4_Init(void)
   hspi4.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi4.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi4.Init.NSS = SPI_NSS_SOFT;
-  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  /* SPI4/5 share the IMUs and BMP390s. HSI=64 MHz; /8 gives
+   * 8 MHz, below the BMP390's 10 MHz and IMU's 24 MHz limits. */
+  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi4.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -869,7 +949,7 @@ static void MX_SPI4_Init(void)
   hspi4.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
   hspi4.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
   hspi4.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
-  hspi4.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
+  hspi4.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_ENABLE;
   hspi4.Init.IOSwap = SPI_IO_SWAP_DISABLE;
   if (HAL_SPI_Init(&hspi4) != HAL_OK)
   {
@@ -904,7 +984,7 @@ static void MX_SPI5_Init(void)
   hspi5.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi5.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi5.Init.NSS = SPI_NSS_SOFT;
-  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi5.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi5.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi5.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -917,7 +997,7 @@ static void MX_SPI5_Init(void)
   hspi5.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
   hspi5.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
   hspi5.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
-  hspi5.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
+  hspi5.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_ENABLE;
   hspi5.Init.IOSwap = SPI_IO_SWAP_DISABLE;
   if (HAL_SPI_Init(&hspi5) != HAL_OK)
   {
@@ -999,32 +1079,34 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, PYROS_2_Pin|PYROS_1_Pin|BMP_CS2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, PYROS_2_Pin|PYROS_1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BMP_CS2_GPIO_Port, BMP_CS2_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIO_RFM_TX_RST_GPIO_Port, GPIO_RFM_TX_RST_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SPI_RFM_TX_CS_GPIO_Port, SPI_RFM_TX_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SPI_RFM_TX_CS_GPIO_Port, SPI_RFM_TX_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIO_RFM_RX_RST_GPIO_Port, GPIO_RFM_RX_RST_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, SPI_RFM_RX_CS_Pin|BUZZER_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SPI_RFM_RX_CS_GPIO_Port, SPI_RFM_RX_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(BMP_CS1_GPIO_Port, BMP_CS1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BMP_CS1_GPIO_Port, BMP_CS1_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(BMP_CS4_GPIO_Port, BMP_CS4_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BMP_CS4_GPIO_Port, BMP_CS4_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, BMP_CS3_Pin|ICM_CS1_Pin|ICM_CS4_Pin|PYROS_4_Pin
-                          |PYROS_3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, PYROS_4_Pin|PYROS_3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, BMP_CS3_Pin|ICM_CS1_Pin|ICM_CS4_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, ICM_CS2_Pin|ICM_CS3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOD, ICM_CS2_Pin|ICM_CS3_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GNSS_RST_GPIO_Port, GNSS_RST_Pin, GPIO_PIN_SET);

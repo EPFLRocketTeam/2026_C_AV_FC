@@ -6,12 +6,13 @@
 #include "Application/Kalman/AppLayer/apogee_hub.hpp"
 #include "Application/Kalman/AppLayer/apogee_factory.hpp"
 #include "Application/Kalman/AppLayer/hw_config.hpp"
+#include "Application/Kalman/AppLayer/hw_calibration_data.hpp"
 #include "Application/Kalman/AppLayer/output_bridge.hpp"
 #include "Application/Kalman/kalman_health.hpp"
+#include "Application/Kalman/imu_group_alignment.hpp"
 #include "Application/Kalman/kalman_debug.hpp"
 #include "Application/Data/fsm.hpp"
 #include "Application/Data/data.hpp"
-#include "Application/FlightControl/threshold.h"
 #include "Application/FlightControl/liftoff_detector.hpp"
 #include "Application/Modules/baro_module.hpp"
 #include "Application/Modules/imu_modlue.hpp"
@@ -28,6 +29,9 @@ extern "C" {
 #include "Application/app_printf.h"
 #include "Drivers/InvIMU/InvIMU.hpp"
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
+// After ubx_gps_interface.h: FlightParams.hpp defines a FIXED macro that
+// collides with GpsCarrierPhaseStatus::FIXED.
+#include "Application/Config/config.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -59,6 +63,15 @@ constexpr size_t kMaxImuSamplesPerSourcePerRun = 32u;  // was 128; lower cap
 constexpr size_t kMaxImuSamplesPerEstimatorBatch = 16u;
 constexpr size_t kMaxBaroSamplesPerSourcePerRun = 8u;
 constexpr size_t kMaxGpsSamplesPerRun = 8u;
+
+// GNSS fusion policy. Default is log-only: fixes are still received, logged
+// (raw UBX via the GPS driver callback) and drained here, but never fed to
+// the estimator. GNSS fusion was never flight-tested, and apogee detection
+// does not need it. The logs allow replaying the flight offline with fusion
+// enabled. Build with -DKALMAN_GNSS_FUSION_ENABLE=1 to fuse GNSS.
+#ifndef KALMAN_GNSS_FUSION_ENABLE
+#define KALMAN_GNSS_FUSION_ENABLE 0
+#endif
 #if APP_IMU_PRIMARY_ODR_HZ > 0
 constexpr uint32_t kNominalImuDtUs =
 	static_cast<uint32_t>(1000000ULL / APP_IMU_PRIMARY_ODR_HZ);
@@ -66,99 +79,214 @@ constexpr uint32_t kNominalImuDtUs =
 constexpr uint32_t kNominalImuDtUs = 1000U;
 #endif
 
+std::atomic<bool> g_reset_requested{false};
+
+/// States in which a requested Kalman reset is honoured: on the ground, with
+/// enough time before launch for the preflight estimators to reconverge
+/// (tens of seconds to ~2 minutes of stationary data).
+bool kalmanResetAllowedIn(uint32_t raw_state) {
+	switch (raw_state) {
+	case flight_computer::State::INIT:
+	case flight_computer::State::CALIBRATION:
+	case flight_computer::State::FILLING:
+	case flight_computer::State::ARMED:
+	case flight_computer::State::ABORT_ON_GROUND:
+	case flight_computer::State::LANDED:
+		return true;
+	default:
+		return false;
+	}
+}
+
 std::atomic<uint32_t> g_last_main_loop_iteration_us{0u};
 std::atomic<uint32_t> g_max_main_loop_iteration_us{0u};
+std::atomic<uint32_t> g_reset_generation{0u};
 volatile uint64_t g_pending_baro_trigger_us = 0u;
 
 // ---------------------------------------------------------------
-// Liftoff acceleration-hold evaluator.
+// Liftoff acceleration-hold evaluator (FSM IGNITION -> BURN/ABORT).
 //
-// After the FSM enters IGNITION, this waits RAMP_UP_DURATION seconds
-// (motor spin-up), then evaluates whether the mean vertical
-// acceleration exceeds ACCEL_LIFTOFF for at least
-// ACCEL_LIFTOFF_DURATION_MS milliseconds.  The result is written
-// as a tri-state AccHoldStatus into the GOATStore eventStore so
-// that the FSM can decide between BURN and ABORT_ON_GROUND.
+// After the FSM enters IGNITION, this waits
+// Ignition.TotalTimeUntilHoldDownMs() (prechill + igniter + delay +
+// ramp-up + hold-down), then averages the thrust-axis acceleration over
+// Ignition.LiftoffAccelDurationMs and compares the mean to
+// Ignition.LiftoffAccelThreshold. The result is written as a tri-state
+// AccHoldStatus into the GOATStore eventStore so that the FSM can decide
+// between BURN and ABORT_ON_GROUND.
+//
+// Input is every raw IMU sample (independent of the estimator's
+// preprocessing) rotated by the fixed sensor-to-body mounting matrix,
+// body +X = nose. It is specific force, so it reads ~+9.81 m/s^2 on the
+// pad and the threshold applies to that value. Samples are selected by
+// their own timestamps; the decision uses the median of the per-IMU
+// means so that a single failed IMU cannot flip it.
 // ---------------------------------------------------------------
 struct LiftoffAccHold {
-	bool active = false;         ///< Evaluation in progress
-	uint64_t ignition_enter_us = 0;  ///< Timestamp when IGNITION was entered
+	static constexpr size_t kMaxSources = 4u;
+	/// Grace period after the window end for samples still in the rings.
+	static constexpr uint64_t kLateSampleMarginUs = 10000u;
 
-	// Accumulator for the evaluation window.
-	double accel_sum = 0.0;
-	uint32_t accel_count = 0;
-	uint64_t window_start_us = 0;  ///< Timestamp when the evaluation window began
-	bool in_window = false;        ///< True once ramp-up has elapsed
+	bool active = false;             ///< Evaluation in progress
+	uint64_t window_start_us = 0;    ///< Evaluation window [start, end)
+	uint64_t window_end_us = 0;
+	double accel_sum[kMaxSources] = {};
+	uint32_t accel_count[kMaxSources] = {};
 
 	void reset() {
 		active = false;
-		ignition_enter_us = 0;
-		accel_sum = 0.0;
-		accel_count = 0;
 		window_start_us = 0;
-		in_window = false;
+		window_end_us = 0;
+		for (size_t i = 0; i < kMaxSources; ++i) {
+			accel_sum[i] = 0.0;
+			accel_count[i] = 0;
+		}
 	}
 
 	void onIgnitionEnter(uint64_t now_us) {
 		reset();
+		const auto &ignition = config::get().Ignition;
+		const uint64_t hold_down_us = static_cast<uint64_t>(
+			ignition.TotalTimeUntilHoldDownMs() * 1000.0f);
+		const uint64_t window_us =
+			static_cast<uint64_t>(ignition.LiftoffAccelDurationMs) * 1000ULL;
 		active = true;
-		ignition_enter_us = now_us;
+		window_start_us = now_us + hold_down_us;
+		window_end_us = window_start_us + window_us;
 	}
 
-	/// Call every Kalman tick while in IGNITION.
-	/// @param vertical_accel_mps2  Kalman-filtered vertical acceleration
-	///                             (positive = upward / away from ground).
-	/// @param now_us               Current wall-clock time in microseconds.
+	/// Feed one raw IMU sample.
+	/// @param thrust_axis_accel_mps2  Body +X specific force (m/s^2).
+	void addSample(size_t source, float thrust_axis_accel_mps2,
+				   uint64_t sample_ts_us) {
+		if (!active || source >= kMaxSources ||
+			sample_ts_us < window_start_us || sample_ts_us >= window_end_us) {
+			return;
+		}
+		accel_sum[source] += static_cast<double>(thrust_axis_accel_mps2);
+		accel_count[source]++;
+	}
+
+	/// Call every Kalman tick while active.
 	/// @return ACC_HOLD_NOT_ELAPSED while still evaluating,
 	///         ACC_HOLD_DID_HOLD / ACC_HOLD_DID_NOT_HOLD when done.
-	flight_computer::AccHoldStatus evaluate(
-		double vertical_accel_mps2, uint64_t now_us)
-	{
-		using flight_computer::AccHoldStatus;
+	flight_computer::AccHoldStatus evaluate(uint64_t now_us) {
 		using flight_computer::ACC_HOLD_NOT_ELAPSED;
 		using flight_computer::ACC_HOLD_DID_HOLD;
 		using flight_computer::ACC_HOLD_DID_NOT_HOLD;
 
-		if (!active) {
+		if (!active || now_us < window_end_us + kLateSampleMarginUs) {
 			return ACC_HOLD_NOT_ELAPSED;
 		}
-
-		constexpr uint64_t ramp_up_us =
-			static_cast<uint64_t>(RAMP_UP_DURATION * 1000000.0f);
-		constexpr uint64_t window_us =
-			static_cast<uint64_t>(ACCEL_LIFTOFF_DURATION_MS * 1000.0f);
-
-		// Phase 1: wait for motor ramp-up to complete.
-		if (!in_window) {
-			if ((now_us - ignition_enter_us) < ramp_up_us) {
-				return ACC_HOLD_NOT_ELAPSED;
-			}
-			in_window = true;
-			window_start_us = now_us;
-			accel_sum = 0.0;
-			accel_count = 0;
-		}
-
-		// Phase 2: accumulate vertical acceleration samples.
-		accel_sum += vertical_accel_mps2;
-		accel_count++;
-
-		// Phase 3: has the evaluation window elapsed?
-		if ((now_us - window_start_us) < window_us) {
-			return ACC_HOLD_NOT_ELAPSED;
-		}
-
-		// Window complete — compute mean and decide.
 		active = false;
-		if (accel_count == 0) {
+
+		double means[kMaxSources] = {};
+		size_t n = 0;
+		for (size_t i = 0; i < kMaxSources; ++i) {
+			if (accel_count[i] > 0) {
+				means[n++] = accel_sum[i] / static_cast<double>(accel_count[i]);
+			}
+		}
+		if (n == 0) {
+			app_printf("[ACC-HOLD] No IMU samples in window -> DID_NOT_HOLD\r\n");
 			return ACC_HOLD_DID_NOT_HOLD;
 		}
+		std::sort(means, means + n);
+		const double median = (n % 2u == 1u)
+			? means[n / 2u]
+			: 0.5 * (means[n / 2u - 1u] + means[n / 2u]);
+		const double threshold =
+			static_cast<double>(config::get().Ignition.LiftoffAccelThreshold);
+		const bool held = median > threshold;
+		app_printf("[ACC-HOLD] median=%.2f m/s2 (n_imu=%u) threshold=%.2f -> %s\r\n",
+		       median, static_cast<unsigned>(n), threshold,
+		       held ? "DID_HOLD" : "DID_NOT_HOLD");
+		return held ? ACC_HOLD_DID_HOLD : ACC_HOLD_DID_NOT_HOLD;
+	}
+};
 
-		const double mean_accel = accel_sum / static_cast<double>(accel_count);
-		if (mean_accel > static_cast<double>(ACCEL_LIFTOFF)) {
-			return ACC_HOLD_DID_HOLD;
+// ---------------------------------------------------------------
+// Touchdown detector (FSM DESCENT -> LANDED).
+//
+// Baro-only, so it depends neither on GNSS nor on the navigation filters:
+// the least-squares slope of the fused barometer altitude over the last
+// kWindowUs must stay below kMaxSpeedMps (FSM spec SPEED_ZERO) for
+// kConfirmUs. Under parachute the descent rate is several m/s, so this only
+// holds on the ground (or if the rocket hangs somewhere). Runs in DESCENT
+// and LANDED. The flag is live, not latched; the FSM additionally requires
+// Descent.MaxDurationMs.
+// ---------------------------------------------------------------
+struct TouchdownDetector {
+	static constexpr size_t kCapacity = 256u;
+	static constexpr uint64_t kWindowUs = 2500000u;
+	static constexpr uint64_t kConfirmUs = 3000000u;
+	static constexpr uint64_t kStaleUs = 2000000u;
+	static constexpr size_t kMinSamples = 10u;
+	static constexpr double kMaxSpeedMps = 0.5;
+
+	uint64_t ts[kCapacity] = {};
+	float alt[kCapacity] = {};
+	size_t head = 0;   ///< Oldest sample
+	size_t count = 0;
+	uint64_t still_since_us = 0;
+	bool detected = false;
+
+	void reset() {
+		head = 0;
+		count = 0;
+		still_since_us = 0;
+		detected = false;
+	}
+
+	void addSample(uint64_t sample_ts_us, float altitude_m) {
+		if (count > 0 && sample_ts_us <= ts[(head + count - 1u) % kCapacity]) {
+			return;  // Same fused sample as last tick
 		}
-		return ACC_HOLD_DID_NOT_HOLD;
+		if (count == kCapacity) {
+			head = (head + 1u) % kCapacity;
+			--count;
+		}
+		ts[(head + count) % kCapacity] = sample_ts_us;
+		alt[(head + count) % kCapacity] = altitude_m;
+		++count;
+		while (count > 0 && ts[head] + kWindowUs < sample_ts_us) {
+			head = (head + 1u) % kCapacity;
+			--count;
+		}
+	}
+
+	void update(uint64_t now_us) {
+		const uint64_t newest = count ? ts[(head + count - 1u) % kCapacity] : 0u;
+		if (count < kMinSamples || now_us > newest + kStaleUs ||
+			newest - ts[head] < (kWindowUs * 8u) / 10u) {
+			still_since_us = 0;
+			detected = false;
+			return;
+		}
+		double mt = 0.0, ma = 0.0;
+		for (size_t i = 0; i < count; ++i) {
+			const size_t k = (head + i) % kCapacity;
+			mt += static_cast<double>(ts[k] - ts[head]) * 1e-6;
+			ma += static_cast<double>(alt[k]);
+		}
+		mt /= static_cast<double>(count);
+		ma /= static_cast<double>(count);
+		double cov = 0.0, var = 0.0;
+		for (size_t i = 0; i < count; ++i) {
+			const size_t k = (head + i) % kCapacity;
+			const double dt = static_cast<double>(ts[k] - ts[head]) * 1e-6 - mt;
+			cov += dt * (static_cast<double>(alt[k]) - ma);
+			var += dt * dt;
+		}
+		const double slope_mps = (var > 0.0) ? cov / var : 0.0;
+		if (std::fabs(slope_mps) < kMaxSpeedMps) {
+			if (still_since_us == 0) {
+				still_since_us = newest;
+			}
+			detected = (newest - still_since_us) >= kConfirmUs;
+		} else {
+			still_since_us = 0;
+			detected = false;
+		}
 	}
 };
 
@@ -178,6 +306,9 @@ struct KalmanRuntime {
 	static constexpr size_t kActiveBaroSources = 4u;
 	LiftoffAccHold acc_hold;  ///< Liftoff acceleration-hold evaluator
 	LiftoffDetector liftoff_detector;  ///< IMU dual-window liftoff detector
+	uint32_t imu_liftoff_detect_ms = 0;  ///< Timestamp of the detecting sample
+	TouchdownDetector touchdown_detector;  ///< Baro stillness in DESCENT
+	bool touchdown_published = false;
 
 #if KALMAN_DEBUG_PRINT
 	kalman_debug::RawSensorSnapshot debug_raw_sensor_{};
@@ -219,11 +350,12 @@ struct KalmanRuntime {
 		       ESKF_BARO_ODR_HZ);
 		app_printf("[KAL-CFG] activeBaroSources=%lu  "
 		       "FORCE_FLIGHT=%d  PRINT_DECIM=%d  "
-		       "FORCE_FLIGHT_DELAY_MS=%u\r\n",
+		       "FORCE_FLIGHT_DELAY_MS=%u  GNSS_FUSION=%d\r\n",
 		       static_cast<unsigned long>(kActiveBaroSources),
 		       KALMAN_DEBUG_FORCE_FLIGHT,
 		       KALMAN_DEBUG_PRINT_DECIMATION,
-		       (unsigned)KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS);
+		       (unsigned)KALMAN_DEBUG_FORCE_FLIGHT_DELAY_MS,
+		       KALMAN_GNSS_FUSION_ENABLE);
 #ifdef COMPILE_OPT_LEVEL
 		app_printf("[KAL-CFG] Optimization: -O%d", COMPILE_OPT_LEVEL);
 #elif defined(__OPTIMIZE__)
@@ -238,6 +370,35 @@ struct KalmanRuntime {
 		       static_cast<unsigned long>(app_timebase_now_ms()),
 		       SystemCoreClock / 1000000UL);
 #endif
+	}
+
+	/// Reset every piece of Kalman runtime state that describes a flight
+	/// sequence: estimator (incl. preflight tares, rail/flight shadows,
+	/// ground references, turn-on bias, GNSS anchor, pending IMU groups),
+	/// apogee hub, both liftoff detectors, IMU timestamp tracking and
+	/// health counters. The FSM state seen by the runtime is unchanged.
+	void resetRuntime() {
+		estimator.reset();
+		estimator.configureReplaySensorCounts(4u, kActiveBaroSources);
+		active_imu_sources = 4u;
+		apogee_hub.reset();
+		for (size_t i = 0; i < 4u; ++i) {
+			last_imu_ts_us[i] = 0;
+			has_prev_imu_ts[i] = false;
+		}
+		liftoff_ms = 0;
+		apogee_detected = false;
+		last_body_accel_mps2 = {};
+		acc_hold.reset();
+		liftoff_detector.reset();
+		imu_liftoff_detect_ms = 0;
+		touchdown_detector.reset();
+		touchdown_published = false;
+		KalmanHealthStore::instance().reset();
+		health = KalmanHealthSnapshot{};
+		g_last_main_loop_iteration_us.store(0u, std::memory_order_relaxed);
+		g_max_main_loop_iteration_us.store(0u, std::memory_order_relaxed);
+		g_reset_generation.fetch_add(1u, std::memory_order_relaxed);
 	}
 
 	void onStateChange(uint32_t raw_state) {
@@ -255,34 +416,55 @@ struct KalmanRuntime {
 		last_state = state;
 
 		if (state == flight_computer::State::INIT) {
-			estimator.reset();
-			estimator.configureReplaySensorCounts(4u, kActiveBaroSources);
-			active_imu_sources = 4u;
-			apogee_hub.reset();
-			last_imu_ts_us[0] = 0;
-			last_imu_ts_us[1] = 0;
-			last_imu_ts_us[2] = 0;
-			last_imu_ts_us[3] = 0;
-			has_prev_imu_ts[0] = false;
-			has_prev_imu_ts[1] = false;
-			has_prev_imu_ts[2] = false;
-			has_prev_imu_ts[3] = false;
-			liftoff_ms = 0;
-			apogee_detected = false;
-			last_body_accel_mps2 = {};
-			acc_hold.reset();
-			liftoff_detector.reset();
-			KalmanHealthStore::instance().reset();
+			resetRuntime();
 		}
 
 		// Start liftoff acceleration-hold evaluation on IGNITION entry.
 		if (state == flight_computer::State::IGNITION) {
 			acc_hold.onIgnitionEnter(app_timebase_now_us());
+
+			// A detection latched before IGNITION (e.g. the rocket was
+			// bumped during FILLING) is not a launch. Discard it so only
+			// detections after ignition can start the flight estimator.
+			if (liftoff_detector.isDetected()) {
+				app_printf("[LIFTOFF] Discarding pre-ignition IMU detection\r\n");
+				liftoff_detector.reset();
+				imu_liftoff_detect_ms = 0;
+				auto &goat = flight_computer::GOATStore::get_instance();
+				auto event = goat.eventStore.get();
+				event.imu_liftoff_detected = false;
+				goat.eventStore.set(event);
+			}
 		}
+	}
+
+	/// Kalman-side liftoff epoch. While the FSM is in IGNITION, the
+	/// dual-window detector fires within tens of ms of motion onset, while
+	/// the FSM may only declare BURN later (cable or end of the
+	/// acceleration-hold window). The estimator freezes its preflight state
+	/// at the liftoff epoch, so a late epoch degrades it; use the detection
+	/// time instead. The FSM remains the authority on flight states, and its
+	/// later BURN is then ignored by onLiftoff().
+	void selfLatchLiftoffIfDetected() {
+		if (liftoff_ms != 0 ||
+			last_state != flight_computer::State::IGNITION ||
+			!liftoff_detector.isDetected() || imu_liftoff_detect_ms == 0) {
+			return;
+		}
+		app_printf("[LIFTOFF] Kalman liftoff epoch from IMU detection: t=%lu ms\r\n",
+		       static_cast<unsigned long>(imu_liftoff_detect_ms));
+		onLiftoff(imu_liftoff_detect_ms);
 	}
 
 	void onLiftoff(uint32_t liftoff_ms) {
 		initIfNeeded();
+		if (this->liftoff_ms != 0) {
+			// Already in flight from an earlier (IMU) epoch: keep it.
+			app_printf("[LIFTOFF] FSM liftoff at t=%lu ms ignored, epoch already t=%lu ms\r\n",
+			       static_cast<unsigned long>(liftoff_ms),
+			       static_cast<unsigned long>(this->liftoff_ms));
+			return;
+		}
 		this->liftoff_ms = liftoff_ms;
 		estimator.onLiftoff(liftoff_ms);
 		apogee_hub.arm(liftoff_ms);
@@ -491,18 +673,39 @@ struct KalmanRuntime {
 						slice[i].accel_y,
 						slice[i].accel_z,
 						gate);
+					if (liftoff_detector.isDetected()) {
+						imu_liftoff_detect_ms = static_cast<uint32_t>(
+							slice[i].timestamp_us / 1000ULL);
+						break;
+					}
 				}
 				if (!was_armed && liftoff_detector.isArmed()) {
 					app_printf("[LIFTOFF] Detector ARMED (pad stable for ~2s)\r\n");
 				}
 				if (liftoff_detector.isDetected()) {
-					app_printf("[LIFTOFF] IMU liftoff DETECTED!\r\n");
+					app_printf("[LIFTOFF] IMU liftoff DETECTED! t=%lu ms\r\n",
+					       static_cast<unsigned long>(imu_liftoff_detect_ms));
 				}
 			}
 
-			last_body_accel_mps2.x = slice[slice_count - 1u].accel_x;
-			last_body_accel_mps2.y = slice[slice_count - 1u].accel_y;
-			last_body_accel_mps2.z = slice[slice_count - 1u].accel_z;
+			// Raw samples rotated by the fixed mounting matrix only (no
+			// estimator preprocessing), body +X = nose.
+			const eskf_scalar (*to_body)[3] = eskf::getImuSensorToBody(source_index);
+			flight_computer::Vector3 body_accel{};
+			for (size_t i = 0; i < slice_count; ++i) {
+				const float s[3] = {slice[i].accel_x, slice[i].accel_y, slice[i].accel_z};
+				float b[3];
+				for (int r = 0; r < 3; ++r) {
+					b[r] = static_cast<float>(to_body[r][0] * s[0] +
+					                          to_body[r][1] * s[1] +
+					                          to_body[r][2] * s[2]);
+				}
+				acc_hold.addSample(source_index, b[0], slice[i].timestamp_us);
+				body_accel.x = b[0];
+				body_accel.y = b[1];
+				body_accel.z = b[2];
+			}
+			last_body_accel_mps2 = body_accel;
 			health.imu_samples_consumed += static_cast<uint32_t>(slice_count);
 
 #if KALMAN_DEBUG_PRINT
@@ -557,18 +760,14 @@ struct KalmanRuntime {
 //			osMutexRelease(navigationDataMutexHandle);
 //		}
 
-		// --- Liftoff acceleration-hold evaluation (DONE) ---
-		// While in IGNITION, feed the evaluator with the latest body-X
-		// acceleration (thrust axis ≈ vertical on the pad).  When the
-		// evaluation window completes, write the result to eventStore.
+		// --- Liftoff acceleration-hold evaluation ---
+		// Samples are fed in ingestImuChunk(). When the evaluation window
+		// completes, write the result to eventStore.
 		flight_computer::AccHoldStatus acc_hold_result =
 			flight_computer::ACC_HOLD_NOT_ELAPSED;
 		bool acc_hold_terminal = false;
 		if (acc_hold.active) {
-			// body_accel_mps2.x is the thrust-axis (body-X) accel from the
-			// latest IMU sample — positive along thrust direction.
-			const double vertical_accel = last_body_accel_mps2.x;
-			acc_hold_result = acc_hold.evaluate(vertical_accel, now_us);
+			acc_hold_result = acc_hold.evaluate(now_us);
 			acc_hold_terminal =
 				(acc_hold_result != flight_computer::ACC_HOLD_NOT_ELAPSED);
 		}
@@ -610,6 +809,28 @@ struct KalmanRuntime {
 		// and transitions to DESCENT. The robustness checks listed above are
 		// NOT yet implemented there — this is a flight-safety TODO.
 
+		// ── Touchdown detector → EventStore (live flag, DESCENT/LANDED) ──
+		if (last_state == flight_computer::State::DESCENT ||
+			last_state == flight_computer::State::LANDED) {
+			float baro_alt_m = 0.0f;
+			uint64_t baro_ts_us = 0u;
+			if (estimator.latestBaroAltitude(baro_alt_m, baro_ts_us)) {
+				touchdown_detector.addSample(baro_ts_us, baro_alt_m);
+			}
+			touchdown_detector.update(now_us);
+		} else {
+			touchdown_detector.reset();
+		}
+		if (touchdown_detector.detected != touchdown_published) {
+			touchdown_published = touchdown_detector.detected;
+			auto event = goat.eventStore.get();
+			event.touchdown_detected = touchdown_published;
+			goat.eventStore.set(event);
+			app_printf("[TOUCHDOWN] %s at t=%lu ms\r\n",
+			       touchdown_published ? "Detected" : "Cleared",
+			       static_cast<unsigned long>(now_us / 1000ULL));
+		}
+
 		// ── IMU liftoff detector → EventStore ────────────────────────
 		const bool imu_liftoff = liftoff_detector.isDetected();
 
@@ -643,10 +864,12 @@ struct KalmanRuntime {
 		health.catchup_budget_yields = estimator.rewindStats().catchup_budget_yields;
 		health.total_events_processed = static_cast<uint32_t>(estimator.totalCatchupEventsProcessed());
 		health.baro_corrections = estimator.rewindStats().baro_corrections;
-		// Compute ESKF lag: wall clock minus ESKF internal timestamp
+		// Ground history deliberately hibernates; its stationary ESKF timestamp
+		// is not a processing backlog. Report lag only while replay is active.
 		const uint64_t now = app_timebase_now_us();
 		const uint64_t kal_ts = estimator.kalmanTimestamp();
-		health.kalman_behind_us = (now > kal_ts) ? static_cast<uint32_t>(now - kal_ts) : 0;
+		health.kalman_behind_us = (estimator.inFlight() && now > kal_ts)
+		    ? static_cast<uint32_t>(now - kal_ts) : 0;
 	}
 
 	void ingestAidingFromStore() {
@@ -724,12 +947,14 @@ struct KalmanRuntime {
 		for (size_t i = 0; i < fix_count; ++i) {
 			const app::sensors::gnss::GnssSample sample =
 				convertGpsFixSample(staged_fixes[i], fallback_timestamp_us);
+#if KALMAN_GNSS_FUSION_ENABLE
 			// Forward ALL fixes to the estimator (including invalid ones) so
 			// the estimator's own stale/frozen detection and fix-drop
 			// diagnostics can observe the full GNSS health picture.
 			// The estimator has its own usability gate:
 			//   (sample.valid && sample.fix_type >= 2).
 			estimator.processGpsSample(sample);
+#endif
 			if (sample.valid) {
 				health.gps_updates += 1;
 			}
@@ -756,12 +981,24 @@ int kalman_loop() {
 	const uint32_t current_state = kalman_current_state();
 	kalman.onStateChange(current_state);
 
+	if (g_reset_requested.exchange(false)) {
+		if (kalmanResetAllowedIn(current_state)) {
+			kalman.resetRuntime();
+			kalman_lifecycle_rearm();
+			app_printf("[KAL] Reset done (state=%lu)\r\n",
+			       static_cast<unsigned long>(current_state));
+		} else {
+			app_printf("[KAL] Reset refused (state=%lu)\r\n",
+			       static_cast<unsigned long>(current_state));
+		}
+	}
+
 	AppImuRingBuffer *buffers[] = {&imuData1, &imuData2, &imuData3, &imuData4};
 
 	bool source_healthy[4] = {false, false, false, false};
 	size_t healthy_source_count = 0;
 	int drained = 0;
-	int align_discarded = 0;
+	uint32_t align_discarded = 0;
 	for (size_t i = 0; i < 4; ++i) {
 		source_healthy[i] =
 			(app_imu_sensor_healthy(static_cast<uint8_t>(i)) != 0U);
@@ -779,72 +1016,14 @@ int kalman_loop() {
 	const uint64_t t_imu_drain_end = app_timebase_now_us();
 #endif
 
-	/* ── Aligned round-robin drain ──────────────────────────────────
-	 *
-	 *  Problem: ring buffers can be deeply unbalanced (overflow discards
-	 *  oldest samples unevenly). Source 1 may have data 17ms ahead of
-	 *  source 0, breaking the 500μs sync tolerance in processImuBatch.
-	 *
-	 *  Solution:
-	 *   1. Align all rings to the NEWEST oldest-sample within 200μs
-	 *      (well inside the 500μs sync tolerance in processImuBatch).
-	 *   2. Round-robin drain 1 sample per source per iteration.
-	 *   3. Stop when ANY healthy ring empties (prevents partial groups).
-	 *      Leftover samples in longer rings survive to next tick.
-	 * ─────────────────────────────────────────────────────────────── */
-
-	// Step 1: Find the latest front timestamp across all healthy rings.
-	uint64_t align_ts = 0;
-	for (size_t i = 0; i < 4; ++i) {
-		if (!source_healthy[i]) continue;
-		const IMUData *front = buffers[i]->get(0);
-		if (front && front->timestamp_us > align_ts) {
-			align_ts = front->timestamp_us;
-		}
-	}
-
-	// Step 2: Discard old samples to align all rings.
-	//         The inter-IMU timestamp offset from sequential SPI reads
-	//         can be 100-170μs (varies by boot). Since this overlaps the
-	//         156μs FSYNC period, a threshold < period cannot reliably
-	//         distinguish same-edge from adjacent-edge. Use 200μs:
-	//         empirically gives staleSkip=0, soloFlush=0 in steady state.
-	static constexpr uint64_t kDrainAlignToleranceUs = 200;
-	if (align_ts > 0) {
-		const uint64_t align_floor = (align_ts > kDrainAlignToleranceUs) ? (align_ts - kDrainAlignToleranceUs) : 0u;
-		for (size_t i = 0; i < 4; ++i) {
-			if (!source_healthy[i]) continue;
-			IMUData discard;
-			while (buffers[i]->size() > 0) {
-				const IMUData *front = buffers[i]->get(0);
-				if (!front || front->timestamp_us >= align_floor) break;
-				buffers[i]->pop(discard);
-				drained++;
-				align_discarded++;
-			}
-		}
-		// If alignment discarded data, stale pending in the estimator
-		// might reference old timestamps. Reset to prevent poisoning.
-		if (align_discarded > 0) {
-			kalman.estimator.resetPendingImuGroup();
-		}
-	}
-
-	// Step 3: Round-robin drain — stop when ANY healthy ring empties.
-	// TODO: guard added because healthy_source_count can be 0 on the first
-	// tick(s) after boot (no IMU has produced a frame yet), which spun this
-	// loop forever with the old unguarded for(;;). Not present upstream on
-	// fix/fc-flight-test-plume since that branch never hit the race.
-
-	//for (;;) {
+	// Align every group, not just the first front in this loop. Internal
+	// FIFO loss gaps must never feed the estimator's solo-source fallback.
 	while (healthy_source_count > 0) {
-		// Check all healthy sources still have data.
-		bool all_have_data = true;
-		for (size_t i = 0; i < 4; ++i) {
-			if (!source_healthy[i]) continue;
-			if (buffers[i]->size() == 0) { all_have_data = false; break; }
-		}
-		if (!all_have_data) break;
+		const uint32_t before = align_discarded;
+		const bool ready = app::alignImuFronts(buffers, source_healthy, align_discarded);
+		drained += align_discarded - before;
+		if (align_discarded != before) kalman.estimator.resetPendingImuGroup();
+		if (!ready) break;
 
 		// Pop one sample from each healthy source.
 		for (size_t i = 0; i < 4; ++i) {
@@ -863,6 +1042,7 @@ int kalman_loop() {
 	// Liftoff must be consumed before aiding ingestion so that GPS
 	// samples arriving in the same tick see in_flight_==true and
 	// can anchor the NED origin immediately, matching ktp-soft ordering.
+	kalman.selfLatchLiftoffIfDetected();
 	uint32_t liftoff_ms = 0;
 	if (kalman_take_pending_liftoff(&liftoff_ms) != 0U) {
 		kalman.onLiftoff(liftoff_ms);
@@ -982,6 +1162,14 @@ int kalman_loop() {
 	return drained;
 }
 
+uint8_t kalman_request_reset(void) {
+	if (!kalmanResetAllowedIn(kalman_current_state())) {
+		return 0u;
+	}
+	g_reset_requested.store(true);
+	return 1u;
+}
+
 void kalman_note_main_loop_iteration_us(uint32_t iteration_us) {
 	g_last_main_loop_iteration_us.store(iteration_us, std::memory_order_relaxed);
 
@@ -1012,4 +1200,8 @@ void kalman_get_group_stats(uint32_t* fire_count, uint32_t* solo_flush,
 	*fire_count  = rt.estimator.imu_group_fire_count_;
 	*solo_flush  = rt.estimator.imu_solo_flush_count_;
 	*stale_flush = rt.estimator.imu_stale_flush_count_;
+}
+
+uint32_t kalman_reset_generation(void) {
+	return g_reset_generation.load(std::memory_order_relaxed);
 }

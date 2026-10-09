@@ -330,6 +330,36 @@ public:
   GpsStatus getPvt(GpsBasicFixData *pvt_data, uint32_t timeout_ms);
 
   /**
+   * @brief Receive through a circular DMA buffer instead of polling the UART
+   *
+   * Polling the UART from the super loop reads at most one byte per call
+   * (no RX FIFO): at 115200 baud a byte arrives every 87 us, so most of each
+   * UBX burst is lost to overrun. With DMA running, getPvt(.., 0) parses
+   * every byte received since the previous call.
+   *
+   * The UART's hdmarx must already be linked to a DMA stream set up for
+   * this UART's RX request in circular mode, and @p buffer must be
+   * DMA-accessible (not DTCM). Call after init().
+   *
+   * @param[in] buffer Receive ring, owned by the caller
+   * @param[in] size   Ring size in bytes
+   * @return GpsStatus::OK if the DMA reception was started
+   */
+  GpsStatus startDmaRx(uint8_t *buffer, uint16_t size);
+
+  /// Receive counters since the last call (DMA path only).
+  struct RxStats {
+    uint32_t bytes = 0;     // bytes taken from the DMA ring
+    uint32_t pvt = 0;       // complete NAV-PVT messages
+    uint32_t overruns = 0;  // UART overrun flags cleared
+  };
+  RxStats takeRxStats() {
+    const RxStats s = rx_stats_;
+    rx_stats_ = RxStats{};
+    return s;
+  }
+
+  /**
    * @brief Send a Stop command to the GPS
    * @return GpsStatus::OK on success, error code otherwise
    */
@@ -373,6 +403,12 @@ private:
   UART_HandleTypeDef *uart_handle_;
   uint16_t rate_ms_;
   RawUbxCallback raw_ubx_callback_ = nullptr;
+
+  // Circular DMA reception (startDmaRx); dma_buf_ == nullptr means polling.
+  uint8_t *dma_buf_ = nullptr;
+  uint16_t dma_size_ = 0;
+  uint16_t dma_tail_ = 0;
+  RxStats rx_stats_{};
 
   // Helper methods
   void calcChecksum(const uint8_t *buffer, uint16_t size, uint8_t *ck_a,

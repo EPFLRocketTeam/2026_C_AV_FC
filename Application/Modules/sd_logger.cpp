@@ -1,4 +1,5 @@
 #include "sd_logger.hpp"
+#include "Application/Modules/sd_imu_pack.hpp"
 #include <string.h>
 
 extern "C" {
@@ -46,6 +47,10 @@ void SdLogger::writeRecord(SdLogRecordType type, const void* payload, uint16_t p
     } else {
         bytes_written_ += sizeof(hdr) + payload_len;
     }
+}
+
+void SdLogger::setLogRate (bool high_rate_enabled) {
+    high_rate_enabled_ = high_rate_enabled;
 }
 
 // ============================================================
@@ -128,7 +133,18 @@ void SdLogger::logFlightShadow(const eskf::FlightShadowSnapshot& snapshot) {
     writeRecord(SD_LOG_FLIGHT_SHADOW, &snapshot, sizeof(snapshot));
 }
 
+// The SD card can stall for ~170 ms (internal garbage collection). At full
+// raw-IMU rate that fills the arena, and every record is then lost, including
+// rare critical ones (FSM transitions, liftoff snapshot). The high-rate streams
+// therefore stop at 3/4 occupancy, keeping the last quarter for everything else.
+bool SdLogger::highRateHeadroomLeft() const {
+    const size_t total = sd_->arena_total_bytes();
+    return sd_->arena_used_bytes() < total - total / 4;
+}
+
 void SdLogger::logImuPipeline(const eskf::ImuPipelineSnapshot& snapshot) {
+    if (!high_rate_enabled_) return;
+    if (sd_ == nullptr || !highRateHeadroomLeft()) return;
     writeRecord(SD_LOG_IMU_PIPELINE, &snapshot, sizeof(snapshot));
 }
 
@@ -142,6 +158,39 @@ void SdLogger::logImuDynamics(const eskf::ImuDynamicsSnapshot& snapshot) {
 
 void SdLogger::logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUData* samples, size_t count) {
     if (sd_ == nullptr || count == 0) return;
+    if (!high_rate_enabled_) return;
+    if (!highRateHeadroomLeft()) {
+        imu_batch_fail_++;  // shed: counted as a lost batch
+        return;
+    }
+
+    // Compact record first (~17 B/sample instead of 40); the full IMUData
+    // record below is the fallback for anything that cannot be packed exactly.
+    if (count <= kPackedBatchMaxSamples) {
+        uint8_t packed[sizeof(SdLogImuPackedBatchHeader) +
+                       kPackedBatchMaxSamples * sdlog::kImuPackedSampleBytes];
+        const size_t packed_len = sdlog::packImuBatch(
+            static_cast<uint8_t>(sensor_index), samples, count, packed);
+        if (packed_len > 0) {
+            SdLogHeader hdr;
+            hdr.magic        = SD_LOG_MAGIC;
+            hdr.record_type  = static_cast<uint8_t>(SD_LOG_IMU_RAW_PACKED);
+            hdr.length       = static_cast<uint16_t>(packed_len);
+            hdr.timestamp_us = (uint32_t)app_timebase_now_us();
+            sd_->beginTransaction();
+            sd_->write(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr));
+            sd_->write(packed, packed_len);
+            sd_->endTransaction();
+            imu_batch_count_++;
+            if (sd_->lastTransactionFailed()) {
+                imu_batch_fail_++;
+            } else {
+                imu_bytes_ok_ += sizeof(hdr) + packed_len;
+            }
+            return;
+        }
+    }
+    imu_batch_unpacked_++;
 
     SdLogImuBatchHeader batch_hdr;
     batch_hdr.sensor_index = static_cast<uint8_t>(sensor_index);
