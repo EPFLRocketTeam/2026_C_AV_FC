@@ -16,6 +16,7 @@ void simple_radio_print_stats(void);
 void app_super_loop_setup(void);
 void app_super_loop_iterate(void);
 
+uint8_t app_get_current_baro_count (void);
 void app_open_parachute ();
 void app_set_pyro_status (int pyro_id, bool enabled);
 uint64_t app_get_remaining_disk_size (void);
