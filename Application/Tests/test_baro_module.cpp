@@ -36,7 +36,7 @@ protected:
 
   BMP390_Interface *drivers[4] = {&b0, &b1, &b2, &b3};
   RingBuffer<BaroData, 100> *buffers[4] = {&rb0, &rb1, &rb2, &rb3};
-  BaroModule module{drivers, buffers};
+  BaroModule<4> module{drivers, buffers};
 
   void SetUp() override {
     stm32sim_ticks_init();
@@ -62,6 +62,26 @@ TEST_F(BaroModuleTest, InitConfiguresAllBarometers) {
   EXPECT_EQ(b0.last_osr_t, OsrTemp::x1);
   EXPECT_EQ(b0.last_filter, IIRFilter::OFF);
   EXPECT_EQ(b3.last_osr_p, OsrPressure::x4);
+}
+
+TEST_F(BaroModuleTest, RejectedTriggersDoNotCreatePendingConversions) {
+  ASSERT_TRUE(module.init());
+  b0.trigger_returns = b1.trigger_returns = false;
+  b2.trigger_returns = b3.trigger_returns = false;
+  module.update(1);
+  EXPECT_EQ(g_last_trigger_us, 0u);
+  EXPECT_EQ(b0.call_getFrame, 0);
+  EXPECT_EQ(module.sensorDropCount(0), 0u);
+
+  b0.trigger_returns = true;
+  stm32sim_ticks_advance(1);
+  module.update(2);
+  EXPECT_GT(g_last_trigger_us, 0u);
+  stm32sim_ticks_advance(1);
+  module.update(3);
+  EXPECT_EQ(module.takeProducedCount(), 1u);
+  EXPECT_EQ(rb0.size(), 1u);
+  EXPECT_EQ(b1.call_getFrame, 0);
 }
 
 TEST_F(BaroModuleTest, CommandModeTriggersThenPublishesAllFourSamples) {

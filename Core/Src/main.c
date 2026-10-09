@@ -874,7 +874,9 @@ static void MX_SPI4_Init(void)
   hspi4.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi4.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi4.Init.NSS = SPI_NSS_SOFT;
-  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  /* SPI4/5 share the IMUs and BMP390s. HSI=64 MHz; /8 gives
+   * 8 MHz, below the BMP390's 10 MHz and IMU's 24 MHz limits. */
+  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi4.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -887,7 +889,7 @@ static void MX_SPI4_Init(void)
   hspi4.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
   hspi4.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
   hspi4.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
-  hspi4.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
+  hspi4.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_ENABLE;
   hspi4.Init.IOSwap = SPI_IO_SWAP_DISABLE;
   if (HAL_SPI_Init(&hspi4) != HAL_OK)
   {
@@ -922,7 +924,7 @@ static void MX_SPI5_Init(void)
   hspi5.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi5.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi5.Init.NSS = SPI_NSS_SOFT;
-  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi5.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi5.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi5.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -935,7 +937,7 @@ static void MX_SPI5_Init(void)
   hspi5.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
   hspi5.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
   hspi5.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
-  hspi5.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
+  hspi5.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_ENABLE;
   hspi5.Init.IOSwap = SPI_IO_SWAP_DISABLE;
   if (HAL_SPI_Init(&hspi5) != HAL_OK)
   {
@@ -1017,32 +1019,34 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, PYROS_2_Pin|PYROS_1_Pin|BMP_CS2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, PYROS_2_Pin|PYROS_1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BMP_CS2_GPIO_Port, BMP_CS2_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIO_RFM_TX_RST_GPIO_Port, GPIO_RFM_TX_RST_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SPI_RFM_TX_CS_GPIO_Port, SPI_RFM_TX_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SPI_RFM_TX_CS_GPIO_Port, SPI_RFM_TX_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIO_RFM_RX_RST_GPIO_Port, GPIO_RFM_RX_RST_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, SPI_RFM_RX_CS_Pin|BUZZER_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SPI_RFM_RX_CS_GPIO_Port, SPI_RFM_RX_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(BMP_CS1_GPIO_Port, BMP_CS1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BMP_CS1_GPIO_Port, BMP_CS1_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(BMP_CS4_GPIO_Port, BMP_CS4_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BMP_CS4_GPIO_Port, BMP_CS4_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, BMP_CS3_Pin|ICM_CS1_Pin|ICM_CS4_Pin|PYROS_4_Pin
-                          |PYROS_3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, PYROS_4_Pin|PYROS_3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, BMP_CS3_Pin|ICM_CS1_Pin|ICM_CS4_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, ICM_CS2_Pin|ICM_CS3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOD, ICM_CS2_Pin|ICM_CS3_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GNSS_RST_GPIO_Port, GNSS_RST_Pin, GPIO_PIN_SET);

@@ -309,6 +309,23 @@ void InvIMU_STM32::configure(AccelRange ar, GyroRange gr, ODR odr) {
     //   bits[1:0] = accel_mode (LN=3), bits[3:2] = gyro_mode (LN=3) -> 0x0F.
     spi_write(0x10, 0x0F);
     HAL_Delay(1);  // let MCLK stabilise before any MREG write
+    {
+        uint8_t pwr = 0;
+        spi_read(PWR_MGMT0, &pwr, 1);
+        // Verify that the mode write has committed before configuring the
+        // internal registers. Some resets need another bounded attempt.
+        for (unsigned retry = 0; pwr != 0x0F && retry < 3; ++retry) {
+            spi_write(PWR_MGMT0, 0x0F);
+            HAL_Delay(10);
+            spi_read(PWR_MGMT0, &pwr, 1);
+            app_printf("[IMU-CFG] source=%u retry=%u power=0x%02X\r\n", _instance_idx, retry, pwr);
+        }
+        if (pwr != 0x0F) {
+            _status_flags |= IMU_STATUS_SPI_ERROR;
+            app_printf("[IMU-CFG] source=%u power configuration failed\r\n", _instance_idx);
+            return;
+        }
+    }
 
     // MREG-backed bandwidth / averaging settings — must come after MCLK is up.
     inv_imu_set_accel_ln_bw(&_dev, toAccelBwDiv(_hw.accel_bw_div));
@@ -926,11 +943,15 @@ int InvIMU_STM32::spi_write_burst(uint8_t reg, const uint8_t* data, uint32_t len
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_RESET);
     int rc = HAL_SPI_Transmit(_hw.hspi, tx_buf, len + 1, 100);
     HAL_GPIO_WritePin(_hw.cs_port, _hw.cs_pin, GPIO_PIN_SET);
+#if APP_BENCH_IMU_INIT_TRACE
+    trace_init_transfer(reg, len, data, true, rc);
+#endif
     if (rc != HAL_OK) _status_flags |= IMU_STATUS_SPI_ERROR;
     return (rc == HAL_OK) ? 0 : -1;
 }
 
 int InvIMU_STM32::spi_read(uint8_t reg, uint8_t* data, uint32_t len) {
+    if (len > 64u) return -1;
     // Build a TX buffer: [reg | 0x80] + [dummy bytes]
     uint8_t tx_buf[65] = {};
     tx_buf[0] = reg | 0x80;

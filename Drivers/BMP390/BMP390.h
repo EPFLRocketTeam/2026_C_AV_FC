@@ -52,7 +52,8 @@ public:
     virtual bool     ping()                                                    = 0;
     virtual void     configure(OsrPressure osr_p, OsrTemp osr_t,
                                IIRFilter filter)                               = 0;
-    virtual void     triggerMeasurement()                                      = 0;
+    // False means rate-limited or failed: no conversion is pending.
+    virtual bool     triggerMeasurement()                                      = 0;
     virtual bool     getFrame(BaroData& out)                                   = 0;
     virtual uint32_t getStatus() const                                         = 0;
 };
