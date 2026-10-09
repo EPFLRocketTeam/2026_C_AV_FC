@@ -1079,7 +1079,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, PYROS_2_Pin|PYROS_1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, PYROS_2_Pin|PYROS_1_Pin|PYROS_Active_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(BMP_CS2_GPIO_Port, BMP_CS2_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
@@ -1117,6 +1117,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PYROS_Active_Pin */
+  GPIO_InitStruct.Pin = PYROS_Active_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(PYROS_Active_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : GPIO_RFM_TX_RST_Pin SPI_RFM_TX_CS_Pin */
   GPIO_InitStruct.Pin = GPIO_RFM_TX_RST_Pin|SPI_RFM_TX_CS_Pin;
