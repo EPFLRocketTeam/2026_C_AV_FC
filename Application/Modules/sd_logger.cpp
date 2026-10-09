@@ -1,4 +1,5 @@
 #include "sd_logger.hpp"
+#include "Application/Modules/sd_imu_pack.hpp"
 #include <string.h>
 
 extern "C" {
@@ -162,6 +163,34 @@ void SdLogger::logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUDat
         imu_batch_fail_++;  // shed: counted as a lost batch
         return;
     }
+
+    // Compact record first (~17 B/sample instead of 40); the full IMUData
+    // record below is the fallback for anything that cannot be packed exactly.
+    if (count <= kPackedBatchMaxSamples) {
+        uint8_t packed[sizeof(SdLogImuPackedBatchHeader) +
+                       kPackedBatchMaxSamples * sdlog::kImuPackedSampleBytes];
+        const size_t packed_len = sdlog::packImuBatch(
+            static_cast<uint8_t>(sensor_index), samples, count, packed);
+        if (packed_len > 0) {
+            SdLogHeader hdr;
+            hdr.magic        = SD_LOG_MAGIC;
+            hdr.record_type  = static_cast<uint8_t>(SD_LOG_IMU_RAW_PACKED);
+            hdr.length       = static_cast<uint16_t>(packed_len);
+            hdr.timestamp_us = (uint32_t)app_timebase_now_us();
+            sd_->beginTransaction();
+            sd_->write(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr));
+            sd_->write(packed, packed_len);
+            sd_->endTransaction();
+            imu_batch_count_++;
+            if (sd_->lastTransactionFailed()) {
+                imu_batch_fail_++;
+            } else {
+                imu_bytes_ok_ += sizeof(hdr) + packed_len;
+            }
+            return;
+        }
+    }
+    imu_batch_unpacked_++;
 
     SdLogImuBatchHeader batch_hdr;
     batch_hdr.sensor_index = static_cast<uint8_t>(sensor_index);

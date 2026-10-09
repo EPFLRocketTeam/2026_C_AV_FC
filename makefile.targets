@@ -12,7 +12,7 @@ BUILD_WS     ?= $(HOME)/.cache/2026_C_AV_FC/cubeide-bench
 BUILD_FLAGS  ?=
 SSH          := ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3
 
-.PHONY: build flash-remote serial deploy _deploy-locked baro-tests clock-tests imu-tests math-tests usb-keepalive
+.PHONY: build flash-remote serial deploy _deploy-locked baro-tests clock-tests imu-tests math-tests sd-tests usb-keepalive
 build:
 	@mkdir -p "$(LOG_DIR)"
 	"$(CUBEIDE)" -data "$(BUILD_WS)" -no-indexer -import "$(PROJECT_ROOT)" -cleanBuild 2026_C_AV_FC/Debug $(BUILD_FLAGS) > "$(LOG_DIR)/build_$(RUN).log" 2>&1
@@ -40,6 +40,12 @@ imu-tests:
 	g++ -std=c++20 -O2 -DUNIT_TEST_ENV -I"$(PROJECT_ROOT)" -I"$(PROJECT_ROOT)/Application/Tests/host_replay/inc" -I"$(PROJECT_ROOT)/Application/Config/2026_C_AV_FLIGHT_PARAMS" -I"$(PROJECT_ROOT)/Application/Config/2026_C_AV_FLIGHT_PARAMS/2026_C_AV_CONFMAN" -I"$(PROJECT_ROOT)/Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET/include" $(addprefix $(PROJECT_ROOT)/,Application/Tests/bench/test_imu_module.cpp Application/Tests/test_imu_module.cpp Drivers/InvIMU/Tests/Mock/InvIMU_test.cpp Drivers/InvIMU/Impl/InvIMU_mock.cpp Drivers/STM32HAL/Simulations/stm32sim_ticks.cpp Application/Data/data.cpp Application/Data/gps_store.cpp Application/Tests/bench/baro_test_support.cpp) $(wildcard $(PROJECT_ROOT)/Application/Data/Stores/*.cpp) -lgtest -lgtest_main -lpthread -o "$(PROJECT_ROOT)/Debug/imu_module_tests" > "$(LOG_DIR)/build_imu_tests.log" 2>&1
 	"$(PROJECT_ROOT)/Debug/imu_module_tests" > "$(LOG_DIR)/imu_tests.log" 2>&1
 	@tail -n 3 "$(LOG_DIR)/imu_tests.log"
+
+sd-tests:
+	@mkdir -p "$(LOG_DIR)" "$(PROJECT_ROOT)/Debug"
+	g++ -std=c++20 -O2 -DUNIT_TEST_ENV -I"$(PROJECT_ROOT)" -I"$(PROJECT_ROOT)/Application/Tests/host_replay/inc" "$(PROJECT_ROOT)/Application/Tests/bench/test_sd_imu_pack.cpp" -lgtest -lgtest_main -lpthread -o "$(PROJECT_ROOT)/Debug/sd_pack_tests" > "$(LOG_DIR)/build_sd_tests.log" 2>&1
+	"$(PROJECT_ROOT)/Debug/sd_pack_tests" > "$(LOG_DIR)/sd_tests.log" 2>&1
+	@tail -n 3 "$(LOG_DIR)/sd_tests.log"
 
 math-tests:
 	@mkdir -p "$(LOG_DIR)" "$(PROJECT_ROOT)/Debug"

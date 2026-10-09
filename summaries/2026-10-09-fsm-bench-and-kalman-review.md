@@ -61,3 +61,27 @@ An external review of code shared with this Kalman found these issues. Each was 
 | Others (boot wait on USB, link parser, watchdog, liftoff jack, PPS stamping, magnetometer, threads) | Platform-specific or not used here | — |
 
 The existing `test_gps_rewind_full.cpp` / `test_gps_rewind_parity.cpp` have three failures before and after these changes. They are stale tests (late-baro innovation transport, out-of-order GPS contract, baro-pending contract), not regressions.
+
+## SD stalls: cause and fix (branch `feat/sd-throughput`)
+
+The ~170 ms writes are not new. Codex's own normal soaks (`N_normal`, `A_soak`) have them too. Without full-rate logging they only use ~30 KB of arena, so no counter moved.
+
+What changed is the size of each SD write. Plume writes everything that is buffered (up to 64 blocks) on each tick.
+- **Old firmware:** in the test flight, the loop took 3.3 ms on average and logging ran at 1.15 MB/s. Writes were large, and over 23 min the only failures were at boot.
+- **Now:** the cache and `-O3` work cut the loop to ~0.8 ms, so the card receives ~350 writes/s of 1–8 blocks. With that pattern it stalls about once a minute.
+- **Théo's 7.5 GB fill:** it watched `write_fail_count`, which did not include raw-batch failures before Oct 8.
+
+Fixes:
+- **Packed raw IMU:** `SD_LOG_IMU_RAW_PACKED` stores the sensor's 20-bit counts, ~22 B/sample instead of 42. It is lossless (bit-exact rebuild checked, with fallback to the full record), and the decoder writes the same `IMUSample.csv` rows.
+- **Larger writes:** `SDCardInterface::tick()` starts a write only once 32 new blocks are buffered or 20 ms have passed.
+
+Each variant: 541 s ARMED with full-rate logging, same board and card.
+
+| Variant | Total rate | Blocks/write | Writes > 100 ms | Raw batches shed | Loop avg |
+|---|---|---|---|---|---|
+| Before (headroom only, 260 s) | 1.13 MB/s | 7.3 | 5 | 15,059 | 861 µs |
+| Packed only | 0.75 MB/s | 4.0 | 2 | 8,828 | 907 µs |
+| Larger writes only | 1.27 MB/s | 32.6 | 2 | 7,351 | 836 µs |
+| Both | 0.76 MB/s | 29.7 | 0 (worst 55 ms) | 0 | 880 µs |
+
+The first "both" run, with slower packing, gave the same result (0 stalls, 0 shed in 541 s). Over the two runs: 0 stalls in 18 min, where the other variants averaged one every ~4.5 min. Record failures were 0 everywhere, and IMU acquisition loss was 0.

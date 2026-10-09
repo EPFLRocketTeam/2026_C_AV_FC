@@ -459,5 +459,18 @@ uint8_t SDCardInterface::write (const uint8_t* buffer, int length) {
     return worked;
 }
 uint8_t SDCardInterface::tick () {
+    // The logger fills the arena in small pieces (1-8 blocks per loop), and
+    // flushing each one as soon as it exists turned into ~350 small writes per
+    // second; cards handle fewer, larger sequential writes better. Let the
+    // card see a write only once kMinWriteBlocks new blocks are buffered or
+    // kMaxWriteDelayMs has passed (the transfer in flight is also completed
+    // then, so its blocks are released at most kMaxWriteDelayMs late).
+    const uint32_t now = HAL_GetTick();
+    const uint64_t new_blocks =
+        context.rb_number_blocks_used - context.rb_pending_batch_size;
+    if (new_blocks < kMinWriteBlocks && now - last_flush_ms_ < kMaxWriteDelayMs) {
+        return PLUME_OK;
+    }
+    last_flush_ms_ = now;
     return plume_tick(&context);
 }

@@ -3,6 +3,7 @@
 #include <assert.h>
 #include "./channel.hpp"
 #include "./types.hpp"
+#include "Application/Modules/sd_imu_pack.hpp"
 
 using namespace flight_computer;
 
@@ -24,8 +25,9 @@ struct UbxRawChannel : public CsvChannel<uint8_t> {
     }
 };
 struct RawImuChannel : public CsvChannel<Drivers::InvIMU::IMUData> {
-private:
-    uint64_t batch_id = 0;
+protected:
+    // Shared by the full and packed raw IMU records (same output file).
+    inline static uint64_t batch_id = 0;
 public:
     RawImuChannel () = default;
     RawImuChannel (
@@ -36,6 +38,7 @@ public:
     void custom_write_header () {
         init_stream();
         if (header_written) return ;
+        header_written = true;
         *os << csv::header<uint64_t>{ .first = true, .field = "batch_id" }
             << csv::header<uint64_t>{ .first = false, .field = "ts_us" }
             << csv::header<SdLogImuBatchHeader>{ .first = false, .field = "header" }
@@ -66,6 +69,45 @@ public:
     }
 };
 
+// SD_LOG_IMU_RAW_PACKED: rebuilt to the same IMUSample.csv rows as
+// SD_LOG_IMU_RAW (see Application/Modules/sd_imu_pack.hpp).
+struct PackedImuChannel : public RawImuChannel {
+    PackedImuChannel () = default;
+    PackedImuChannel (
+        std::function<std::ostream&(const std::string&)> get_st,
+        std::string st_name
+    ) : RawImuChannel(get_st, st_name) {}
+
+    // The header is written once by the RawImuChannel sharing this file.
+    void custom_write_header () {
+        init_stream();
+    }
+
+    void custom_aggregate (uint64_t timestamp_ms, SdLogHeader header, const void* payload) {
+        init_stream();
+        const uint8_t* bytes = static_cast<const uint8_t*>(payload);
+        SdLogImuPackedBatchHeader packed;
+        std::memcpy(&packed, bytes, sizeof(packed));
+        if (header.length != sizeof(packed) + packed.sample_count * sdlog::kImuPackedSampleBytes) {
+            throw std::runtime_error("Invalid packed IMU batch length.");
+        }
+
+        SdLogImuBatchHeader batch_header{};
+        batch_header.sensor_index = packed.sensor_index;
+        batch_header.sample_count = packed.sample_count;
+        uint64_t current_batch = batch_id ++;
+
+        for (size_t offset = 0; offset < packed.sample_count; offset ++) {
+            const Drivers::InvIMU::IMUData data = sdlog::unpackImuSample(bytes, offset);
+            *os << csv::value<uint64_t>{ .value = current_batch, .first = true }
+                << csv::value<uint64_t>{ .value = timestamp_ms, .first = false }
+                << csv::value<SdLogImuBatchHeader>{ .value = batch_header, .first = false }
+                << csv::value<Drivers::InvIMU::IMUData>{ .value = data, .first = false }
+                << "\n";
+        }
+    }
+};
+
 #define X_CHANNELS \
     X_CHANNEL(SD_LOG_MAGIC, SD_LOG_DATADUMP,        DataDump,                   "fc/DataDump.csv") \
     X_CHANNEL(SD_LOG_MAGIC, SD_LOG_FSM_TRANSITION,  SdLogFsmTransition,         "fc/FsmTransitions.csv") \
@@ -85,6 +127,7 @@ public:
     X_CHANNEL(SD_LOG_MAGIC, SD_LOG_APP_METRICS,     SdLogAppMetrics,            "fc/AppMetrics.csv") \
     X_CHANNEL(SD_LOG_MAGIC, SD_LOG_CAMERA,          CameraDump,                 "fc/Cameras.csv") \
     X_CUSTOM_CHANNEL(SD_LOG_MAGIC, SD_LOG_IMU_RAW,  RawImuChannel,              "fc/sensors/IMUSample.csv") \
+    X_CUSTOM_CHANNEL(SD_LOG_MAGIC, SD_LOG_IMU_RAW_PACKED, PackedImuChannel,     "fc/sensors/IMUSample.csv") \
     X_CUSTOM_CHANNEL(SD_LOG_MAGIC, SD_LOG_UBX_RAW,  UbxRawChannel,              "fc/sensors/UBXRaw.csv")
 
 #define CONCAT_IMPL(a, b) a##b

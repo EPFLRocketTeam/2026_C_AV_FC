@@ -882,7 +882,7 @@ extern "C" void app_super_loop_iterate(void) {
     // tick() is always called to drain the ring buffer via DMA.
     if (g_sd_logging_active) {
         RUN_EVERY(100) {
-            app_printf("[SD] wr=%lu fail=%lu arena=%lu/%lu maxWr=%luus ticks=%lu disk=%lluKB imu=%lu/%lu(%luKB)\r\n",
+            app_printf("[SD] wr=%lu fail=%lu arena=%lu/%lu maxWr=%luus ticks=%lu disk=%lluKB imu=%lu/%lu(%luKB) unpacked=%lu\r\n",
                    (unsigned long)g_sd_logger.writeCount(),
                    (unsigned long)g_sd_logger.writeFailCount(),
                    (unsigned long)g_sd_interface.arena_used_bytes(),
@@ -892,7 +892,8 @@ extern "C" void app_super_loop_iterate(void) {
                    (uint64_t)(g_sd_interface.disk_size_remaining() / 1024),
                    (unsigned long)g_sd_logger.imuBatchCount(),
                    (unsigned long)g_sd_logger.imuBatchFail(),
-                   (unsigned long)(g_sd_logger.imuBytesOk() / 1024));
+                   (unsigned long)(g_sd_logger.imuBytesOk() / 1024),
+                   (unsigned long)g_sd_logger.imuBatchUnpacked());
         }
 
         const uint32_t now_ms = HAL_GetTick();
