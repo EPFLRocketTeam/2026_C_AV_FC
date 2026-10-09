@@ -1054,6 +1054,7 @@ extern "C" void app_super_loop_iterate(void) {
 
     size_t producedCount = g_superloop.imuModule.takeProducedCount();
     nb_consumed += producedCount;
+    nb_consumed_since_last_poll += producedCount;
     app_perf_end(APP_PERF_IMU, perf_t0);
 
     perf_t0 = app_perf_begin();
@@ -1242,6 +1243,9 @@ extern "C" void app_set_pyro_status (int pyro_id, bool enabled) {
 
 extern "C" void app_on_state_becomes_init () {
     g_sd_logger.setLogRate(false);
+    auto &goat = flight_computer::GOATStore::get_instance();
+    goat.flightEventTimersStore.set(
+        flight_computer::FlightEventTimers());
 }
 extern "C" void app_on_state_becomes_armed () {
     g_sd_logger.setLogRate(true);
