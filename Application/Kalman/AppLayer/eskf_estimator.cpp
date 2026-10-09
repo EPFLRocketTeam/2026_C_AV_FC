@@ -162,6 +162,7 @@ void EskfEstimator::configureCalibration(const appcfg::CalibrationConfig &cfg) {
 }
 
 void EskfEstimator::reset() {
+  imu_pipeline_log_limiter_.reset();
   resetCoastState();
   initialized_ = false;
   in_flight_ = false;
@@ -1277,9 +1278,12 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
   constexpr eskf_scalar kTempScale = 1.0 / 2.07;
   constexpr eskf_scalar kTempOffsetK = 25.0 + 273.15; // 25°C in Kelvin
 
-  eskf_sensor_t accel_data[ESKF_MAX_IMUS][kMaxBatchSize * 3] = {};
-  eskf_sensor_t gyro_data[ESKF_MAX_IMUS][kMaxBatchSize * 3] = {};
-  eskf_scalar temp_data[ESKF_MAX_IMUS][kMaxBatchSize] = {};
+  // Only present sources and [0, safe_count) are passed to VirtualImu; each
+  // element in that range is written below. Do not clear sixteen samples per
+  // source when the synchronized runtime usually supplies just one.
+  eskf_sensor_t accel_data[ESKF_MAX_IMUS][kMaxBatchSize * 3];
+  eskf_sensor_t gyro_data[ESKF_MAX_IMUS][kMaxBatchSize * 3];
+  eskf_scalar temp_data[ESKF_MAX_IMUS][kMaxBatchSize];
   bool source_present[ESKF_MAX_IMUS] = {};
 
 #if APP_IMU_LOG_FORMAT == 0
@@ -2770,13 +2774,11 @@ void EskfEstimator::logImuPipelineIfDue(const eskf::VirtualImuOutput &vout,
     return;
   }
 
-  // Decimate during flight to avoid constructing 600+ byte snapshot at IMU rate.
-  // Pre-flight: every sample. In-flight: every 64th sample (~100Hz at 6.4kHz).
-  if (in_flight_) {
-    static uint16_t imu_pipeline_log_counter = 0;
-    if (++imu_pipeline_log_counter < 64) return;
-    imu_pipeline_log_counter = 0;
-  }
+  // Bound the diagnostic stream in BOTH modes. At 6.4 kHz, preflight snapshots
+  // alone previously added >2.2 MB/s and exhausted the arena while ARMED.
+  // Use sample time (not polling/burst time); raw logging and physics remain
+  // full-rate. Per-instance limiter state is cleared by reset().
+  if (!imu_pipeline_log_limiter_.shouldLog(vout.frame.timestamp_us)) return;
 
   eskf::ImuPipelineSnapshot snapshot;
   for (int i = 0; i < 3; ++i) {

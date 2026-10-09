@@ -886,6 +886,13 @@ extern "C" void app_super_loop_iterate(void) {
             static uint32_t prev_total_events = 0;
             static uint32_t prev_catchup_yields = 0;
             static uint32_t prev_baro_corrections = 0;
+            static uint32_t prev_reset_generation = 0;
+            const uint32_t reset_generation = kalman_reset_generation();
+            if (reset_generation != prev_reset_generation) {
+                prev_fire_count = prev_solo_flush = prev_stale_flush = 0;
+                prev_total_events = prev_catchup_yields = prev_baro_corrections = 0;
+                prev_reset_generation = reset_generation;
+            }
             const uint32_t delta_fire  = fire_count  - prev_fire_count;
             const uint32_t delta_solo  = solo_flush  - prev_solo_flush;
             const uint32_t delta_stale = stale_flush - prev_stale_flush;

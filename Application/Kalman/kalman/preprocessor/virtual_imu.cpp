@@ -9,6 +9,13 @@
 #include <cstring>
 #include <limits>
 
+#if defined(__GNUC__) && !defined(__clang__)
+// Full-rate voting/lever-arm loops are acquisition's remaining CPU hot path.
+// Keep helpers at the same optimization level so they can inline; no fast-math.
+#pragma GCC push_options
+#pragma GCC optimize ("O3")
+#endif
+
 namespace eskf {
 
 static_assert(ESKF_CENTRAL_DIFF_ORDER == 7,
@@ -1398,3 +1405,7 @@ size_t VirtualImu::process(const eskf_sensor_t *const accel_data[ESKF_MAX_IMUS],
 }
 
 } // namespace eskf
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC pop_options
+#endif

@@ -29,6 +29,9 @@ int kalman_loop(void);
 uint8_t kalman_request_reset(void);
 void kalman_note_main_loop_iteration_us(uint32_t iteration_us);
 void kalman_note_baro_trigger(uint64_t trigger_us);
+/// Changes only when a reset executes; lets cumulative-counter observers
+/// restart interval baselines without confusing a reset with uint32 rollover.
+uint32_t kalman_reset_generation(void);
 
 /// Retrieve ESKF IMU grouping statistics for metrics logging.
 void kalman_get_group_stats(uint32_t* fire_count, uint32_t* solo_flush,

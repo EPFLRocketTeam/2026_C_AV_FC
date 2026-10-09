@@ -100,6 +100,7 @@ bool kalmanResetAllowedIn(uint32_t raw_state) {
 
 std::atomic<uint32_t> g_last_main_loop_iteration_us{0u};
 std::atomic<uint32_t> g_max_main_loop_iteration_us{0u};
+std::atomic<uint32_t> g_reset_generation{0u};
 volatile uint64_t g_pending_baro_trigger_us = 0u;
 
 // ---------------------------------------------------------------
@@ -394,6 +395,10 @@ struct KalmanRuntime {
 		touchdown_detector.reset();
 		touchdown_published = false;
 		KalmanHealthStore::instance().reset();
+		health = KalmanHealthSnapshot{};
+		g_last_main_loop_iteration_us.store(0u, std::memory_order_relaxed);
+		g_max_main_loop_iteration_us.store(0u, std::memory_order_relaxed);
+		g_reset_generation.fetch_add(1u, std::memory_order_relaxed);
 	}
 
 	void onStateChange(uint32_t raw_state) {
@@ -859,10 +864,12 @@ struct KalmanRuntime {
 		health.catchup_budget_yields = estimator.rewindStats().catchup_budget_yields;
 		health.total_events_processed = static_cast<uint32_t>(estimator.totalCatchupEventsProcessed());
 		health.baro_corrections = estimator.rewindStats().baro_corrections;
-		// Compute ESKF lag: wall clock minus ESKF internal timestamp
+		// Ground history deliberately hibernates; its stationary ESKF timestamp
+		// is not a processing backlog. Report lag only while replay is active.
 		const uint64_t now = app_timebase_now_us();
 		const uint64_t kal_ts = estimator.kalmanTimestamp();
-		health.kalman_behind_us = (now > kal_ts) ? static_cast<uint32_t>(now - kal_ts) : 0;
+		health.kalman_behind_us = (estimator.inFlight() && now > kal_ts)
+		    ? static_cast<uint32_t>(now - kal_ts) : 0;
 	}
 
 	void ingestAidingFromStore() {
@@ -1193,4 +1200,8 @@ void kalman_get_group_stats(uint32_t* fire_count, uint32_t* solo_flush,
 	*fire_count  = rt.estimator.imu_group_fire_count_;
 	*solo_flush  = rt.estimator.imu_solo_flush_count_;
 	*stale_flush = rt.estimator.imu_stale_flush_count_;
+}
+
+uint32_t kalman_reset_generation(void) {
+	return g_reset_generation.load(std::memory_order_relaxed);
 }

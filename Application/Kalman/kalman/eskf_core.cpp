@@ -1866,6 +1866,11 @@ void EskfCore::computeF(eskf_scalar F[kDimError][kDimError],
   // Bias rows (9-14): random walk, stay at identity (already set)
 }
 
+#if defined(__GNUC__) && !defined(__clang__)
+// Fixed-size sparse covariance loops dominate full-rate prediction on Cortex-M7.
+// Permit loop unrolling here while retaining IEEE maths (no fast-math).
+__attribute__((optimize("O3")))
+#endif
 void EskfCore::propagateCovariance(const eskf_scalar F[kDimError][kDimError],
                                    eskf_scalar dt) {
   // P = F * P * F' + Q_d
