@@ -180,7 +180,9 @@ int main(void)
   MX_SPI4_Init();
   MX_SPI5_Init();
   MX_USART6_UART_Init();
+  sd_pre_init();
   MX_SDMMC1_SD_Init();
+  sd_post_init(&hsd1);
   MX_SPI2_Init();
   MX_SPI1_Init();
   MX_I2C4_Init();
