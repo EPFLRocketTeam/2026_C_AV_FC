@@ -139,7 +139,10 @@ void EskfCore::freezeFlightBiasCovariance() {
 // ============================================================
 
 void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
-  if (!std::isfinite(dt) || dt <= 0 || diverged_)
+  // Only hard divergence (NaN, negative covariance) stops propagation. Soft
+  // NIS divergence keeps fusing baro with inflated R and needs the process
+  // noise added here to recover, so the state must keep propagating.
+  if (!std::isfinite(dt) || dt <= 0 || (diverged_ && !nis_soft_diverged_))
     return;
 
   eskf_scalar dt_used = dt;
@@ -441,8 +444,11 @@ void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
     getEskfLogger().logImuDynamics(imu_snap);
   }
 
-  // Check for numerical issues
-  checkNumericalHealth();
+  // Check for numerical issues. NIS is only evaluated after a measurement
+  // update: predict() runs at the IMU rate, and re-reading the last update's
+  // NIS here counted one high value once per IMU sample, declaring divergence
+  // ~10 samples after a single outlier.
+  checkNumericalHealth(false);
 }
 
 // ============================================================
@@ -882,6 +888,7 @@ void EskfCore::correctBaroAltitude(eskf_scalar alt_m, eskf_scalar R) {
   } else if (y < -kMaxBaroInn) {
     z = h - kMaxBaroInn;
   }
+  last_innovation_ = z - h;  // logged with the correction (after clamping)
 
 #if !ESKF_USE_CUSTOM_LINALG
   math::RowVector15 H = math::RowVector15::Zero();
@@ -985,6 +992,7 @@ void EskfCore::correctBaroWithSnapshot(eskf_scalar measured_alt,
   } else if (y < -kMaxBaroInn) {
     z = h - kMaxBaroInn;
   }
+  last_innovation_ = z - h;  // logged with the correction (after clamping)
 
   // Jacobian is same as normal baro (affects current state)
 #if !ESKF_USE_CUSTOM_LINALG
@@ -1156,6 +1164,7 @@ void EskfCore::correctHeadingWithEvent(eskf_scalar heading_rad, eskf_scalar R,
     innovation -= 2 * constants::kPi;
   while (innovation < -constants::kPi)
     innovation += 2 * constants::kPi;
+  last_innovation_ = innovation;
 
   // Jacobian: H affects yaw (δθ_z at index 8)
   // For small angles, Δheading ≈ δθ_z
@@ -1479,6 +1488,7 @@ void EskfCore::correctSideslip(eskf_scalar R_lateral) {
   // h = v_body[1] (current lateral velocity)
   eskf_scalar z = 0;
   eskf_scalar h = v_body[1];
+  last_innovation_ = z - h;
 
   // Yaw-only sideslip Jacobian (decoupled update).
   // h = e_y^T * R_nb^T * v_ned
@@ -2047,7 +2057,7 @@ void EskfCore::flushDeferredCovariancePropagation() {
 #endif
 }
 
-void EskfCore::checkNumericalHealth() {
+void EskfCore::checkNumericalHealth(bool check_nis) {
   // Check quaternion
   if (!math::quatIsFinite(state_.q)) {
     if (!diverged_) {
@@ -2102,6 +2112,9 @@ void EskfCore::checkNumericalHealth() {
   // NIS-based divergence is "soft": baro corrections continue with inflated R
   // so that b_baro can slowly adapt through process noise.  Recovery clears
   // the flag after sustained low NIS.
+  if (!check_nis) {
+    return;
+  }
   if (last_nis_ > cfg_.nis_divergence_threshold) {
     consecutive_high_nis_count_++;
     consecutive_low_nis_count_ = 0;

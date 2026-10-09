@@ -258,6 +258,15 @@ private:
   // Last body-frame acceleration (for apogee detection lockout checks)
   mutable eskf_scalar last_body_accel_x_ = 0;
 
+  // Coast detection for apogee gating (see updateCoastState()).
+  eskf_scalar coast_accel_filt_ = 0;
+  bool coast_filter_init_ = false;
+  uint64_t coast_below_since_us_ = 0;
+  bool coast_latched_ = false;
+  void updateCoastState(eskf_scalar body_accel_x, uint64_t timestamp_us,
+                        eskf_scalar dt_s);
+  void resetCoastState();
+
   // Checkpoint timing for RailShadow (pre-liftoff)
   uint64_t last_rail_checkpoint_us_ = 0;
 
