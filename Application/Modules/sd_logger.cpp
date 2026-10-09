@@ -132,8 +132,18 @@ void SdLogger::logFlightShadow(const eskf::FlightShadowSnapshot& snapshot) {
     writeRecord(SD_LOG_FLIGHT_SHADOW, &snapshot, sizeof(snapshot));
 }
 
+// The SD card can stall for ~170 ms (internal garbage collection). At full
+// raw-IMU rate that fills the arena, and every record is then lost, including
+// rare critical ones (FSM transitions, liftoff snapshot). The high-rate streams
+// therefore stop at 3/4 occupancy, keeping the last quarter for everything else.
+bool SdLogger::highRateHeadroomLeft() const {
+    const size_t total = sd_->arena_total_bytes();
+    return sd_->arena_used_bytes() < total - total / 4;
+}
+
 void SdLogger::logImuPipeline(const eskf::ImuPipelineSnapshot& snapshot) {
     if (!high_rate_enabled_) return;
+    if (sd_ == nullptr || !highRateHeadroomLeft()) return;
     writeRecord(SD_LOG_IMU_PIPELINE, &snapshot, sizeof(snapshot));
 }
 
@@ -148,6 +158,10 @@ void SdLogger::logImuDynamics(const eskf::ImuDynamicsSnapshot& snapshot) {
 void SdLogger::logImuRawBatch(size_t sensor_index, const Drivers::InvIMU::IMUData* samples, size_t count) {
     if (sd_ == nullptr || count == 0) return;
     if (!high_rate_enabled_) return;
+    if (!highRateHeadroomLeft()) {
+        imu_batch_fail_++;  // shed: counted as a lost batch
+        return;
+    }
 
     SdLogImuBatchHeader batch_hdr;
     batch_hdr.sensor_index = static_cast<uint8_t>(sensor_index);

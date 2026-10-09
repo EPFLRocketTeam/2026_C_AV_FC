@@ -80,6 +80,7 @@ public:
 
 private:
     SDCardInterface* sd_ = nullptr;
+    bool highRateHeadroomLeft() const;
 
     bool high_rate_enabled_ = false;
 
