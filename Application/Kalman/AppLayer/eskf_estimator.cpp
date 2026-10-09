@@ -162,6 +162,7 @@ void EskfEstimator::configureCalibration(const appcfg::CalibrationConfig &cfg) {
 }
 
 void EskfEstimator::reset() {
+  resetCoastState();
   initialized_ = false;
   in_flight_ = false;
   rail_shadow_initialized_ = false;
@@ -675,6 +676,7 @@ void EskfEstimator::onLiftoff(uint32_t liftoff_ms) {
   latest_descent_gnss_ = LatestGnssForDescent{};
   latest_descent_baro_ = LatestBaroForDescent{};
 
+  resetCoastState();
   in_flight_ = true;
   liftoff_ms_ = liftoff_ms;
   liftoff_us_ = static_cast<uint64_t>(liftoff_ms) * 1000ULL;
@@ -1385,7 +1387,7 @@ void EskfEstimator::processSyncedImuGroup(const PendingImuBatch *const *group,
 
       // Push IMU sample to ESKF ring buffer at full rate.
       filter_.pushImu(vout.frame, dt_s);
-      last_body_accel_x_ = vout.frame.accel[0];
+      updateCoastState(vout.frame.accel[0], vout.frame.timestamp_us, dt_s);
 
       if (!in_flight_) {
         // Use pre-lever-arm accel for rail shadow to avoid bias-induced drift.
@@ -1569,7 +1571,7 @@ void EskfEstimator::processBufferedImuBatch(const PendingImuBatch &batch) {
 
       // Push IMU sample to ESKF ring buffer at full rate.
       filter_.pushImu(vout.frame, dt_s);
-      last_body_accel_x_ = vout.frame.accel[0];
+      updateCoastState(vout.frame.accel[0], vout.frame.timestamp_us, dt_s);
 
       if (!in_flight_) {
         // Use pre-lever-arm accel for rail shadow to avoid bias-induced drift.
@@ -2559,13 +2561,51 @@ bool EskfEstimator::latestBaroAltitude(float &altitude_m,
 }
 
 bool EskfEstimator::isCoastPhase() const {
-  if (!in_flight_)
-    return false;
+  return in_flight_ && coast_latched_;
+}
 
-  // Coast phase = body-X acceleration is negative (drag > thrust)
-  // During motor burn, body_accel_x > 0 (thrust > drag)
-  // After MECO, body_accel_x < 0 (drag > thrust)
-  return last_body_accel_x_ < 0;
+// Coast phase = motor off. It used to be "this raw body-X sample < 0" (drag >
+// thrust), which is not robust: in early coast vibration flips its sign
+// hundreds of times per second, and once drag is small (near apogee, or a
+// low-energy flight) an IMU bias of ~0.1 m/s^2 or a tail-first slide keeps it
+// positive, blocking every apogee decision. Instead detect thrust off: the
+// filtered specific force stays below kCoastMaxSpecificForce for
+// kCoastConfirmUs, then latch (the motor does not relight). Thrust gives
+// ~+5 g, the pad ~+1 g; coast is drag plus bias, well below 1 m/s^2 except at
+// high speed where drag is negative anyway.
+void EskfEstimator::updateCoastState(eskf_scalar body_accel_x,
+                                     uint64_t timestamp_us, eskf_scalar dt_s) {
+  constexpr eskf_scalar kCoastFilterTauS = 0.05;
+  constexpr eskf_scalar kCoastMaxSpecificForce = 1.0;  // m/s^2
+  constexpr uint64_t kCoastConfirmUs = 100000;
+
+  last_body_accel_x_ = body_accel_x;
+  if (!in_flight_ || coast_latched_) {
+    return;
+  }
+  if (!coast_filter_init_ || !(dt_s > 0)) {
+    coast_accel_filt_ = body_accel_x;
+    coast_filter_init_ = true;
+  } else {
+    coast_accel_filt_ +=
+        (dt_s / (kCoastFilterTauS + dt_s)) * (body_accel_x - coast_accel_filt_);
+  }
+  if (coast_accel_filt_ >= kCoastMaxSpecificForce) {
+    coast_below_since_us_ = 0;
+    return;
+  }
+  if (coast_below_since_us_ == 0) {
+    coast_below_since_us_ = timestamp_us;
+  } else if (timestamp_us - coast_below_since_us_ >= kCoastConfirmUs) {
+    coast_latched_ = true;
+  }
+}
+
+void EskfEstimator::resetCoastState() {
+  coast_accel_filt_ = 0;
+  coast_filter_init_ = false;
+  coast_below_since_us_ = 0;
+  coast_latched_ = false;
 }
 
 eskf_scalar EskfEstimator::bodyAccelX() const { return last_body_accel_x_; }

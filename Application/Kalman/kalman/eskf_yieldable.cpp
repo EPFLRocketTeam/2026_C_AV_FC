@@ -913,6 +913,33 @@ void EskfYieldable::discardStalePendingBaro() {
 #endif
 }
 
+// After a rewind restores the state at timestamp_us, checkpoints saved after
+// it describe the old timeline: they lack the measurement that triggered the
+// rewind. Replay re-saves periodic checkpoints as it goes; keeping the stale
+// ones would let a later rewind restore a state without that correction.
+// Checkpoints are stored in time order, so this keeps the oldest prefix.
+void EskfYieldable::dropCheckpointsNewerThan(uint64_t timestamp_us) {
+  if (checkpoint_count_ == 0) {
+    return;
+  }
+  const size_t oldest = oldestIndex<ESKF_CHECKPOINT_BUFFER_SIZE>(
+      checkpoint_count_, checkpoint_head_);
+  if (oldest != 0) {
+    // Full ring: move the oldest entry to index 0 so a partial ring keeps the
+    // "oldest is at 0" layout that oldestIndex() assumes.
+    std::rotate(checkpoint_buffer_, checkpoint_buffer_ + oldest,
+                checkpoint_buffer_ + ESKF_CHECKPOINT_BUFFER_SIZE);
+  }
+  size_t keep = 0;
+  while (keep < checkpoint_count_ &&
+         checkpoint_buffer_[keep].timestamp_us <= timestamp_us) {
+    ++keep;
+  }
+  checkpoint_count_ = keep;
+  checkpoint_head_ = keep % ESKF_CHECKPOINT_BUFFER_SIZE;
+  imu_since_checkpoint_ = 0;
+}
+
 void EskfYieldable::saveCheckpointNow() {
   if (hibernating_) {
     return;
@@ -989,9 +1016,11 @@ void EskfYieldable::rewindTo(uint64_t timestamp_us, bool liftoff_rewind) {
     restoreRewindCheckpoint(checkpoint_buffer_[best_checkpoint_idx]);
     rewind_info.checkpoint_timestamp_us = best_checkpoint_ts;
     replay_from = best_checkpoint_ts;
+    dropCheckpointsNewerThan(best_checkpoint_ts);
   } else if (has_checkpoint_) {
     // Fall back to oldest checkpoint
     restoreRewindCheckpoint(oldest_checkpoint_);
+    dropCheckpointsNewerThan(oldest_checkpoint_.timestamp_us);
     rewind_info.checkpoint_timestamp_us = oldest_checkpoint_.timestamp_us;
     replay_from = oldest_checkpoint_.timestamp_us;
     

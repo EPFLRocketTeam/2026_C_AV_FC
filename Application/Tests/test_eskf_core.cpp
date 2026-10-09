@@ -843,6 +843,63 @@ static void test_flight_mode_freezes_imu_bias_state_updates() {
 }
 
 // ============================================================
+// NIS divergence accounting
+// ============================================================
+
+static void initStatic(EskfCore& filter) {
+  State initial;
+  initial.setIdentity();
+  filter.initialize(initial, InitialCovariance::defaults(),
+                    ProcessNoise::defaults());
+}
+
+static ImuFrame staticImu(uint64_t timestamp_us) {
+  ImuFrame imu{};
+  imu.accel[2] = -9.80665;
+  imu.timestamp_us = timestamp_us;
+  return imu;
+}
+
+// One outlier baro update must not be re-counted by every following predict:
+// predict() runs at the IMU rate, so counting there declared divergence about
+// ten IMU samples after a single high-NIS correction.
+static void test_single_high_nis_update_does_not_diverge() {
+  EskfCore filter;
+  initStatic(filter);
+
+  filter.correctBaroAltitude(50.0, 0.01);
+  TEST_ASSERT_TRUE(filter.lastNIS() > 100.0);
+
+  for (int i = 1; i <= 100; ++i) {
+    filter.predict(staticImu(1000u * i), 0.001);
+  }
+  TEST_ASSERT_FALSE(filter.hasDiverged());
+}
+
+// Soft (NIS) divergence keeps fusing baro with inflated R and relies on the
+// process noise to recover: propagation must continue while it is flagged.
+static void test_soft_nis_divergence_keeps_propagating() {
+  EskfCore filter;
+  initStatic(filter);
+
+  // Alternate the outlier sign so every update stays inconsistent.
+  for (int i = 0; i < 50 && !filter.hasDiverged(); ++i) {
+    filter.correctBaroAltitude((i % 2) ? -50.0 : 50.0, 0.01);
+  }
+  TEST_ASSERT_TRUE(filter.hasDiverged());
+
+  const eskf_scalar v_before = filter.state().v[2];
+  ImuFrame imu = staticImu(1000);
+  imu.accel[2] = -9.80665 - 10.0;  // 10 m/s^2 net upward specific force
+  for (int i = 1; i <= 100; ++i) {
+    imu.timestamp_us = 1000u * i;
+    filter.predict(imu, 0.001);
+  }
+  TEST_ASSERT_TRUE(std::abs(filter.state().v[2] - v_before) > 0.5);
+  TEST_ASSERT_EQUAL_UINT64(100000u, filter.state().timestamp_us);
+}
+
+// ============================================================
 // GTest Wrapper
 // ============================================================
 
@@ -880,5 +937,7 @@ WRAP_TEST(test_core_contract_14_covariance_decimation_accumulates_jacobians);
 WRAP_TEST(test_core_contract_14_covariance_decimation_flush_before_updates);
 WRAP_TEST(test_flight_mode_freezes_imu_bias_covariance_but_keeps_baro_bias_rw);
 WRAP_TEST(test_flight_mode_freezes_imu_bias_state_updates);
+WRAP_TEST(test_single_high_nis_update_does_not_diverge);
+WRAP_TEST(test_soft_nis_divergence_keeps_propagating);
 
 #undef WRAP_TEST
