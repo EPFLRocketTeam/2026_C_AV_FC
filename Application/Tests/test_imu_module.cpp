@@ -11,11 +11,21 @@ using Drivers::InvIMU::ODR;
 using Drivers::InvIMU::InvIMU_Mock;
 using Drivers::InvIMU::InvIMU_Interface;
 
+// The application uses blocking FIFO transfers. Keep the driver's asynchronous
+// mock available for its DMA tests, but finish transfers inside tick here.
+class BlockingInvImuMock : public InvIMU_Mock {
+public:
+  void tick() override {
+    InvIMU_Mock::tick();
+    onDmaComplete();
+  }
+};
+
 class ImuModuleTest : public ::testing::Test {
 protected:
-  InvIMU_Mock imu0;
-  InvIMU_Mock imu1;
-  InvIMU_Mock imu2;
+  BlockingInvImuMock imu0;
+  BlockingInvImuMock imu1;
+  BlockingInvImuMock imu2;
 
   RingBuffer<IMUData, 100> rb0;
   RingBuffer<IMUData, 100> rb1;

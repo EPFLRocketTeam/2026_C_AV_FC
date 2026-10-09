@@ -9,6 +9,17 @@
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Common.h"
 #include "Drivers/ERT_RF_Protocol_Interface/ParameterDefinition_Firehorn2.h"
 
+// Bench switch: 1 sends every packet with the former blocking driver call
+// (reconfigure + wait for TxDone, ~92 ms per packet, ~154 ms with no radio),
+// to compare against the non-blocking path on the same build.
+#ifndef APP_RADIO_BLOCKING_TX
+#define APP_RADIO_BLOCKING_TX 0
+#endif
+
+#ifndef APP_RADIO_TEST_UPLINK
+#define APP_RADIO_TEST_UPLINK 0
+#endif
+
 #define PREPARE_DOWNLINK(type) \
     inline void prepare_downlink_packet (av_downlink_unpacked_t &packet, const type &dump)
 
@@ -129,24 +140,122 @@ PREPARE_DOWNLINK(flight_computer::DataDump) {
     prepare_downlink_packet(packet, dump.uplinkCmd);
 }
 
+/// Downlink counters since the last takeStats().
+struct TxRadioStats {
+    uint32_t started = 0;         // transmissions put on air
+    uint32_t sent = 0;            // TxDone seen
+    uint32_t skipped_busy = 0;    // send() while the previous packet was on air
+    uint32_t skipped_absent = 0;  // send() with the radio missing or failing
+    uint32_t timeouts = 0;        // no TxDone within kTxTimeoutMs
+    uint32_t reconfigs = 0;       // full reconfigurations after a fault
+    uint32_t max_airtime_ms = 0;  // longest start-to-TxDone time
+};
+
+/// Downlink over the TX radio without blocking the super loop: send() loads
+/// the packet and starts the transmission, tick() picks up TxDone. A missing
+/// or failing radio is retried every kRetryPeriodMs instead of being reset
+/// (100 ms) and reconfigured (15 ms) on every packet.
 class TxRadioModule {
 private:
+    // A downlink is ~75 ms on air (59 B, SF7, BW250, CR4/7).
+    static constexpr uint32_t kTxTimeoutMs = 500;
+    static constexpr uint32_t kRetryPeriodMs = 5000;
+    static constexpr uint32_t kMaxConsecutiveTimeouts = 3;
+
     SX127XCapsule *driver_;
 
     uint32_t packet_nbr = 0;
     uint32_t next_time = 0;
     uint32_t ms_between_send;
+
+    bool present_ = false;
+    bool tx_busy_ = false;
+    uint32_t tx_start_ms_ = 0;
+    uint32_t consecutive_timeouts_ = 0;
+    uint32_t next_retry_ms_ = 0;
+    TxRadioStats stats_{};
+
+    bool usable () const {
+        return present_ && consecutive_timeouts_ < kMaxConsecutiveTimeouts;
+    }
+
 public:
     explicit TxRadioModule(SX127XCapsule *driver, uint32_t ms_between_send)
       : driver_(driver), ms_between_send(ms_between_send) {}
 
     bool init () {
     	//app_printf("driver: %p\n", driver_);
+#if APP_RADIO_TEST_UPLINK
+      driver_->init(864.34e6, SX127X_POWER_11DBM, SX127X_LORA_SF_8,
+        SX127X_LORA_BW_125KHZ, SX127X_LORA_CR_4_7, SX127X_LORA_CRC_EN,
+        av_uplink_size);
+#else
 	  driver_->init(866.34e6, SX127X_POWER_20DBM, SX127X_LORA_SF_7,
 	  	SX127X_LORA_BW_250KHZ, SX127X_LORA_CR_4_7, SX127X_LORA_CRC_EN,
 	  	av_downlink_size);
+#endif
 	  //app_printf("init is ok.\n");
-	  return true;
+	  present_ = driver_->isPresent();
+	  if (present_) {
+	  	driver_->prepareTransmit();
+	  } else {
+	  	app_printf("[RADIO] TX radio not detected, retrying every %lu ms\r\n",
+	  			(unsigned long) kRetryPeriodMs);
+	  }
+	  next_retry_ms_ = app_timebase_now_ms() + kRetryPeriodMs;
+	  return present_;
+    }
+
+    /// Call every loop iteration: completes the transmission in progress and
+    /// retries a missing or failing radio.
+    void tick () {
+        const uint32_t now = app_timebase_now_ms();
+
+        if (!usable()) {
+            if ((int32_t) (now - next_retry_ms_) < 0) {
+                return;
+            }
+            next_retry_ms_ = now + kRetryPeriodMs;
+            present_ = driver_->isPresent();
+            if (!present_) {
+                return;
+            }
+            driver_->reconfigure();
+            driver_->prepareTransmit();
+            ++stats_.reconfigs;
+            consecutive_timeouts_ = 0;
+            tx_busy_ = false;
+            return;
+        }
+
+        if (!tx_busy_) {
+            return;
+        }
+        switch (driver_->pollTransmit()) {
+        case SX127X_TX_DONE: {
+            const uint32_t airtime = now - tx_start_ms_;
+            if (airtime > stats_.max_airtime_ms) stats_.max_airtime_ms = airtime;
+            ++stats_.sent;
+            consecutive_timeouts_ = 0;
+            tx_busy_ = false;
+            break;
+        }
+        case SX127X_TX_BUSY:
+            if (now - tx_start_ms_ > kTxTimeoutMs) {
+                // Back to standby with the TX registers rewritten; a radio
+                // that lost its whole configuration keeps timing out and is
+                // then fully reconfigured by the retry path above.
+                driver_->abortTransmit();
+                ++stats_.timeouts;
+                ++consecutive_timeouts_;
+                tx_busy_ = false;
+                next_retry_ms_ = now + kRetryPeriodMs;
+            }
+            break;
+        case SX127X_TX_IDLE:
+            tx_busy_ = false;
+            break;
+        }
     }
 
     bool should_send () {
@@ -154,11 +263,54 @@ public:
     }
 
     bool send (const flight_computer::DataDump &dump) {
-        next_time = app_timebase_now_ms() + ms_between_send;
+        const uint32_t now = app_timebase_now_ms();
+#if APP_RADIO_TEST_UPLINK
+        (void)dump;
+        next_time = now + ms_between_send;
+        if (tx_busy_) { ++stats_.skipped_busy; return false; }
+        if (!usable()) { ++stats_.skipped_absent; return false; }
+        // Order 0 is not an actuator or FSM command: the dispatcher ignores it.
+        const av_uplink_t noop = {0, 0};
+        if (!driver_->startTransmit(GSC_CMD, (uint8_t*)&noop, av_uplink_size)) return false;
+        tx_busy_ = true;
+        tx_start_ms_ = now;
+        ++stats_.started;
+        return true;
+#endif
+        next_time = now + ms_between_send;
 
         av_downlink_unpacked_t packet;
         packet.packet_nbr = packet_nbr ++;
-        
+
+#if APP_RADIO_BLOCKING_TX
+        {
+            prepare_downlink_packet(packet, dump);
+            av_downlink_t compressed_packet;
+            encode_downlink(&compressed_packet, packet);
+            ++stats_.started;
+            const bool ok = driver_->transmit(CAPSULE_ID::AV_TELEMETRY, (uint8_t*) &compressed_packet, av_downlink_size);
+            if (ok) ++stats_.sent; else ++stats_.timeouts;
+            return ok;
+        }
+#endif
+
+        if (!usable()) {
+            ++stats_.skipped_absent;
+            return false;
+        }
+        if (tx_busy_) {
+            ++stats_.skipped_busy;
+            return false;
+        }
+        // One register read: catches a board unplugged since the last packet,
+        // whose floating MISO would otherwise read back as TxDone.
+        if (!driver_->isPresent()) {
+            present_ = false;
+            next_retry_ms_ = now + kRetryPeriodMs;
+            ++stats_.skipped_absent;
+            return false;
+        }
+
         prepare_downlink_packet(packet, dump);
 
         struct __attribute__((packed)) Guard {
@@ -169,6 +321,23 @@ public:
 
         encode_downlink(&guard.compressed_packet, packet);
 
-        return driver_->transmit(CAPSULE_ID::AV_TELEMETRY, (uint8_t*) &guard.compressed_packet, av_downlink_size);
+        if (!driver_->startTransmit(CAPSULE_ID::AV_TELEMETRY, (uint8_t*) &guard.compressed_packet, av_downlink_size)) {
+            ++stats_.skipped_busy;
+            return false;
+        }
+        tx_busy_ = true;
+        tx_start_ms_ = now;
+        ++stats_.started;
+        return true;
+    }
+
+    bool present () const {
+        return present_;
+    }
+
+    TxRadioStats takeStats () {
+        const TxRadioStats s = stats_;
+        stats_ = TxRadioStats{};
+        return s;
     }
 };

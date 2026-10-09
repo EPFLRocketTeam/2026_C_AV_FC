@@ -173,14 +173,13 @@ private:
       if (!state.initialized || drivers_[i] == nullptr) {
         continue;
       }
-      drivers_[i]->triggerMeasurement();
-      state.pending = true;
+      state.pending = drivers_[i]->triggerMeasurement();
       state.status_flags = drivers_[i]->getStatus();
       state.healthy = isHealthyStatus(i, tick_ms);
       if (state.healthy) {
         state.last_healthy_time_us = trigger_ts;
       }
-      any_pending = true;
+      any_pending = any_pending || state.pending;
     }
 
     if (!any_pending) {

@@ -6,6 +6,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#if APP_BENCH_PREDICT_PROFILE
+#include "stm32h7xx_hal.h"
+#include "app_printf.h"
+#endif
 
 namespace eskf {
 
@@ -139,7 +143,13 @@ void EskfCore::freezeFlightBiasCovariance() {
 // ============================================================
 
 void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
-  if (!std::isfinite(dt) || dt <= 0 || diverged_)
+#if APP_BENCH_PREDICT_PROFILE
+  const uint32_t profile_start = DWT->CYCCNT;
+#endif
+  // Only hard divergence (NaN, negative covariance) stops propagation. Soft
+  // NIS divergence keeps fusing baro with inflated R and needs the process
+  // noise added here to recover, so the state must keep propagating.
+  if (!std::isfinite(dt) || dt <= 0 || (diverged_ && !nis_soft_diverged_))
     return;
 
   eskf_scalar dt_used = dt;
@@ -323,6 +333,9 @@ void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
   // 5. Covariance Propagation (Sparse)
   // ----------------------------------------------------------------
 
+#if APP_BENCH_PREDICT_PROFILE
+  const uint32_t profile_cov_start = DWT->CYCCNT;
+#endif
 #if ESKF_COVARIANCE_DECIMATION > 1
   eskf_scalar F_step[kDimError][kDimError];
   computeF(F_step, accel_body, dt_used);
@@ -418,6 +431,9 @@ void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
   computeF(F, accel_body, dt_used);
   propagateCovariance(F, dt_used);
 #endif
+#if APP_BENCH_PREDICT_PROFILE
+  const uint32_t profile_cov_end = DWT->CYCCNT;
+#endif
 
   // Update timestamp
   state_.timestamp_us = imu.timestamp_us;
@@ -441,8 +457,24 @@ void EskfCore::predict(const ImuFrame &imu, eskf_scalar dt) {
     getEskfLogger().logImuDynamics(imu_snap);
   }
 
-  // Check for numerical issues
-  checkNumericalHealth();
+  // Check for numerical issues. NIS is only evaluated after a measurement
+  // update: predict() runs at the IMU rate, and re-reading the last update's
+  // NIS here counted one high value once per IMU sample, declaring divergence
+  // ~10 samples after a single outlier.
+  checkNumericalHealth(false);
+#if APP_BENCH_PREDICT_PROFILE
+  static uint32_t calls = 0, nominal = 0, covariance = 0, tail = 0;
+  nominal += profile_cov_start - profile_start;
+  covariance += profile_cov_end - profile_cov_start;
+  tail += DWT->CYCCNT - profile_cov_end;
+  if (++calls == 1000) {
+    const uint32_t cycles_us = SystemCoreClock / 1000000u;
+    app_printf("[PREDICT-PROFILE] calls=%lu nominal=%lu cov=%lu tail=%lu\r\n",
+        (unsigned long)calls, (unsigned long)(nominal / cycles_us),
+        (unsigned long)(covariance / cycles_us), (unsigned long)(tail / cycles_us));
+    calls = nominal = covariance = tail = 0;
+  }
+#endif
 }
 
 // ============================================================
@@ -882,6 +914,7 @@ void EskfCore::correctBaroAltitude(eskf_scalar alt_m, eskf_scalar R) {
   } else if (y < -kMaxBaroInn) {
     z = h - kMaxBaroInn;
   }
+  last_innovation_ = z - h;  // logged with the correction (after clamping)
 
 #if !ESKF_USE_CUSTOM_LINALG
   math::RowVector15 H = math::RowVector15::Zero();
@@ -985,6 +1018,7 @@ void EskfCore::correctBaroWithSnapshot(eskf_scalar measured_alt,
   } else if (y < -kMaxBaroInn) {
     z = h - kMaxBaroInn;
   }
+  last_innovation_ = z - h;  // logged with the correction (after clamping)
 
   // Jacobian is same as normal baro (affects current state)
 #if !ESKF_USE_CUSTOM_LINALG
@@ -1156,6 +1190,7 @@ void EskfCore::correctHeadingWithEvent(eskf_scalar heading_rad, eskf_scalar R,
     innovation -= 2 * constants::kPi;
   while (innovation < -constants::kPi)
     innovation += 2 * constants::kPi;
+  last_innovation_ = innovation;
 
   // Jacobian: H affects yaw (δθ_z at index 8)
   // For small angles, Δheading ≈ δθ_z
@@ -1479,6 +1514,7 @@ void EskfCore::correctSideslip(eskf_scalar R_lateral) {
   // h = v_body[1] (current lateral velocity)
   eskf_scalar z = 0;
   eskf_scalar h = v_body[1];
+  last_innovation_ = z - h;
 
   // Yaw-only sideslip Jacobian (decoupled update).
   // h = e_y^T * R_nb^T * v_ned
@@ -1856,6 +1892,11 @@ void EskfCore::computeF(eskf_scalar F[kDimError][kDimError],
   // Bias rows (9-14): random walk, stay at identity (already set)
 }
 
+#if defined(__GNUC__) && !defined(__clang__)
+// Fixed-size sparse covariance loops dominate full-rate prediction on Cortex-M7.
+// Permit loop unrolling here while retaining IEEE maths (no fast-math).
+__attribute__((optimize("O3")))
+#endif
 void EskfCore::propagateCovariance(const eskf_scalar F[kDimError][kDimError],
                                    eskf_scalar dt) {
   // P = F * P * F' + Q_d
@@ -2047,7 +2088,7 @@ void EskfCore::flushDeferredCovariancePropagation() {
 #endif
 }
 
-void EskfCore::checkNumericalHealth() {
+void EskfCore::checkNumericalHealth(bool check_nis) {
   // Check quaternion
   if (!math::quatIsFinite(state_.q)) {
     if (!diverged_) {
@@ -2102,6 +2143,9 @@ void EskfCore::checkNumericalHealth() {
   // NIS-based divergence is "soft": baro corrections continue with inflated R
   // so that b_baro can slowly adapt through process noise.  Recovery clears
   // the flag after sustained low NIS.
+  if (!check_nis) {
+    return;
+  }
   if (last_nis_ > cfg_.nis_divergence_threshold) {
     consecutive_high_nis_count_++;
     consecutive_low_nis_count_ = 0;
