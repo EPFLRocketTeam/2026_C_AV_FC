@@ -175,11 +175,12 @@ struct VehiculeOverview {// TODO: Properly update the store test
   bool no_cable_continuity_engine;
   bool no_cable_continuity_lox;
 
+  bool pyros_activated;
   bool pyros_on[4];
 
   VehiculeOverview();
 };
-static_assert(sizeof(VehiculeOverview) == 6);
+static_assert(sizeof(VehiculeOverview) == 7);
 
 struct adxl375_data {
   float x;
@@ -434,6 +435,9 @@ public:
 
   bool get_no_cable_continuity_lox () const;
   void set_no_cable_continuity_lox (bool value);
+
+  bool get_pyros_activated () const;
+  void set_pyros_activated (bool value);
 
   bool get_pyro_ch1_on () const;
   bool get_pyro_ch2_on () const;

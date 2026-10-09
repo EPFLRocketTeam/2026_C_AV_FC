@@ -180,9 +180,7 @@ int main(void)
   MX_SPI4_Init();
   MX_SPI5_Init();
   MX_USART6_UART_Init();
-  sd_pre_init();
   MX_SDMMC1_SD_Init();
-  sd_post_init(&hsd1);
   MX_SPI2_Init();
   MX_SPI1_Init();
   MX_I2C4_Init();
@@ -999,7 +997,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, PYROS_2_Pin|PYROS_1_Pin|BMP_CS2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, PYROS_2_Pin|PYROS_1_Pin|PYROS_Active_Pin|BMP_CS2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIO_RFM_TX_RST_GPIO_Port, GPIO_RFM_TX_RST_Pin, GPIO_PIN_SET);
@@ -1035,6 +1033,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PYROS_Active_Pin */
+  GPIO_InitStruct.Pin = PYROS_Active_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(PYROS_Active_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : GPIO_RFM_TX_RST_Pin SPI_RFM_TX_CS_Pin */
   GPIO_InitStruct.Pin = GPIO_RFM_TX_RST_Pin|SPI_RFM_TX_CS_Pin;

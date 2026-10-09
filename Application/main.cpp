@@ -960,10 +960,16 @@ extern "C" float app_get_current_imu_rate (void) {
     return ratio;
 }
 extern "C" void app_open_parachute () {
+    app_activate_pyros();
     app_set_pyro_status(1, true);
     app_set_pyro_status(2, true);
     app_set_pyro_status(3, true);
     app_set_pyro_status(4, true);
+}
+extern "C" void app_activate_pyros () {
+    flight_computer::GOATStore::get_instance().vehiculeOverviewStore
+        .set_pyros_activated(true);
+    HAL_GPIO_WritePin(PYROS_Active_GPIO_Port, PYROS_Active_Pin, GPIO_PIN_SET);
 }
 extern "C" void app_set_pyro_status (int pyro_id, bool enabled) {
     auto &store = flight_computer::GOATStore::get_instance().vehiculeOverviewStore;
