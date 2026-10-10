@@ -106,14 +106,6 @@ State AvState::fromIgnition(DataDump const &dump) {
     return State::ABORT_ON_GROUND;
   }
 
-  // TEMPORARY bench bypass: no real motor burn on the bench means the
-  // accel-hold check always reads ACC_HOLD_DID_NOT_HOLD, so IGNITION would
-  // always auto-abort. Force BURN here instead; real liftoff logic below is
-  // left intact and unreachable until this is removed.
-  bool mo_open = GOATStore::get_instance().valvesStore.get_main_LOX_open();
-  bool me_open = GOATStore::get_instance().valvesStore.get_main_fuel_open();
-  return (mo_open && me_open) ? State::BURN : currentState;
-
   // Liftoff detection, per spec: cable disconnect OR the accel hold
   // confirming it is enough for BURN, either signal alone is trusted.
   // No liftoff (ABORT_ON_GROUND) still needs both signals to agree
@@ -123,12 +115,16 @@ State AvState::fromIgnition(DataDump const &dump) {
   // Cable is lost if and only if both cable fell.
   const bool cable_lost = dump.vehiculeOverview.no_cable_continuity_eth
                        && dump.vehiculeOverview.no_cable_continuity_lox;
-  if (cable_lost || dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
+  if ((cable_lost && dump.event.vertical_acc_hold == ACC_HOLD_NOT_ELAPSED)
+     || dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
     return State::BURN;
   }
   // TODO wtf, maybe add a delay idk
-  if (!cable_lost && dump.event.vertical_acc_hold == ACC_HOLD_DID_NOT_HOLD) {
-    return State::ABORT_ON_GROUND;
+  // if (!cable_lost && dump.event.vertical_acc_hold == ACC_HOLD_DID_NOT_HOLD) {
+  //   return State::ABORT_ON_GROUND;
+  // }
+  if (HAL_GetTick() - ignition_entry_ms_ >= config::get().MaxTimeFromIgnitionToDescentMs()) {
+    return State::DESCENT;
   }
 
   return currentState;
@@ -301,6 +297,7 @@ void AvState::update(const DataDump &dump) {
     // IgnitionPrechill, see 2026_C_AV_PRC's engine_state.cpp), matching
     // OnPressurize's clear_to_ignite send that got it to ClearToIgnite.
     if (currentState == State::IGNITION) {
+      ignition_entry_ms_ = HAL_GetTick();
       Fc_Can_SendPrcIgnite();
     }
 

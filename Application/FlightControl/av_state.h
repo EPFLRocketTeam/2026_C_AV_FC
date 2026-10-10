@@ -78,6 +78,7 @@ private:
     // fromPressurization()'s hold-delay check directly instead of the
     // never-set event.timer_launch_delay flag.
     uint32_t pressurization_entry_ms_ = 0;
+    uint32_t ignition_entry_ms_ = 0;
 
     // One-shot guard for the delayed DPR depressurize send in DESCENT
     // (see update()), reset on every entry into DESCENT.
