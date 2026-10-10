@@ -167,7 +167,7 @@ static SX127XCapsule *rxArr[1] = {&rx};
 static RingBuffer<av_uplink_t, 10> *rxRing[1] = {&rx_buffer};
 
 RxRadioModule rx_module(rxArr, rxRing);
-TxRadioModule tx_module(&tx, 1000); // 1 Hz send
+TxRadioModule tx_module(&tx, 100); // 10 Hz send
 
 void simple_radio_init(void) {
 	SX127X_RX_hw.dio0.port = GPIO_RFM_RX_INT0_GPIO_Port;
