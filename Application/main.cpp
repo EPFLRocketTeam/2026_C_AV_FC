@@ -1195,10 +1195,11 @@ extern "C" uint64_t app_get_sd_fail_count (void) {
 }
 extern "C" float app_get_current_imu_rate (void) {
     float ratio = 0;
+    app_printf("[GET IMU RATE] - dt=%u dN=%u\n", HAL_GetTick() - lastRatioComputationTime, nb_consumed_since_last_poll);
     if (lastRatioComputationTime != 0) {
         uint32_t deltaTime = HAL_GetTick() - lastRatioComputationTime;
 
-        ratio = ((float) nb_consumed_since_last_poll) / ((float) deltaTime);
+        ratio = ((float) nb_consumed_since_last_poll * 1000) / ((float) deltaTime);
     }
 
     flight_computer::GOATStore::get_instance()
