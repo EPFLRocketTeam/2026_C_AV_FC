@@ -101,7 +101,7 @@ State AvState::fromPressurization(DataDump const &dump) {
   return currentState;
 }
 
-State AvState::fromIgnition(DataDump const &dump) {
+State AvState::fromTryIgnition(DataDump const &dump) {
   if (dump.uplinkCmd.id == AV_CMD_ABORT) {
     return State::ABORT_ON_GROUND;
   }
