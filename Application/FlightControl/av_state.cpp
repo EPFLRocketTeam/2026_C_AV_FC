@@ -96,7 +96,7 @@ State AvState::fromPressurization(DataDump const &dump) {
       dump.propSensors.ETA_pressure > config::get().Pressurization.MinFuelNominalPressure; 
 
   if (hold_delay_elapsed && pressure_nominal) {
-    return State::IGNITION;
+    return State::TRY_IGNITION;
   }
   return currentState;
 }
