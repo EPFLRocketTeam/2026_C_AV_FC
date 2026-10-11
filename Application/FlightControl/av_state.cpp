@@ -105,6 +105,23 @@ State AvState::fromIgnition(DataDump const &dump) {
   if (dump.uplinkCmd.id == AV_CMD_ABORT) {
     return State::ABORT_ON_GROUND;
   }
+  
+  float TryIgnitionDurationMs =
+    config::get().Ignition.DelayMs
+  + config::get().Ignition.IgniterDurationMs
+  + config::get().Ignition.PrechillDurationMs
+  + config::get().Ignition.RampUpMs;
+
+  if (HAL_GetTick() - try_ignition_entry_ms_ >= TryIgnitionDurationMs) {
+    return State::IGNITION;
+  }
+
+  return currentState;
+}
+State AvState::fromIgnition(DataDump const &dump) {
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) {
+    return State::ABORT_ON_GROUND;
+  }
 
   // Liftoff detection, per spec: cable disconnect OR the accel hold
   // confirming it is enough for BURN, either signal alone is trusted.
@@ -228,6 +245,9 @@ void AvState::update(const DataDump &dump) {
   case State::PRESSURIZATION:
     currentState = fromPressurization(dump);
     break;
+  case State::TRY_IGNITION:
+    currentState = fromTryIgnition(dump);
+    break;
   case State::IGNITION:
     currentState = fromIgnition(dump);
     break;
@@ -296,9 +316,12 @@ void AvState::update(const DataDump &dump) {
     // Engine board starts its own ignition sequence (ClearToIgnite ->
     // IgnitionPrechill, see 2026_C_AV_PRC's engine_state.cpp), matching
     // OnPressurize's clear_to_ignite send that got it to ClearToIgnite.
+    if (currentState == State::TRY_IGNITION) {
+      Fc_Can_SendPrcIgnite();
+      try_ignition_entry_ms_ = HAL_GetTick();
+    }
     if (currentState == State::IGNITION) {
       ignition_entry_ms_ = HAL_GetTick();
-      Fc_Can_SendPrcIgnite();
     }
 
     // Abort side effect (spec: "Immediately gives the command to the DPRs
@@ -401,6 +424,9 @@ std::string AvState::stateToString(State state) {
     break;
   case State::FILLING:
     return "FILLING";
+    break;
+  case State::TRY_IGNITION:
+    return "TRY_IGNITION";
     break;
   case State::IGNITION:
     return "IGNITION";

@@ -11,6 +11,7 @@ enum State : uint8_t {
 
   ARMED,
   PRESSURIZATION,
+  TRY_IGNITION,
   IGNITION,
 
   /* =============== In flight =============== */

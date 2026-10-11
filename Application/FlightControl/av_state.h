@@ -53,6 +53,7 @@ private:
     State fromFilling(DataDump const &dump);
     State fromArmed(DataDump const &dump);
     State fromPressurization(DataDump const &dump);
+    State fromTryIgnition(DataDump const &dump);
     State fromIgnition(DataDump const &dump);
     State fromBurn(DataDump const &dump);
     State fromAscent(DataDump const &dump);
@@ -79,6 +80,7 @@ private:
     // never-set event.timer_launch_delay flag.
     uint32_t pressurization_entry_ms_ = 0;
     uint32_t ignition_entry_ms_ = 0;
+    uint32_t try_ignition_entry_ms_ = 0;
 
     // One-shot guard for the delayed DPR depressurize send in DESCENT
     // (see update()), reset on every entry into DESCENT.
