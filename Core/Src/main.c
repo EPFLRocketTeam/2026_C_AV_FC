@@ -261,7 +261,6 @@ int main(void)
   MX_FDCAN2_Init();
   /* USER CODE BEGIN 2 */
 
-
   Fc_Can_Init(&hfdcan1); /* latch hfdcan1 for Fc_Can_SendMainValveCmd, see Application/FlightControl/prc_can.hpp */
 
   /* Small delay to let USB enumerate -- but drain (and discard) FIFO0 while
@@ -315,6 +314,8 @@ int main(void)
 
   simple_radio_init();
   app_printf("Out of init.\n");
+
+  app_printf("FDCAN clk=%lu\r\n", (unsigned long)HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_FDCAN));  /* expect 16000000 */
 
   app_super_loop_setup();
 
@@ -654,7 +655,7 @@ static void MX_FDCAN2_Init(void)
   hfdcan2.Init.DataSyncJumpWidth = 1;
   hfdcan2.Init.DataTimeSeg1 = 1;
   hfdcan2.Init.DataTimeSeg2 = 1;
-  hfdcan2.Init.MessageRAMOffset = 0;
+  hfdcan2.Init.MessageRAMOffset = 385;
   hfdcan2.Init.StdFiltersNbr = 0;
   hfdcan2.Init.ExtFiltersNbr = 0;
   hfdcan2.Init.RxFifo0ElmtsNbr = 8;

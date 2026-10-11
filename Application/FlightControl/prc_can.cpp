@@ -93,22 +93,25 @@ void OnDprLoxPressures(void*, pi::payload::dpr_lox_pressures p) noexcept {
 }
 void OnDprLoxTempsOta12(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
-  if (t.hasOta1()) sensors.set_fls_OTA_temperature_1(t.ota1());
-  if (t.hasOta2()) sensors.set_fls_OTA_temperature_2(t.ota2());
+  app_printf("Received 12: %f %f\n", t.t1, t.t2);
+  if (!t.hasOta1()) sensors.set_fls_OTA_temperature_1(t.ota1());
+  if (!t.hasOta2()) sensors.set_fls_OTA_temperature_2(t.ota2());
 }
 void OnDprLoxTempsOta34(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
   // OTA4 moved to the engine board (see OnPrcTempsOta45 below) -- only
   // OTA3 is meaningful in this message now.
   auto& sensors = GOATStore::get_instance().propSensorsStore;
-  if (t.hasOta3()) sensors.set_fls_OTA_temperature_3(t.ota3());
-  if (t.hasOta4()) sensors.set_fls_OTA_temperature_4(t.ota4());
+  app_printf("Received 34: %f %f\n", t.t1, t.t2);
+  if (!t.hasOta3()) sensors.set_fls_OTA_temperature_3(t.ota3());
+  if (!t.hasOta4()) sensors.set_fls_OTA_temperature_4(t.ota4());
 }
 // Sent by the engine board (Node::PrcP), not DPR-LOX: OTA1-3 are read out
 // on DPR-LOX (OnDprLoxTempsOta12/34 above), OTA4/5 on the engine board.
 void OnDprLoxTempsOta56(void*, pi::payload::dpr_lox_temps_ota t) noexcept {
   auto& sensors = GOATStore::get_instance().propSensorsStore;
-  if (t.hasOta5()) sensors.set_fls_OTA_temperature_5(t.ota5());
-  if (t.hasOta6()) sensors.set_fls_OTA_temperature_6(t.ota6());
+  app_printf("Received 56: %f %f\n", t.t1, t.t2);
+  if (!t.hasOta5()) sensors.set_fls_OTA_temperature_5(t.ota5());
+  if (!t.hasOta6()) sensors.set_fls_OTA_temperature_6(t.ota6());
 }
 
 void OnPrcPInjector(void*, pi::payload::prc_p_injector p) noexcept {

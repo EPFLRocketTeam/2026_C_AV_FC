@@ -31,7 +31,7 @@ void sd_pre_init(void)
     PeriphClkInitStruct.PLL2.PLL2M = 32;     /* HSI 64 MHz / 32 = 2 MHz VCO input */
     PeriphClkInitStruct.PLL2.PLL2N = 200;    /* 2 MHz × 200 = 400 MHz VCO */
     PeriphClkInitStruct.PLL2.PLL2P = 2;
-    PeriphClkInitStruct.PLL2.PLL2Q = 2;
+    PeriphClkInitStruct.PLL2.PLL2Q = 25;
     PeriphClkInitStruct.PLL2.PLL2R = 2;      /* 400 / 2 = 200 MHz */
     PeriphClkInitStruct.PLL2.PLL2RGE   = RCC_PLL2VCIRANGE_0;
     PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOMEDIUM;
