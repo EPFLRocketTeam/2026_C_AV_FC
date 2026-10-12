@@ -104,9 +104,9 @@ std::atomic<uint32_t> g_reset_generation{0u};
 volatile uint64_t g_pending_baro_trigger_us = 0u;
 
 // ---------------------------------------------------------------
-// Liftoff acceleration-hold evaluator (FSM IGNITION -> BURN/ABORT).
+// Liftoff acceleration-hold evaluator (FSM IGNITION -> BURN).
 //
-// After the FSM enters IGNITION, this waits
+// After the ignite command (FSM enters TRY_IGNITION), this waits
 // Ignition.TotalTimeUntilHoldDownMs() (prechill + igniter + delay +
 // ramp-up + hold-down), then averages the thrust-axis acceleration over
 // Ignition.LiftoffAccelDurationMs and compares the mean to
@@ -412,6 +412,7 @@ struct KalmanRuntime {
 			return;
 		}
 
+		const flight_computer::State previous_state = last_state;
 		estimator.onFlightStateChange(state);
 		last_state = state;
 
@@ -419,13 +420,19 @@ struct KalmanRuntime {
 			resetRuntime();
 		}
 
-		// Start liftoff acceleration-hold evaluation on IGNITION entry.
-		if (state == flight_computer::State::IGNITION) {
+		// Start liftoff acceleration-hold evaluation at the ignite command:
+		// TRY_IGNITION entry, or IGNITION entry when it is reached directly.
+		// The hold-down wait counts the whole ignition sequence from there.
+		const bool ignite_command =
+			state == flight_computer::State::TRY_IGNITION ||
+			(state == flight_computer::State::IGNITION &&
+			 previous_state != flight_computer::State::TRY_IGNITION);
+		if (ignite_command) {
 			acc_hold.onIgnitionEnter(app_timebase_now_us());
 
-			// A detection latched before IGNITION (e.g. the rocket was
-			// bumped during FILLING) is not a launch. Discard it so only
-			// detections after ignition can start the flight estimator.
+			// A detection latched before the ignite command (e.g. the
+			// rocket was bumped during FILLING) is not a launch. Discard it
+			// so only detections after it can start the flight estimator.
 			if (liftoff_detector.isDetected()) {
 				app_printf("[LIFTOFF] Discarding pre-ignition IMU detection\r\n");
 				liftoff_detector.reset();
@@ -438,16 +445,18 @@ struct KalmanRuntime {
 		}
 	}
 
-	/// Kalman-side liftoff epoch. While the FSM is in IGNITION, the
-	/// dual-window detector fires within tens of ms of motion onset, while
-	/// the FSM may only declare BURN later (cable or end of the
+	/// Kalman-side liftoff epoch. While the FSM is in TRY_IGNITION or
+	/// IGNITION, the dual-window detector fires within tens of ms of motion
+	/// onset, while the FSM may only declare BURN later (cable or end of the
 	/// acceleration-hold window). The estimator freezes its preflight state
 	/// at the liftoff epoch, so a late epoch degrades it; use the detection
 	/// time instead. The FSM remains the authority on flight states, and its
 	/// later BURN is then ignored by onLiftoff().
 	void selfLatchLiftoffIfDetected() {
-		if (liftoff_ms != 0 ||
-			last_state != flight_computer::State::IGNITION ||
+		const bool igniting =
+			last_state == flight_computer::State::TRY_IGNITION ||
+			last_state == flight_computer::State::IGNITION;
+		if (liftoff_ms != 0 || !igniting ||
 			!liftoff_detector.isDetected() || imu_liftoff_detect_ms == 0) {
 			return;
 		}

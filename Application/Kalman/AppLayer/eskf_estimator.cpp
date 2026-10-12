@@ -919,6 +919,7 @@ void EskfEstimator::onFlightStateChange(flight_computer::State state,
              state == flight_computer::State::FILLING ||
              state == flight_computer::State::ARMED ||
              state == flight_computer::State::PRESSURIZATION ||
+             state == flight_computer::State::TRY_IGNITION ||
              state == flight_computer::State::IGNITION ||
              state == flight_computer::State::ABORT_ON_GROUND ||
              state == flight_computer::State::ABORT_IN_FLIGHT) {

@@ -94,6 +94,7 @@ inline const char* fsmStateName(flight_computer::State s) {
         case flight_computer::State::FILLING:         return "FILL";
         case flight_computer::State::ARMED:           return "ARMED";
         case flight_computer::State::PRESSURIZATION:  return "PRESS";
+        case flight_computer::State::TRY_IGNITION:    return "TRYIGN";
         case flight_computer::State::IGNITION:        return "IGN";
         case flight_computer::State::BURN:            return "BURN";
         case flight_computer::State::ASCENT:          return "ASC";
