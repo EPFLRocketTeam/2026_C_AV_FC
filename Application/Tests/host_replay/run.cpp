@@ -6,6 +6,8 @@
 //   mode=ignition   INIT -> IGNITION at t_ign; BURN on cable (t_cable) or
 //                   vertical_acc_hold == DID_HOLD; ABORT on DID_NOT_HOLD
 //                   without cable (FSM spec, no valve bypass)
+//   try_ign=1       ignition mode through TRY_IGNITION: the ignite command
+//                   at t_ign, IGNITION once the ignition sequence elapsed
 //   t_burn, t_ign, t_cable : absolute us (0 = never)
 //   burn_to_ascent_ms      : BURN -> ASCENT delay (default 2000)
 //   descent_max_ms         : DESCENT -> LANDED needs touchdown_detected and
@@ -33,6 +35,8 @@ extern "C" {
 #include "Drivers/BMP390/BMP390.h"
 #include "Drivers/InvIMU/InvIMU.h"
 #include "Drivers/UBX_GPS/ubx_gps_interface.h"
+// After the drivers: FlightParams defines a FIXED macro.
+#include "Application/Config/config.hpp"
 
 using Drivers::InvIMU::IMUData;
 extern uint64_t g_sim_us;
@@ -81,9 +85,10 @@ std::string argS(int argc, char **argv, const char *k, const char *def) {
 }
 
 const char *stateName(uint32_t s) {
-  static const char *n[] = {"INIT", "CALIBRATION", "FILLING", "ARMED", "PRESSURIZATION", "IGNITION",
-                            "BURN", "ASCENT", "DESCENT", "LANDED", "ABORT_ON_GROUND", "ABORT_IN_FLIGHT"};
-  return s < 12 ? n[s] : "?";
+  static const char *n[] = {"INIT", "CALIBRATION", "FILLING", "ARMED", "PRESSURIZATION", "TRY_IGNITION",
+                            "IGNITION", "BURN", "ASCENT", "DESCENT", "LANDED", "ABORT_ON_GROUND",
+                            "ABORT_IN_FLIGHT"};
+  return s < 13 ? n[s] : "?";
 }
 
 uint32_t g_state = flight_computer::State::INIT;
@@ -104,6 +109,7 @@ int main(int argc, char **argv) {
   const uint64_t t_cable = argU(argc, argv, "t_cable", 0);
   const uint64_t burn_to_ascent_us = argU(argc, argv, "burn_to_ascent_ms", 2000) * 1000u;
   const uint64_t descent_max_us = argU(argc, argv, "descent_max_ms", 60000) * 1000u;
+  const bool try_ign = argU(argc, argv, "try_ign", 0) != 0;
   const bool detector = argU(argc, argv, "detector", 1) != 0, fake_gps = argU(argc, argv, "fake_gps", 0) != 0;
   const uint64_t reset_at = argU(argc, argv, "reset_at", 0), reset_at2 = argU(argc, argv, "reset_at2", 0);
   const std::string drop = argS(argc, argv, "drop_imu", "");
@@ -190,7 +196,11 @@ int main(int argc, char **argv) {
     if (mode == "flown") {
       if (g_state == State::INIT && t_burn && g_sim_us >= t_burn) { transition(State::BURN); burn_entry = g_sim_us; }
     } else {
-      if (g_state == State::INIT && t_ign && g_sim_us >= t_ign) transition(State::IGNITION);
+      const auto &ign = config::get().Ignition;
+      const uint64_t sequence_us =
+          1000ull * (ign.DelayMs + ign.IgniterDurationMs + ign.PrechillDurationMs + ign.RampUpMs);
+      if (g_state == State::INIT && t_ign && g_sim_us >= t_ign) transition(try_ign ? State::TRY_IGNITION : State::IGNITION);
+      else if (g_state == State::TRY_IGNITION && g_sim_us - t_ign >= sequence_us) transition(State::IGNITION);
       else if (g_state == State::IGNITION) {
         const bool cable_lost = t_cable && g_sim_us >= t_cable;
         if (cable_lost || ev.vertical_acc_hold == flight_computer::ACC_HOLD_DID_HOLD) { transition(State::BURN); burn_entry = g_sim_us; }
