@@ -1250,6 +1250,13 @@ extern "C" void app_on_state_becomes_init () {
     flight_computer::GOATStore::get_instance().vehiculeOverviewStore
         .set_pyros_activated(false);
     HAL_GPIO_WritePin(PYROS_Active_GPIO_Port, PYROS_Active_Pin, GPIO_PIN_RESET);
+    // Channel pins stay high after app_open_parachute (DESCENT or
+    // ABORT_IN_FLIGHT). Clear them here, otherwise the next ARMED entry
+    // re-enables the master line with every channel already asserted.
+    app_set_pyro_status(1, false);
+    app_set_pyro_status(2, false);
+    app_set_pyro_status(3, false);
+    app_set_pyro_status(4, false);
 }
 extern "C" void app_on_state_becomes_armed () {
     g_sd_logger.setLogRate(true);
