@@ -38,6 +38,7 @@ bool IsProtectedMode () {
   flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
 
   return state == flight_computer::State::PRESSURIZATION
+      || state == flight_computer::State::TRY_IGNITION
       || state == flight_computer::State::IGNITION
       || state == flight_computer::State::BURN;
 }
