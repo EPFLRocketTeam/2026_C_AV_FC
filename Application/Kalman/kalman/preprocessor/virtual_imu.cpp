@@ -9,6 +9,13 @@
 #include <cstring>
 #include <limits>
 
+#if defined(__GNUC__) && !defined(__clang__)
+// Full-rate voting/lever-arm loops are acquisition's remaining CPU hot path.
+// Keep helpers at the same optimization level so they can inline; no fast-math.
+#pragma GCC push_options
+#pragma GCC optimize ("O3")
+#endif
+
 namespace eskf {
 
 static_assert(ESKF_CENTRAL_DIFF_ORDER == 7,
@@ -81,6 +88,7 @@ void VirtualImu::reset() {
   std::memset(prev_accel_body_, 0, sizeof(prev_accel_body_));
   std::memset(prev_gyro_body_, 0, sizeof(prev_gyro_body_));
   std::memset(tare_window_count_, 0, sizeof(tare_window_count_));
+  std::memset(tare_window_disturbed_, 0, sizeof(tare_window_disturbed_));
   std::memset(tare_window_gyro_sum_, 0, sizeof(tare_window_gyro_sum_));
   std::memset(tare_window_accel_sum_, 0, sizeof(tare_window_accel_sum_));
   std::memset(gyro_tare_body_, 0, sizeof(gyro_tare_body_));
@@ -666,6 +674,7 @@ size_t VirtualImu::process(const eskf_sensor_t *const accel_data[ESKF_MAX_IMUS],
               enabled_mask[i] && has_data_mask[i] && !input_hard_mask[i];
           if (!tare_sample_ok) {
             tare_window_count_[i] = 0;
+            tare_window_disturbed_[i] = false;
             for (int axis = 0; axis < 3; ++axis) {
               tare_window_gyro_sum_[i][axis] = 0;
               tare_window_accel_sum_[i][axis] = 0;
@@ -675,8 +684,10 @@ size_t VirtualImu::process(const eskf_sensor_t *const accel_data[ESKF_MAX_IMUS],
 
           eskf_scalar accel_bias_sample[3] = {0, 0, 0};
           eskf_scalar accel_norm_sq = 0;
+          eskf_scalar gyro_norm_sq = 0;
           for (int axis = 0; axis < 3; ++axis) {
             accel_norm_sq += accel_body[i][axis] * accel_body[i][axis];
+            gyro_norm_sq += gyro_body[i][axis] * gyro_body[i][axis];
           }
           if (accel_norm_sq > static_cast<eskf_scalar>(1e-12)) {
             const eskf_scalar accel_norm = std::sqrt(accel_norm_sq);
@@ -685,6 +696,16 @@ size_t VirtualImu::process(const eskf_sensor_t *const accel_data[ESKF_MAX_IMUS],
             for (int axis = 0; axis < 3; ++axis) {
               accel_bias_sample[axis] = accel_body[i][axis] * scale;
             }
+            if (std::abs(accel_norm - tare_gravity) >
+                cfg_.tare_max_sample_excess_mps2) {
+              tare_window_disturbed_[i] = true;
+            }
+          } else {
+            tare_window_disturbed_[i] = true;
+          }
+          if (gyro_norm_sq >
+              cfg_.tare_max_gyro_rad_s * cfg_.tare_max_gyro_rad_s) {
+            tare_window_disturbed_[i] = true;
           }
 
           for (int axis = 0; axis < 3; ++axis) {
@@ -699,14 +720,29 @@ size_t VirtualImu::process(const eskf_sensor_t *const accel_data[ESKF_MAX_IMUS],
             const eskf_scalar inv_n =
                 static_cast<eskf_scalar>(1.0) /
                 static_cast<eskf_scalar>(tare_window_count_[i]);
+            eskf_scalar mean_bias_sq = 0;
             for (int axis = 0; axis < 3; ++axis) {
-              gyro_tare_body_[i][axis] = tare_window_gyro_sum_[i][axis] * inv_n;
-              accel_tare_body_[i][axis] =
+              const eskf_scalar mean_bias =
                   tare_window_accel_sum_[i][axis] * inv_n;
+              mean_bias_sq += mean_bias * mean_bias;
+            }
+            // Only a stationary window may become the tare (see config).
+            const bool commit =
+                !tare_window_disturbed_[i] &&
+                mean_bias_sq <= cfg_.tare_max_mean_bias_mps2 *
+                                    cfg_.tare_max_mean_bias_mps2;
+            for (int axis = 0; axis < 3; ++axis) {
+              if (commit) {
+                gyro_tare_body_[i][axis] =
+                    tare_window_gyro_sum_[i][axis] * inv_n;
+                accel_tare_body_[i][axis] =
+                    tare_window_accel_sum_[i][axis] * inv_n;
+              }
               tare_window_gyro_sum_[i][axis] = 0;
               tare_window_accel_sum_[i][axis] = 0;
             }
             tare_window_count_[i] = 0;
+            tare_window_disturbed_[i] = false;
           }
         }
       }
@@ -1369,3 +1405,7 @@ size_t VirtualImu::process(const eskf_sensor_t *const accel_data[ESKF_MAX_IMUS],
 }
 
 } // namespace eskf
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC pop_options
+#endif

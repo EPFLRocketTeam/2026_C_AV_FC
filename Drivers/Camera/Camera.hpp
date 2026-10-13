@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include "Drivers/Camera/Intranet.hpp"
+#include "Drivers/Camera/CameraDump.hpp"
 
 enum Camera : uint8_t {
     CAM_AERO_BOT = 0b00,
@@ -90,6 +91,8 @@ public:
     );
 
     bool isSynchronized (camera::AvionicsStateMachine stateImposed);
+
+    SingleCameraDump makeDump (uint32_t currentTime);
 };
 
 struct CameraDriver {

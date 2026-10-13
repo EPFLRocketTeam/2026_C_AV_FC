@@ -39,10 +39,12 @@ void BMP390_Mock::configure(OsrPressure osr_p, OsrTemp osr_t, IIRFilter filter) 
     last_filter = filter;
 }
 
-void BMP390_Mock::triggerMeasurement() {
+bool BMP390_Mock::triggerMeasurement() {
     ++call_trigger;
+    if (!trigger_returns) return false;
     pending_             = true;
     not_ready_remaining_ = not_ready_cycles;
+    return true;
 }
 
 bool BMP390_Mock::getFrame(BaroData& out) {

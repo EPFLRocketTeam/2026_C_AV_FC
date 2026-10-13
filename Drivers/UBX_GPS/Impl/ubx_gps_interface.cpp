@@ -210,6 +210,34 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
     return false;
   };
 
+#if !defined(UNIT_TEST_ENV)
+  if (dma_buf_ != nullptr) {
+    // A UART error (e.g. a byte arriving before the DMA was started) leaves
+    // ORE set; clear it so reception never stalls.
+    if (__HAL_UART_GET_FLAG(uart_handle_, UART_FLAG_ORE)) {
+      __HAL_UART_CLEAR_FLAG(uart_handle_, UART_CLEAR_OREF);
+      ++rx_stats_.overruns;
+    }
+    // The DMA counter counts down from dma_size_ and reloads in circular mode.
+    uint16_t head = static_cast<uint16_t>(
+        dma_size_ - __HAL_DMA_GET_COUNTER(uart_handle_->hdmarx));
+    if (head >= dma_size_) {
+      head = 0;
+    }
+    while (dma_tail_ != head) {
+      const uint8_t byte = dma_buf_[dma_tail_];
+      dma_tail_ = static_cast<uint16_t>((dma_tail_ + 1u) % dma_size_);
+      ++rx_stats_.bytes;
+      if (processByte(byte)) {
+        ++rx_stats_.pvt;
+        return GpsStatus::OK;
+      }
+    }
+    // The UART is owned by the DMA now: no polled wait.
+    return GpsStatus::ERROR_TIMEOUT;
+  }
+#endif
+
   if (timeout_ms == 0u) {
     uint32_t bytes_polled = 0;
     while (bytes_polled < GPS_RX_NONBLOCKING_MAX_BYTES &&
@@ -240,6 +268,30 @@ GpsStatus UbxGpsInterface::getPvt(GpsBasicFixData *pvt_data,
   }
 
   return GpsStatus::ERROR_TIMEOUT;
+}
+
+GpsStatus UbxGpsInterface::startDmaRx(uint8_t *buffer, uint16_t size) {
+#if !defined(UNIT_TEST_ENV)
+  if (buffer == nullptr || size == 0u || uart_handle_->hdmarx == nullptr) {
+    return GpsStatus::ERROR_CONFIG;
+  }
+  // Bytes received since init() overran the single-byte RDR; clear the
+  // error flags or the receiver keeps them set.
+  __HAL_UART_CLEAR_FLAG(uart_handle_, UART_CLEAR_OREF | UART_CLEAR_NEF |
+                                          UART_CLEAR_PEF | UART_CLEAR_FEF);
+  if (HAL_UART_Receive_DMA(uart_handle_, buffer, size) != HAL_OK) {
+    return GpsStatus::ERROR_UART;
+  }
+  dma_buf_ = buffer;
+  dma_size_ = size;
+  dma_tail_ = 0;
+  resetParserState();
+  return GpsStatus::OK;
+#else
+  (void)buffer;
+  (void)size;
+  return GpsStatus::ERROR_CONFIG;
+#endif
 }
 
 GpsStatus UbxGpsInterface::stop() {

@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define ENABLE_USB_LOG
+// #define ENABLE_USB_LOG
 
 void app_printf_use_usb(bool use_usb);
 bool app_printf_is_usb_enabled ();

@@ -47,7 +47,7 @@ public:
     bool     ping()                                                   override;
     void     configure(OsrPressure osr_p, OsrTemp osr_t,
                        IIRFilter filter)                              override;
-    void     triggerMeasurement()                                     override;
+    bool     triggerMeasurement()                                     override;
     bool     getFrame(BaroData& out)                                  override;
     uint32_t getStatus() const                                        override { return statusFlags_; }
 

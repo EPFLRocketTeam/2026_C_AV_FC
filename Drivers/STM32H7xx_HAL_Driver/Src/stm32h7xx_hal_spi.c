@@ -3899,6 +3899,28 @@ static void SPI_CloseTransfer(SPI_HandleTypeDef *hspi)
   __HAL_SPI_CLEAR_EOTFLAG(hspi);
   __HAL_SPI_CLEAR_TXTFFLAG(hspi);
 
+#if defined(SPI_EOT_GUARD_US) && (SPI_EOT_GUARD_US > 0)
+  /* ES0392 section 2.22.6: EOT can precede the final SCK edge. With cached
+     execution, disabling SPE here can truncate a write without a HAL error.
+     The board selects a guard covering its slowest configured SCK period. */
+  if (hspi->Init.Mode == SPI_MODE_MASTER)
+  {
+    const uint32_t guard_cycles = (SystemCoreClock / 1000000U + 1U) * SPI_EOT_GUARD_US;
+    if ((CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk) != 0U &&
+        (DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk) != 0U)
+    {
+      const uint32_t start_cycles = DWT->CYCCNT;
+      while ((uint32_t)(DWT->CYCCNT - start_cycles) < guard_cycles) { __NOP(); }
+    }
+    else
+    {
+      /* At least one CPU cycle per iteration; do not enable/reset the shared
+         DWT counter from a transport cleanup routine. */
+      for (volatile uint32_t remaining = guard_cycles; remaining > 0U; --remaining) { __NOP(); }
+    }
+  }
+#endif
+
   /* Disable SPI peripheral */
   __HAL_SPI_DISABLE(hspi);
 

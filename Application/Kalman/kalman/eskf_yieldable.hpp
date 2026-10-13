@@ -543,6 +543,7 @@ class EskfYieldable {
 
   RewindCheckpoint captureRewindCheckpoint() const;
   void restoreRewindCheckpoint(const RewindCheckpoint& cp);
+  void dropCheckpointsNewerThan(uint64_t timestamp_us);
   
   /// Compute averaged lever arm velocity in NED frame over the window
   /// @param lever_arm_body GPS antenna lever arm in body frame (m)

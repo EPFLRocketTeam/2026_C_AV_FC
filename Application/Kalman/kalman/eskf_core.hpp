@@ -451,7 +451,7 @@ class EskfCore {
 
   /// Check for NaN/Inf in state and covariance.
   /// Sets diverged_ flag if detected.
-  void checkNumericalHealth();
+  void checkNumericalHealth(bool check_nis = true);
 
   /// Flush deferred covariance propagation before asynchronous corrections.
   /// Needed when covariance decimation is enabled and updates arrive between

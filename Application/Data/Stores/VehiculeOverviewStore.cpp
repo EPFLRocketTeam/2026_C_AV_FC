@@ -4,7 +4,7 @@
 using namespace flight_computer;
 
 VehiculeOverview::VehiculeOverview()
-    : no_cable_continuity(0) {
+    : no_cable_continuity_lox(0), no_cable_continuity_eth(0), pyros_activated(false) {
     pyros_on[0] = false;
     pyros_on[1] = false;
     pyros_on[2] = false;
@@ -13,8 +13,26 @@ VehiculeOverview::VehiculeOverview()
 
 VehiculeOverviewStore::VehiculeOverviewStore() {}
 
-uint8_t VehiculeOverviewStore::get_no_cable_continuity() const { return data_.no_cable_continuity; }
-void VehiculeOverviewStore::set_no_cable_continuity(uint8_t value) { data_.no_cable_continuity = value; }
+bool VehiculeOverviewStore::get_pyros_activated () const {
+    return data_.pyros_activated;
+}
+void VehiculeOverviewStore::set_pyros_activated (bool value) {
+    data_.pyros_activated = value;
+}
+
+bool VehiculeOverviewStore::get_no_cable_continuity_eth () const {
+    return data_.no_cable_continuity_eth;
+}
+void VehiculeOverviewStore::set_no_cable_continuity_eth (bool value) {
+    data_.no_cable_continuity_eth = value;
+}
+
+bool VehiculeOverviewStore::get_no_cable_continuity_lox () const {
+    return data_.no_cable_continuity_lox;
+}
+void VehiculeOverviewStore::set_no_cable_continuity_lox (bool value) {
+    data_.no_cable_continuity_lox = value;
+}
 
 bool VehiculeOverviewStore::get_pyro_ch1_on () const { return data_.pyros_on[0]; }
 bool VehiculeOverviewStore::get_pyro_ch2_on () const { return data_.pyros_on[1]; }

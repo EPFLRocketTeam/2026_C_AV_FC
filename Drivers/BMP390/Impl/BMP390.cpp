@@ -145,12 +145,12 @@ void BMP390_SDK::configure(OsrPressure osr_p, OsrTemp osr_t, IIRFilter filter) {
 
 // ── BMP390_Interface: triggerMeasurement / getFrame ───────────────────────────
 
-void BMP390_SDK::triggerMeasurement() {
+bool BMP390_SDK::triggerMeasurement() {
     // Force-clear pending so a new trigger always succeeds.
     // The BaroModule calls this only after its own timeout has elapsed,
     // meaning the previous conversion result is stale/abandoned.
     pending_ = false;
-    triggerConversion();
+    return triggerConversion();
 }
 
 bool BMP390_SDK::getFrame(BaroData& out) {

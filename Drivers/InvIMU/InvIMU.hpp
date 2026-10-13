@@ -1,6 +1,7 @@
 #pragma once
 
 #include "InvIMU.h"
+#include "fifo_clock.hpp"
 #include <cstring>
 #include "stm32h7xx_hal.h"
 
@@ -87,6 +88,9 @@ namespace InvIMU {
 
         bool use_dwt_timestamps = true;
         bool use_dma = (INVIMU_USE_DMA_DEFAULT != 0u);
+        // Optional prescaler for blocking FIFO bursts only. Register accesses
+        // retain the shared-bus default; UINT32_MAX means no override.
+        uint32_t fifo_spi_prescaler = UINT32_MAX;
         uint8_t accel_bw_div = INVIMU_ACCEL_BW_DIV;
         uint8_t gyro_bw_div = INVIMU_GYRO_BW_DIV;
         uint8_t accel_lp_avg = INVIMU_ACCEL_LP_AVG;
@@ -122,6 +126,9 @@ namespace InvIMU {
         // Timestamp diagnostic accessors
         uint32_t monotonicRepairCount() const { return _monotonic_repair_count; }
         int32_t lastOffsetErrUs() const { return _last_offset_err_us; }
+        uint64_t lastFrameTimestampUs() const { return _last_emitted_ts_us; }
+        int32_t timestampScalePpm() const { return _clock.scalePpm(); }
+        uint32_t recoveredTimestampWraps() const { return _clock.recoveredWraps(); }
         uint32_t frameCount0x7C() const { return _frame_count_0x7C; }
         uint32_t offsetUpdateRejectCount() const { return _offset_update_reject_count; }
         int32_t maxRejectedErrUs() const { return _max_rejected_err_us; }
@@ -129,6 +136,12 @@ namespace InvIMU {
         uint32_t spiStateNotReadyCount() const { return _spi_state_not_ready_count; }
         uint32_t offsetBurstCount() const { return _offset_burst_count; }
         bool offsetGateArmed() const { return _offset_gate_armed; }
+
+        FifoStats takeFifoStats() override {
+            const FifoStats s = _fifo_stats;
+            _fifo_stats = FifoStats{};
+            return s;
+        }
 
         void onInterrupt(uint64_t irq_us = 0) override;
         void tick() override;        
@@ -176,15 +189,11 @@ namespace InvIMU {
         volatile bool _irq_pending = false;
         volatile uint16_t _last_dma_size = 0;
         volatile uint64_t _dma_irq_time_us = 0;
+        uint16_t _fifo_count_snapshot = 0;
+        FifoClock _clock{};
         volatile uint32_t _invalidate_size = 0;
 
-        bool _timestamp_initialized = false;
-        volatile uint16_t _last_fifo_ts = 0;  
-        volatile uint64_t _last_unwrapped_ts = 0; 
-
         volatile uint64_t _irq_time_us = 0;
-        int64_t _fifo_to_abs_offset_us = 0;
-        bool _fifo_to_abs_offset_initialized = false;
         uint64_t _last_emitted_ts_us = 0;
 
         // Timestamp diagnostic counters
@@ -209,6 +218,8 @@ namespace InvIMU {
         // SPI diagnostic counters
         uint32_t _spi_fifo_read_fail_count = 0;
         uint32_t _spi_state_not_ready_count = 0;
+
+        FifoStats _fifo_stats{};
 
         static void enable_dwt_cyccnt();
         static bool dwt_is_running();

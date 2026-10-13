@@ -17,6 +17,9 @@
 
 #include "imu/inv_imu_driver.h"
 #include "imu/inv_imu_version.h"
+#if APP_BENCH_IMU_INIT_STAGE
+#include "app_printf.h"
+#endif
 
 void inv_imu_sleep_us(inv_imu_device_t *s, uint32_t us)
 {
@@ -61,8 +64,12 @@ int inv_imu_soft_reset(inv_imu_device_t *s)
 			}
 			inv_imu_sleep_us(s, 1000);
 		}
-		if (!reset_done)
+		if (!reset_done) {
+#if APP_BENCH_IMU_INIT_STAGE
+			app_printf("[IMU-STAGE] reset poll=%02X status=%d\r\n", *(uint8_t *)&int1_status0, status);
+#endif
 			return INV_IMU_ERROR;
+		}
 	}
 
 	return status;

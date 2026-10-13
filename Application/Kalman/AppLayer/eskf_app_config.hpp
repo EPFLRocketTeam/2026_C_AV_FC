@@ -5,7 +5,16 @@
 #endif
 
 #ifndef ESKF_APP_CATCHUP_BUDGET_US
-#define ESKF_APP_CATCHUP_BUDGET_US 2000
+// Full-rate 6.4 kHz prediction needs a larger quantum than ingestion's
+// per-loop overhead. Still bounded: service sensor FIFOs between catch-ups.
+#define ESKF_APP_CATCHUP_BUDGET_US 4000
+#endif
+
+#ifndef ESKF_APP_IMU_PIPELINE_LOG_INTERVAL_US
+// Static-orientation diagnostics must not exceed SD bandwidth while ARMED.
+// Raw IMUs and estimator processing stay full-rate. 0 is an explicit bench
+// override for unthrottled snapshots, not a supported production SD load.
+#define ESKF_APP_IMU_PIPELINE_LOG_INTERVAL_US 10000
 #endif
 
 #ifndef ESKF_GPS_LEVER_ARM_X

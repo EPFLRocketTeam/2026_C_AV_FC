@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cstdio>
 #include "app_printf.h"
+#include "Application/app_timebase.h"
 
 // ── SPI transport ─────────────────────────────────────────────────────────────
 // BMP390 SPI read protocol: [addr|0x80] [dummy rx] [data...].
@@ -90,22 +91,13 @@ void bmp3_delay_us_hal(uint32_t us, void* /*ctx*/) {
     }
 }
 
-// ── DWT microsecond timer (same approach as the raw driver) ───────────────────
+// ── Shared application microsecond clock ──────────────────────────────────────
 
 void bmp3_enable_dwt() {
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CYCCNT = 0;
-    DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
+    // Share the application clock; never reset a counter used by other sensors.
+    app_timebase_init();
 }
 
 uint64_t bmp3_now_us() {
-    if (!(DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk)) {
-        return HAL_GetTick() * 1000ULL;
-    }
-    static uint32_t prev_cyc = 0;
-    static uint64_t accum_us = 0;
-    uint32_t cyc  = DWT->CYCCNT;
-    accum_us += static_cast<uint64_t>(cyc - prev_cyc) * 1000000ULL / SystemCoreClock;
-    prev_cyc  = cyc;
-    return accum_us;
+    return app_timebase_now_us();
 }

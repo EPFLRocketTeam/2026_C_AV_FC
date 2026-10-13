@@ -38,6 +38,11 @@ private:
     bool inTransaction = false;
     bool transactionFailed = false;
     bool lastTxFailed_ = false;
+
+    // Write batching, see tick().
+    static constexpr uint64_t kMinWriteBlocks = 32;   // 16 KB
+    static constexpr uint32_t kMaxWriteDelayMs = 20;
+    uint32_t last_flush_ms_ = 0;
 public:
     bool init_sd_card (
         SD_HandleTypeDef* hsd,

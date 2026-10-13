@@ -61,6 +61,8 @@ void Error_Handler(void);
 #define PYROS_2_GPIO_Port GPIOC
 #define PYROS_1_Pin GPIO_PIN_15
 #define PYROS_1_GPIO_Port GPIOC
+#define PYROS_Active_Pin GPIO_PIN_0
+#define PYROS_Active_GPIO_Port GPIOC
 #define GPIO_RFM_TX_RST_Pin GPIO_PIN_2
 #define GPIO_RFM_TX_RST_GPIO_Port GPIOA
 #define GPIO_RFM_TX_INT0_Pin GPIO_PIN_3
@@ -111,6 +113,15 @@ void Error_Handler(void);
 #define PYROS_3_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */
+
+/* Shared C/C++ policy: the application rejects unaudited SPI DMA when the
+ * board enables data caching. Kept here so both checks see the same default. */
+#ifndef APP_ENABLE_DCACHE
+#define APP_ENABLE_DCACHE 1
+#endif
+#ifndef APP_CACHE_SD_ARENA
+#define APP_CACHE_SD_ARENA 1
+#endif
 
 /* USER CODE END Private defines */
 

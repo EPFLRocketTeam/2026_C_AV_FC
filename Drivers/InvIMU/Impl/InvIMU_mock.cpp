@@ -55,7 +55,8 @@ void InvIMU_Mock::addMockSamples(const std::vector<IMUData>& samples) {
     }
 }
 
-void InvIMU_Mock::onInterrupt() {
+void InvIMU_Mock::onInterrupt(uint64_t irq_us) {
+    (void)irq_us;
     if (_fifo.size() >= _fifo_watermark) {
         _interrupt_pending = true;
     }

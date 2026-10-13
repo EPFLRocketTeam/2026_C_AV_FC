@@ -16,6 +16,9 @@
  */
 
 #include "imu/inv_imu_driver_advanced.h"
+#if APP_BENCH_IMU_INIT_STAGE
+#include "app_printf.h"
+#endif
 
 /* Static functions */
 static int configure_serial_interface(inv_imu_device_t *s);
@@ -50,8 +53,12 @@ int inv_imu_adv_init(inv_imu_device_t *s)
 
 	/* Read and check whoami */
 	status |= inv_imu_get_who_am_i(s, &whoami);
-	if (whoami != INV_IMU_WHOAMI)
+	if (whoami != INV_IMU_WHOAMI) {
+#if APP_BENCH_IMU_INIT_STAGE
+		app_printf("[IMU-STAGE] WHO read=%02X status=%d\r\n", whoami, status);
+#endif
 		return INV_IMU_ERROR;
+	}
 
 	/* Reset device */
 	status |= inv_imu_adv_device_reset(s);

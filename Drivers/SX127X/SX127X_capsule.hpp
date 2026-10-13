@@ -69,6 +69,65 @@ public:
 	}
 
 	/**
+	 * Non-blocking variant of transmit(): encode the frame, load it and
+	 * start the transmission, then return. Completion is reported by
+	 * pollTransmit(). Requires prepareTransmit() after init().
+	 *
+	 * \return true if the transmission was started, false if one is still
+	 *         in progress or the encoded frame would exceed SX127X_MAX_PACKET
+	 */
+	bool startTransmit(uint8_t packetId, const uint8_t *payload,
+			uint8_t length) {
+		uint32_t codedLen = capsule.getCodedLen(length);
+		if (codedLen > SX127X_MAX_PACKET) {
+			return false;
+		}
+		if (module.status == TX) {
+			return false;
+		}
+		capsule.encode(packetId, const_cast<uint8_t*>(payload), length, internalBuffer);
+		return SX127X_txStart(&module, internalBuffer,
+				static_cast<uint8_t>(codedLen)) == 1;
+	}
+
+	/** TX-side register setup for startTransmit(); call once after init(). */
+	void prepareTransmit() {
+		SX127X_txPrepare(&module);
+	}
+
+	/** \return SX127X_TX_DONE once per transmission started by startTransmit() */
+	SX127X_TxPoll_t pollTransmit() {
+		return SX127X_txPoll(&module);
+	}
+
+	/** Give up on the transmission in progress: standby, TX registers again. */
+	void abortTransmit() {
+		SX127X_standby(&module);
+		SX127X_txPrepare(&module);
+	}
+
+	/** Reapply the configuration from init() (blocking, ~16 ms). */
+	void reconfigure() {
+		SX127X_config(&module);
+	}
+
+	/** Non-blocking variant of receive(); call after init() or reconfigure(). */
+	void startReceive() {
+		SX127X_rxStart(&module, module.packetLength);
+	}
+
+	/** \return true if RegOpMode is LoRa continuous RX (as set by receive()) */
+	bool isInLoRaRx() {
+		const uint8_t op = SX127X_SPIRead(&module, LR_RegOpMode);
+		return (op & 0x80) != 0 && (op & 0x07) == 0x05;
+	}
+
+	/** \return true if the radio answers on the bus (RegVersion) */
+	bool isPresent() {
+		return SX127X_isPresent(&module);
+	}
+
+	/**
 	 * Enter reception mode, listening for frames of the length configured in
 	 * init().
 	 *

@@ -62,6 +62,13 @@
 /* #define HAL_MMC_MODULE_ENABLED   */
 /* #define HAL_SPDIFRX_MODULE_ENABLED   */
 #define HAL_SPI_MODULE_ENABLED
+
+/* STM32H743 ES0392 2.22.6 workaround in SPI_CloseTransfer. All configured
+ * board SPI clocks are >= 4 MHz; 1 us covers their final SCK cycle with margin.
+ * Revisit this bound if a bus is configured below 1 MHz. */
+#ifndef SPI_EOT_GUARD_US
+#define SPI_EOT_GUARD_US 1U
+#endif
 /* #define HAL_SWPMI_MODULE_ENABLED   */
 #define HAL_TIM_MODULE_ENABLED
 #define HAL_UART_MODULE_ENABLED

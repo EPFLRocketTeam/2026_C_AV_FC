@@ -19,7 +19,7 @@ BMP3_INTF_RET_TYPE bmp3_spi_read (uint8_t reg, uint8_t* dst, uint32_t len, void*
 BMP3_INTF_RET_TYPE bmp3_spi_write(uint8_t reg, const uint8_t* src, uint32_t len, void* ctx);
 void               bmp3_delay_us_hal(uint32_t us, void* ctx);
 
-// ── DWT microsecond timer ──────────────────────────────────────────────────────
+// ── Shared application microsecond clock (legacy entry-point names) ────────────
 
 void     bmp3_enable_dwt();
 uint64_t bmp3_now_us();

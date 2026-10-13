@@ -1,11 +1,12 @@
 #include "av_state.h"
+#include "Application/main.h"
 #include "Application/Data/data.hpp"
 #include "Application/Config/config.hpp"
 #include "Application/FlightControl/prc_can.hpp"
-#include "Application/FlightControl/threshold.h"
 #include "Application/Kalman/kalman_lifecycle.h"
 #include "Drivers/STM32HAL/stm32hal.h"
 #include "Application/app_printf.h"
+#include "Application/main.h"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 
 extern "C" {
@@ -95,23 +96,32 @@ State AvState::fromPressurization(DataDump const &dump) {
       dump.propSensors.ETA_pressure > config::get().Pressurization.MinFuelNominalPressure; 
 
   if (hold_delay_elapsed && pressure_nominal) {
-    return State::IGNITION;
+    return State::TRY_IGNITION;
   }
   return currentState;
 }
 
+State AvState::fromTryIgnition(DataDump const &dump) {
+  if (dump.uplinkCmd.id == AV_CMD_ABORT) {
+    return State::ABORT_ON_GROUND;
+  }
+  
+  float TryIgnitionDurationMs =
+    config::get().Ignition.DelayMs
+  + config::get().Ignition.IgniterDurationMs
+  + config::get().Ignition.PrechillDurationMs
+  + config::get().Ignition.RampUpMs;
+
+  if (HAL_GetTick() - try_ignition_entry_ms_ >= TryIgnitionDurationMs) {
+    return State::IGNITION;
+  }
+
+  return currentState;
+}
 State AvState::fromIgnition(DataDump const &dump) {
   if (dump.uplinkCmd.id == AV_CMD_ABORT) {
     return State::ABORT_ON_GROUND;
   }
-
-  // TEMPORARY bench bypass: no real motor burn on the bench means the
-  // accel-hold check always reads ACC_HOLD_DID_NOT_HOLD, so IGNITION would
-  // always auto-abort. Force BURN here instead; real liftoff logic below is
-  // left intact and unreachable until this is removed.
-  bool mo_open = GOATStore::get_instance().valvesStore.get_main_LOX_open();
-  bool me_open = GOATStore::get_instance().valvesStore.get_main_fuel_open();
-  return (mo_open && me_open) ? State::BURN : currentState;
 
   // Liftoff detection, per spec: cable disconnect OR the accel hold
   // confirming it is enough for BURN, either signal alone is trusted.
@@ -119,13 +129,19 @@ State AvState::fromIgnition(DataDump const &dump) {
   // nothing happened. While the accel hold hasn't concluded yet
   // (ACC_HOLD_NOT_ELAPSED) and the cable is still connected, stay in
   // IGNITION.
-  const bool cable_lost = dump.vehiculeOverview.no_cable_continuity;
-  if (cable_lost || dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
+  // Cable is lost if and only if both cable fell.
+  const bool cable_lost = dump.vehiculeOverview.no_cable_continuity_eth
+                       && dump.vehiculeOverview.no_cable_continuity_lox;
+  if ((cable_lost && dump.event.vertical_acc_hold == ACC_HOLD_NOT_ELAPSED)
+     || dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
     return State::BURN;
   }
   // TODO wtf, maybe add a delay idk
-  if (!cable_lost && dump.event.vertical_acc_hold == ACC_HOLD_DID_NOT_HOLD) {
-    return State::ABORT_ON_GROUND;
+  // if (!cable_lost && dump.event.vertical_acc_hold == ACC_HOLD_DID_NOT_HOLD) {
+  //   return State::ABORT_ON_GROUND;
+  // }
+  if (HAL_GetTick() - ignition_entry_ms_ >= config::get().MaxTimeFromIgnitionToDescentMs()) {
+    return State::DESCENT;
   }
 
   return currentState;
@@ -229,6 +245,9 @@ void AvState::update(const DataDump &dump) {
   case State::PRESSURIZATION:
     currentState = fromPressurization(dump);
     break;
+  case State::TRY_IGNITION:
+    currentState = fromTryIgnition(dump);
+    break;
   case State::IGNITION:
     currentState = fromIgnition(dump);
     break;
@@ -260,6 +279,9 @@ void AvState::update(const DataDump &dump) {
            stateToString(previous_state).c_str(),
            stateToString(currentState).c_str());
     kalman_on_state_change(static_cast<uint32_t>(currentState));
+
+    if (currentState == State::INIT) app_on_state_becomes_init();
+    if (currentState == State::ARMED) app_on_state_becomes_armed();
 
     if (currentState == State::ARMED && previous_state == State::ASCENT
      && config::get().ColdflowMode) {
@@ -294,8 +316,12 @@ void AvState::update(const DataDump &dump) {
     // Engine board starts its own ignition sequence (ClearToIgnite ->
     // IgnitionPrechill, see 2026_C_AV_PRC's engine_state.cpp), matching
     // OnPressurize's clear_to_ignite send that got it to ClearToIgnite.
-    if (currentState == State::IGNITION) {
+    if (currentState == State::TRY_IGNITION) {
       Fc_Can_SendPrcIgnite();
+      try_ignition_entry_ms_ = HAL_GetTick();
+    }
+    if (currentState == State::IGNITION) {
+      ignition_entry_ms_ = HAL_GetTick();
     }
 
     // Abort side effect (spec: "Immediately gives the command to the DPRs
@@ -312,14 +338,11 @@ void AvState::update(const DataDump &dump) {
     // entering ABORT_IN_FLIGHT. No separation mechanism driver/CAN message
     // exists anywhere in this codebase yet -- call it here once it does.
     if (currentState == State::ABORT_IN_FLIGHT) {
-      // Fc_Can_SendSepMechTrigger();
+      app_open_parachute();
     }
 
-    // TODO(SepMech): spec's DESCENT description: "Apogee reached and
-    // detected, separation mechanism triggered." Same missing driver as
-    // above -- call it here once it exists.
     if (currentState == State::DESCENT) {
-      // Fc_Can_SendSepMechTrigger();
+      app_open_parachute();
 
       // Passivate side effect: tells the Engine board to run its
       // passivation sequence (2026_C_AV_PRC's engine_state.cpp:
@@ -401,6 +424,9 @@ std::string AvState::stateToString(State state) {
     break;
   case State::FILLING:
     return "FILLING";
+    break;
+  case State::TRY_IGNITION:
+    return "TRY_IGNITION";
     break;
   case State::IGNITION:
     return "IGNITION";
