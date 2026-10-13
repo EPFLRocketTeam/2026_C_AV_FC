@@ -10,7 +10,9 @@
 extern "C" {
 #endif
 
+#ifndef UNIT_TEST_ENV
 void Fc_Can_Init(FDCAN_HandleTypeDef *hfdcan);
+#endif
 
 void Fc_Can_ProcessRxMessage(uint32_t can_id, const uint8_t *data, uint32_t dlc);
 

@@ -35,9 +35,11 @@ GpsStatus UbxGpsInterface::init() {
   status = writeCfgVal32(CFG_KEY_UART1_BAUDRATE, UBX_BAUDRATE);
   if (status != GpsStatus::OK)
     return status;
+#ifndef UNIT_TEST_ENV
   uart_handle_->Init.BaudRate = UBX_BAUDRATE;
   if (HAL_UART_Init(uart_handle_) != HAL_OK)
     return GpsStatus::ERROR_UART;
+#endif
 
   // 3. Configure power mode (ktp-soft parity: high performance by default)
   status = configurePowerMode();
