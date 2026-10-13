@@ -132,8 +132,7 @@ State AvState::fromIgnition(DataDump const &dump) {
   // Cable is lost if and only if both cable fell.
   const bool cable_lost = dump.vehiculeOverview.no_cable_continuity_eth
                        && dump.vehiculeOverview.no_cable_continuity_lox;
-  if ((cable_lost && dump.event.vertical_acc_hold == ACC_HOLD_NOT_ELAPSED)
-     || dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
+  if (cable_lost || dump.event.vertical_acc_hold == ACC_HOLD_DID_HOLD) {
     return State::BURN;
   }
   // TODO wtf, maybe add a delay idk
@@ -176,16 +175,12 @@ State AvState::fromBurn(DataDump const &dump) {
 }
 
 State AvState::fromAscent(DataDump const &dump) {
-  if (config::get().ColdflowMode && dump.uplinkCmd.id == AV_CMD_ARM) {
-    return State::ARMED;
-  }
-
   if (dump.uplinkCmd.id == AV_CMD_ABORT) {
     return State::ABORT_IN_FLIGHT;
   } else if (
-      (!config::get().ColdflowMode)
-       &&  (dump.event.apogee_detected
-         || dump.flightEventTimers.ascent_duration > config::get().Ascent.AscentMaxDurationMs)) {
+      dump.event.apogee_detected
+   || dump.flightEventTimers.ascent_duration > config::get().Ascent.AscentMaxDurationMs
+  ) {
     return State::DESCENT;
   }
   return currentState;
@@ -282,13 +277,6 @@ void AvState::update(const DataDump &dump) {
 
     if (currentState == State::INIT) app_on_state_becomes_init();
     if (currentState == State::ARMED) app_on_state_becomes_armed();
-
-    if (currentState == State::ARMED && previous_state == State::ASCENT
-     && config::get().ColdflowMode) {
-      Fc_Can_SendPrcReset();
-      Fc_Can_SendDprEthReset();
-      Fc_Can_SendDprLoxReset();
-    }
 
     if (currentState == State::PRESSURIZATION) {
       pressurization_entry_ms_ = HAL_GetTick();
