@@ -23,10 +23,6 @@ void handleRxCommand(void* data) noexcept {
 	if (packet == nullptr) {
 		return;
 	}
-	flight_computer::GOATStore& g = flight_computer::GOATStore::get_instance();
-	g.uplinkCmdStore.set_id(packet->order_id);
-	g.uplinkCmdStore.set_value(packet->order_value);
-
 	// order_value is specified as strictly ACTIVE or INACTIVE. Anything else
 	// is a corrupt byte that survived CRC, so drop the command rather than
 	// letting it fall through to the "close" case and move a valve.
@@ -41,6 +37,12 @@ void handleRxCommand(void* data) noexcept {
 				packet->order_value, packet->order_id);
 		return;
 	}
+	// Publish to the store only once the command is accepted: AvState reads
+	// uplinkCmd.id on its own and would otherwise act on a dropped command.
+	flight_computer::GOATStore& g = flight_computer::GOATStore::get_instance();
+	g.uplinkCmdStore.set_id(packet->order_id);
+	g.uplinkCmdStore.set_value(packet->order_value);
+
 	const bool  active  = (packet->order_value == 1);
 	const float percent = ((float) packet->order_value) * 1.11111111f;
 
