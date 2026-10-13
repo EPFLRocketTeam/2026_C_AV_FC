@@ -1247,7 +1247,11 @@ extern "C" void app_on_state_becomes_init () {
     auto &goat = flight_computer::GOATStore::get_instance();
     goat.flightEventTimersStore.set(
         flight_computer::FlightEventTimers());
+    flight_computer::GOATStore::get_instance().vehiculeOverviewStore
+        .set_pyros_activated(false);
+    HAL_GPIO_WritePin(PYROS_Active_GPIO_Port, PYROS_Active_Pin, GPIO_PIN_RESET);
 }
 extern "C" void app_on_state_becomes_armed () {
     g_sd_logger.setLogRate(true);
+    app_activate_pyros();
 }
