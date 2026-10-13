@@ -26,7 +26,7 @@ if (ENABLE_COVERAGE)
         COMMAND ctest
 
         COMMAND lcov --capture --directory . --output-file coverage.info --ignore-errors mismatch --rc branch_coverage=1
-        COMMAND lcov --remove coverage.info '/usr/*' '*test*' '*_deps*' --output-file coverage_filtered.info --rc branch_coverage=1
+        COMMAND lcov --remove coverage.info '/usr/*' '*test*' '*_deps*' --output-file coverage_filtered.info --ignore-errors unused --rc branch_coverage=1
 
         COMMAND genhtml coverage_filtered.info --output-directory html_report --rc branch_coverage=1
     )
