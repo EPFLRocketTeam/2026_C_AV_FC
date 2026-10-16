@@ -55,8 +55,12 @@ PREPARE_DOWNLINK(flight_computer::PropSensors) {
    	packet.HPE_pressure = dump.HPE_pressure;
 	packet.fuel_pressure = dump.ETA_pressure;
 	packet.LOX_pressure = dump.OTA_pressure;
-	packet.LOX_fls_temp_1 = dump.fls_OTA_temperature_1;
-	packet.LOX_fls_temp_2 = dump.fls_OTA_temperature_2;
+	// fls_OTA_temperature_1/2 carry the 24 V rail voltage of DPR-Lox / DPR-Eth (INA228
+	// on the PRCs), not a temperature. The packet field is int8 with a 2-unit step,
+	// so send 4*V (0.5 V steps, up to 63.5 V); the ground divides by 4. +0.25 V
+	// makes the truncating int8 cast round to nearest instead of down.
+	packet.LOX_fls_temp_1 = (dump.fls_OTA_temperature_1 + 0.25) * 4.0;
+	packet.LOX_fls_temp_2 = (dump.fls_OTA_temperature_2 + 0.25) * 4.0;
 	packet.LOX_fls_temp_3 = dump.fls_OTA_temperature_3;
 	packet.LOX_fls_temp_4 = dump.fls_OTA_temperature_4;
 	packet.LOX_fls_temp_5 = dump.fls_OTA_temperature_5;
