@@ -24,9 +24,9 @@
     inline void prepare_downlink_packet (av_downlink_unpacked_t &packet, const type &dump)
 
 PREPARE_DOWNLINK(GpsBasicFixData) {
-    packet.gnss_alt = dump.height;
-    packet.gnss_lat = dump.lat;
-    packet.gnss_lon = dump.lon;
+    packet.gnss_alt = dump.height / 1e3f;
+    packet.gnss_lat = dump.lat / 1e7f;
+    packet.gnss_lon = dump.lon / 1e7f;
 }
 PREPARE_DOWNLINK(flight_computer::SensStatus) {
     (void) packet; (void) dump;

@@ -881,7 +881,7 @@ extern "C" void app_super_loop_iterate(void) {
     // Write DataDump at ~62.5 Hz + on FSM transitions.
     // tick() is always called to drain the ring buffer via DMA.
     if (g_sd_logging_active) {
-        RUN_EVERY(100) {
+        /*RUN_EVERY(100) {
             app_printf("[SD] wr=%lu fail=%lu arena=%lu/%lu maxWr=%luus ticks=%lu disk=%lluKB imu=%lu/%lu(%luKB) unpacked=%lu\r\n",
                    (unsigned long)g_sd_logger.writeCount(),
                    (unsigned long)g_sd_logger.writeFailCount(),
@@ -894,7 +894,7 @@ extern "C" void app_super_loop_iterate(void) {
                    (unsigned long)g_sd_logger.imuBatchFail(),
                    (unsigned long)(g_sd_logger.imuBytesOk() / 1024),
                    (unsigned long)g_sd_logger.imuBatchUnpacked());
-        }
+        }*/
 
         const uint32_t now_ms = HAL_GetTick();
         bool should_log = (now_ms - g_last_log_ms >= kLogIntervalMs);
@@ -986,7 +986,7 @@ extern "C" void app_super_loop_iterate(void) {
             g_metrics_tracker.reset();
 
             // Debug print SD health + app metrics (1 Hz)
-            {
+            /*{
                 SdTimingStats st = sd_timing_snapshot();
                 uint32_t avg_cycle = (st.dma_count > 0) ? (uint32_t)(st.sum_cycle_us / st.dma_count) : 0;
                 app_printf("[SD-T] dma=%lu err=%lu(0x%lX) blk=%lu batch=%lu-%lu xfer=%luus prog=%luus cyc=%lu/%luus\r\n",
@@ -1012,7 +1012,7 @@ extern "C" void app_super_loop_iterate(void) {
                    (unsigned long)m.sd_tick_max_us,
                    (unsigned long)delta_fire,
                    (unsigned long)delta_solo,
-                   (unsigned long)delta_stale);
+                   (unsigned long)delta_stale);*/
         }
     }
     app_perf_end(APP_PERF_SD_LOG, perf_t0);
@@ -1037,16 +1037,16 @@ extern "C" void app_super_loop_iterate(void) {
 
     nb_superloops ++;
     RUN_EVERY(1000) {
-    	app_printf("[IMU STATUS] \n");
-    	for (size_t i = 0; i < 4; i ++) {
-    		printf(" IMU %d: healthy=%d status=%d\n", (int) i, (int) g_imu_healthy[i], (int) g_imu_status_flags[i]);
-    	}
-    	app_printf("PRODUCED: %d\n", nb_consumed);
-        app_printf("OVER TIME: %d\n", nb_superloops);
-    	app_printf("[BARO STATUS] \n");
-    	for (size_t i = 0; i < 4; i ++) {
-    		printf(" BARO %d: healthy=%d status=%d\n", (int) i, (int) g_baro_healthy[i], (int) g_baro_status_flags[i]);
-    	}
+    	// app_printf("[IMU STATUS] \n");
+    	// for (size_t i = 0; i < 4; i ++) {
+    	// 	printf(" IMU %d: healthy=%d status=%d\n", (int) i, (int) g_imu_healthy[i], (int) g_imu_status_flags[i]);
+    	// }
+    	// app_printf("PRODUCED: %d\n", nb_consumed);
+        // app_printf("OVER TIME: %d\n", nb_superloops);
+    	// app_printf("[BARO STATUS] \n");
+    	// for (size_t i = 0; i < 4; i ++) {
+    	// 	printf(" BARO %d: healthy=%d status=%d\n", (int) i, (int) g_baro_healthy[i], (int) g_baro_status_flags[i]);
+    	// }
         nb_superloops = 0;
         nb_consumed = 0;
     }

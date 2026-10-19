@@ -54,6 +54,11 @@ public:
 
     buffers_[0]->append(gpsFix);
     g.gpsStore.set(gpsFix);
+    app_printf("GPS Information:\n");
+    app_printf(" longitude: %f\n", gpsFix.lon / 1e7f);
+    app_printf(" latitude:  %f\n", gpsFix.lat / 1e7f);
+    app_printf(" n_sat:     %d\n", gpsFix.numSV);
+    app_printf("\n");
 
     last_fix_tick_ms_ = tick_ms;
     has_fix_ = true;

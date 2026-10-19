@@ -74,7 +74,7 @@ public:
                 }
 
                 flight_computer::GOATStore::get_instance().setFcTemperature(dump.temperature_c);
-                RUN_EVERY(1'000) app_printf("[TMP1075] fc_temperature = %f\n", dump.temperature_c);
+                // RUN_EVERY(1'000) app_printf("[TMP1075] fc_temperature = %f\n", dump.temperature_c);
             } else {
                 if (!driver.triggerConversion()) {
                     // RUN_EVERY(10'000) app_printf("[TMP1075] Trigger has failed.\n");
