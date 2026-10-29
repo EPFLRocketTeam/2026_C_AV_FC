@@ -94,12 +94,13 @@ void cameras_start (void* ctx);
 void cameras_stop (void* ctx);
 
 // -- System ----------------------------------------------------------------
-// Reboots into the ROM DFU bootloader; refused with a printed reason unless
-// the FC state is INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND, and
-// acts only when repeated within 10 s (the first call arms and says so).
+// system dfu and system reboot refuse with a printed reason unless the FC
+// state is INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND; otherwise
+// they only arm a 10 s window. system confirm inside it does the armed
+// reset: the ROM DFU bootloader or a plain reboot.
 void OnSystemDfu(void*) noexcept;
-// Plain reset into the application, with the same guard and confirmation.
 void OnSystemReboot(void*) noexcept;
+void OnSystemConfirm(void*) noexcept;
 
 void handleRxCommand(void* data) noexcept;
 }  // namespace fc_commands

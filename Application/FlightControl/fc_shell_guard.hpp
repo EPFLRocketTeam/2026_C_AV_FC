@@ -48,26 +48,30 @@ inline const char* StateName(flight_computer::State state) {
   return "UNKNOWN";
 }
 
-// Two step confirmation for system dfu and system reboot: the first call
-// arms a 10 s window for that command, a second call of the same command
-// inside the window confirms it. Anything else (the window ran out, or the
-// other command came in between) arms again. A refused call disarms.
-// Times are milliseconds from any free running clock (HAL_GetTick on the
-// board); wrap around is handled.
+// Two step confirmation for system dfu and system reboot: either command
+// only arms a 10 s window and says so; `system confirm` inside the window
+// acts on whatever was armed. The second step is a different command, so a
+// reflex double entry or a repeated line only re-arms. Arming again (either
+// command) restarts the window for that command; a refusal disarms;
+// confirming consumes the window. Times are milliseconds from any free
+// running clock (HAL_GetTick on the board); wrap around is handled.
 class ConfirmWindow {
  public:
   enum class Command : uint8_t { kNone, kDfu, kReboot };
   static constexpr uint32_t kWindowMs = 10000;
 
-  // Returns true when this call confirms the command; false when it armed.
-  bool Request(Command command, uint32_t now_ms) {
-    if (command == armed_ && now_ms - armed_at_ms_ < kWindowMs) {
-      armed_ = Command::kNone;
-      return true;
-    }
+  void Arm(Command command, uint32_t now_ms) {
     armed_ = command;
     armed_at_ms_ = now_ms;
-    return false;
+  }
+
+  // Returns the armed command and disarms, or kNone when nothing is armed
+  // or the window ran out.
+  Command Confirm(uint32_t now_ms) {
+    const Command armed = armed_;
+    armed_ = Command::kNone;
+    if (armed == Command::kNone || now_ms - armed_at_ms_ >= kWindowMs) return Command::kNone;
+    return armed;
   }
 
   void Disarm() { armed_ = Command::kNone; }

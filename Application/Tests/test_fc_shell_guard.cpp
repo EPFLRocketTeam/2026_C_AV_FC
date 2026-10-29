@@ -47,39 +47,58 @@ TEST(FcShellGuard, EveryStateHasItsName) {
 
 using Command = fc_shell::ConfirmWindow::Command;
 
-TEST(FcShellConfirm, SecondCallInsideTheWindowConfirms) {
+// Truth table of the two step reset: what system confirm does after each
+// sequence. The second step is always a different command than the first.
+TEST(FcShellConfirm, ConfirmActsOnWhatWasArmedWithinTheWindow) {
     fc_shell::ConfirmWindow w;
-    EXPECT_FALSE(w.Request(Command::kDfu, 1000));
-    EXPECT_TRUE(w.Request(Command::kDfu, 1000 + 9999));
-    // Confirming consumes the window: the next call arms again.
-    EXPECT_FALSE(w.Request(Command::kDfu, 12000));
+    w.Arm(Command::kDfu, 1000);
+    EXPECT_EQ(w.Confirm(1000 + 9999), Command::kDfu);
+    // Confirming consumes the window.
+    EXPECT_EQ(w.Confirm(1000 + 9999), Command::kNone);
+
+    w.Arm(Command::kReboot, 5000);
+    EXPECT_EQ(w.Confirm(5001), Command::kReboot);
+}
+
+TEST(FcShellConfirm, ConfirmWithNothingArmedDoesNothing) {
+    fc_shell::ConfirmWindow w;
+    EXPECT_EQ(w.Confirm(0), Command::kNone);
+    EXPECT_EQ(w.Confirm(123456), Command::kNone);
 }
 
 TEST(FcShellConfirm, WindowOfTenSecondsRunsOut) {
     fc_shell::ConfirmWindow w;
-    EXPECT_FALSE(w.Request(Command::kReboot, 0));
-    EXPECT_FALSE(w.Request(Command::kReboot, 10000));  // too late: re-armed
-    EXPECT_TRUE(w.Request(Command::kReboot, 10001));
+    w.Arm(Command::kDfu, 0);
+    EXPECT_EQ(w.Confirm(10000), Command::kNone);
+    // A late confirm also disarms: confirming again later does nothing.
+    EXPECT_EQ(w.Confirm(10001), Command::kNone);
 }
 
-TEST(FcShellConfirm, OtherCommandInBetweenRearms) {
+// A reflex double entry (system dfu typed twice, or up arrow and Enter)
+// only re-arms; nothing happens without system confirm.
+TEST(FcShellConfirm, RepeatingTheCommandOnlyRearms) {
     fc_shell::ConfirmWindow w;
-    EXPECT_FALSE(w.Request(Command::kDfu, 0));
-    EXPECT_FALSE(w.Request(Command::kReboot, 100));
-    EXPECT_FALSE(w.Request(Command::kDfu, 200));
-    EXPECT_TRUE(w.Request(Command::kDfu, 300));
+    w.Arm(Command::kDfu, 0);
+    w.Arm(Command::kDfu, 9000);  // the repeat restarts the window
+    EXPECT_EQ(w.Confirm(18000), Command::kDfu);
+}
+
+TEST(FcShellConfirm, LastArmedCommandWins) {
+    fc_shell::ConfirmWindow w;
+    w.Arm(Command::kDfu, 0);
+    w.Arm(Command::kReboot, 100);
+    EXPECT_EQ(w.Confirm(200), Command::kReboot);
 }
 
 TEST(FcShellConfirm, DisarmCancelsTheWindow) {
     fc_shell::ConfirmWindow w;
-    EXPECT_FALSE(w.Request(Command::kDfu, 0));
+    w.Arm(Command::kDfu, 0);
     w.Disarm();
-    EXPECT_FALSE(w.Request(Command::kDfu, 1));
-    EXPECT_TRUE(w.Request(Command::kDfu, 2));
+    EXPECT_EQ(w.Confirm(1), Command::kNone);
 }
 
 TEST(FcShellConfirm, TickWrapAroundIsHandled) {
     fc_shell::ConfirmWindow w;
-    EXPECT_FALSE(w.Request(Command::kDfu, 0xFFFFF000u));
-    EXPECT_TRUE(w.Request(Command::kDfu, 0x00000500u));
+    w.Arm(Command::kDfu, 0xFFFFF000u);
+    EXPECT_EQ(w.Confirm(0x00000500u), Command::kDfu);
 }

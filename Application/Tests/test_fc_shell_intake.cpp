@@ -229,17 +229,21 @@ TEST(FcShellIntake, FeedReturnsTrueOnlyWhenALineIsEmitted) {
 namespace {
 int g_reboots = 0;
 int g_dfus = 0;
+int g_confirms = 0;
 void CountReboot(void*) { ++g_reboots; }
 void CountDfu(void*) { ++g_dfus; }
+void CountConfirm(void*) { ++g_confirms; }
 }  // namespace
 
 // FC_Shell_Tick's handoff: Drain into ReplayLine into the generated trie.
 TEST(FcShellIntake, DrainedLinesReachTheGeneratedTrie) {
     g_reboots = 0;
     g_dfus = 0;
+    g_confirms = 0;
     driver drv{};
     drv.system_reboot = CountReboot;
     drv.system_dfu = CountDfu;
+    drv.system_confirm = CountConfirm;
     context ctx{};
     fc_shell::Intake<256, 128> intake;
     auto receive = [&intake](const std::string& s) {
@@ -258,4 +262,7 @@ TEST(FcShellIntake, DrainedLinesReachTheGeneratedTrie) {
     tick();
     EXPECT_EQ(g_reboots, 1);
     EXPECT_EQ(g_dfus, 1);
+    receive("system confirm\n");
+    tick();
+    EXPECT_EQ(g_confirms, 1);
 }
