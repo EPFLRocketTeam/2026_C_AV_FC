@@ -39,6 +39,12 @@ What to expect:
 * After flashing, `:leave` (or `--start`) exits the bootloader and the board reboots into the new image. With the BOOT0 fallback, every reset enters the bootloader until BOOT0 is back low.
 * `system reboot` on the VCP port resets into the application.
 
+Bench checklist, once per board revision (the backup register write behind `system dfu` is not yet confirmed on hardware):
+
+1. On the VCP port, run `system dfu` twice within 10 s in FILLING.
+2. Expect `0483:df11` on the DFU port (`dfu-util -l`), and note the ROM bootloader ID the first `system dfu` printed.
+3. If the board just reboots into the application instead, select LSI as the RTC clock source in the `.ioc` (RCC, RTC clock mux), regenerate, and try again.
+
 What the ROM bootloader needs (ST AN2606 Rev 61, section 52 "STM32H74xxx/75xxx devices bootloader"):
 
 * Entry point: "The bootloader start address is 0x1FF09800" (section 52.1, Table 113). The jump loads the initial stack pointer from 0x1FF09800 and the reset handler from 0x1FF09804.

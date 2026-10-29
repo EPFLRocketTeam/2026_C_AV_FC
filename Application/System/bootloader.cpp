@@ -27,6 +27,12 @@
 //      RTC APB interface, so RCC_APB4ENR.RTCAPBEN (__HAL_RCC_RTC_CLK_ENABLE
 //      in this HAL) must be set to read them.
 //      The RTC kernel clock (RCC_BDCR.RTCEN) does not need to run.
+//      Per the HAL, reading and writing RTC_BKP0R needs only RTCAPBEN
+//      (__HAL_RCC_RTC_CLK_ENABLE) plus PWR_CR1.DBP; both .ioc files leave
+//      the RTC and its kernel clock source (RCC_BDCR.RTCSEL) unselected.
+//      Not yet confirmed on a board: if `system dfu` does not bring up
+//      0483:df11, select LSI as the RTC clock source in the .ioc (README,
+//      bench checklist).
 //    - PWR chapter, PWR_CR1.DBP: backup domain write protection; set it
 //      before writing RTC_BKPxR.
 //    - RCC chapter: after reset the core runs from HSI and no peripheral
