@@ -23,6 +23,10 @@ namespace {
 // drains them into a 128 byte line, rebuilt across USB packets.
 fc_shell::Intake<256, 128> g_intake;
 
+// The first bytes from a host turn the USB log on, once, so a fresh board
+// answers without `logs usb fc on`. `logs usb fc off` still holds after.
+volatile bool g_usb_log_auto_enabled = false;
+
 context g_cmd_ctx;
 driver  g_driver;
 
@@ -501,6 +505,10 @@ void EnsureInit() {
 // excess is dropped and the intake throws away the line it cut (see
 // SpscRing in fc_shell_intake.hpp), so a cut line never runs.
 void Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length) {
+    if (!g_usb_log_auto_enabled) {
+        g_usb_log_auto_enabled = true;
+        app_printf_use_usb(true);
+    }
     g_intake.Receive(data, length);
 }
 

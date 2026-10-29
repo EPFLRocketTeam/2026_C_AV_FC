@@ -177,15 +177,30 @@ static void board_configure_data_cache(void)
 }
 
 #ifdef OUTPUT_LOG
+extern USBD_HandleTypeDef hUsbDeviceHS;
+
+// Set when the CDC IN endpoint stayed busy past the 2 ms budget below (no
+// host reading the port, or a lost completion). Later writes are dropped
+// at once instead of each stalling the main loop, until the host shows
+// it is back: USB_Log_ClearStall() from CDC_TransmitCplt_HS or
+// CDC_Receive_HS (usbd_cdc_if.c).
+static volatile uint8_t usb_log_stalled = 0;
+
+void USB_Log_ClearStall(void) {
+    usb_log_stalled = 0;
+}
+
 int _write(int file, char *ptr, int len) {
-    // Wait until USB is ready, but never wedge: if the CDC endpoint stays
-    // busy (host not draining, missed completion), drop the output instead
-    // of spinning forever.
+    // Send only to an enumerated host, wait at most 2 ms on a busy
+    // endpoint, then drop: logging must never stall the flight loop.
     if (!app_printf_is_enabled()) return len;
+    if (hUsbDeviceHS.dev_state != USBD_STATE_CONFIGURED) return len;
+    if (usb_log_stalled) return len;
 
     uint32_t start = HAL_GetTick();
     while (CDC_Transmit_HS((uint8_t*)ptr, len) == USBD_BUSY) {
-        if (HAL_GetTick() - start > 100) {
+        if (HAL_GetTick() - start >= 2) {
+            usb_log_stalled = 1;
             break;
         }
     }
