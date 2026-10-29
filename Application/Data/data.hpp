@@ -755,6 +755,19 @@ public:
   StateStore();
 };
 
+// PRC heartbeat liveness, published by prc_can.cpp from PrcLinkMonitor
+// (prc_link.hpp). Bit 0 engine, bit 1 ethanol, bit 2 LOX.
+struct PrcLink {
+  uint8_t prc_alive_mask = 0;
+};
+static_assert(sizeof(PrcLink) == 1);
+
+class PrcLinkStore : public IStore<PrcLink> {
+public:
+  uint8_t get_prc_alive_mask() const { return data_.prc_alive_mask; }
+  void set_prc_alive_mask(uint8_t value) { data_.prc_alive_mask = value; }
+};
+
 struct DataDump {
   State av_state; // Y
   // Timestamp contract: GOATStore::get() stamps this field from the shared
@@ -774,6 +787,7 @@ struct DataDump {
   Batteries batteries; // X
   CamsRecording camsRecording; // X
   UplinkCmd uplinkCmd; // X
+  PrcLink prcLink; // X
 };
 
 class GpsStore : public IStore<GpsBasicFixData> {
@@ -819,6 +833,7 @@ public:
   BatteriesStore batteriesStore;
   CamsRecordingStore camsRecordingStore;
   UplinkCmdStore uplinkCmdStore;
+  PrcLinkStore prcLinkStore;
 
   void set(const DataDump &value);
   const DataDump &get() const;
