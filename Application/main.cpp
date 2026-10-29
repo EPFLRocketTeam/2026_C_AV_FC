@@ -629,6 +629,9 @@ extern "C" void app_super_loop_setup(void) {
     app_timebase_init();
 #if !defined(UNIT_TEST_ENV)
     g_superloop.rgbLed.init();  // before any early return, so errors show
+    if (!g_superloop.rgbLed.ready()) {
+        app_printf("[LED] status LEDs off: DWT cycle counter not running\r\n");
+    }
 #endif
 
     if (!g_superloop.imuModule.init()) {
@@ -902,6 +905,11 @@ extern "C" void app_super_loop_iterate(void) {
         if (g_superloop.statusLed.update(led_in, led_out)) {
 #if !defined(UNIT_TEST_ENV)
             g_superloop.rgbLed.show(led_out, flight_computer::StatusLed::kLedCount);
+            static bool led_fault_reported = false;
+            if (g_superloop.rgbLed.faulted() && !led_fault_reported) {
+                led_fault_reported = true;
+                app_printf("[LED] status LEDs faulted: cycle counter stopped, strip left stale\r\n");
+            }
 #endif
         }
     }

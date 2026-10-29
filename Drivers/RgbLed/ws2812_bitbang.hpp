@@ -81,7 +81,11 @@ public:
     // the previous frame.
     void show(const Rgb* colours, size_t n);
 
+    // True once init() saw the cycle counter run; show() is a no op otherwise.
+    bool ready() const { return ready_; }
+
     // True once a wait gave up or the counter was found stopped. Sticky.
+    // The driver never prints; the caller reports it.
     bool faulted() const { return faulted_; }
 
 private:
