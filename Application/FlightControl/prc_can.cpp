@@ -200,12 +200,18 @@ void PublishPrcLink(uint32_t now_ms) {
   static const char* const kNames[PrcLinkMonitor::BOARD_COUNT] = {"ENGINE", "ETH", "LOX"};
   const uint8_t mask = g_prc_link.aliveMask(now_ms);
   const uint8_t report = g_prc_link.takeReport(now_ms);
+  PrcLinkStore& store = GOATStore::get_instance().prcLinkStore;
   for (uint8_t i = 0; i < PrcLinkMonitor::BOARD_COUNT; i++) {
+    const PrcLinkMonitor::Link& link = g_prc_link.link(static_cast<PrcLinkMonitor::Board>(i));
+    store.set_counts(i, link.received, link.missed);
     if (report & (1u << i)) {
-      app_printf("[PRC LINK] %s %s\r\n", kNames[i], (mask & (1u << i)) ? "alive" : "dead");
+      app_printf("[PRC LINK] %s %s (rx %lu, missed %lu)\r\n", kNames[i],
+                 (mask & (1u << i)) ? "alive" : "dead",
+                 static_cast<unsigned long>(link.received),
+                 static_cast<unsigned long>(link.missed));
     }
   }
-  GOATStore::get_instance().prcLinkStore.set_prc_alive_mask(mask);
+  store.set_prc_alive_mask(mask);
 }
 
 pi::context& Ctx() {

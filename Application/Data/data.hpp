@@ -766,6 +766,21 @@ class PrcLinkStore : public IStore<PrcLink> {
 public:
   uint8_t get_prc_alive_mask() const { return data_.prc_alive_mask; }
   void set_prc_alive_mask(uint8_t value) { data_.prc_alive_mask = value; }
+
+  // Heartbeats received and missed per board (0 engine, 1 ethanol, 2 LOX).
+  // Held here only: DataDump carries the mask, not these counts.
+  static constexpr uint8_t BOARD_COUNT = 3;
+  uint32_t get_received(uint8_t board) const { return board < BOARD_COUNT ? received_[board] : 0; }
+  uint32_t get_missed(uint8_t board) const { return board < BOARD_COUNT ? missed_[board] : 0; }
+  void set_counts(uint8_t board, uint32_t received, uint32_t missed) {
+    if (board >= BOARD_COUNT) return;
+    received_[board] = received;
+    missed_[board]   = missed;
+  }
+
+private:
+  uint32_t received_[BOARD_COUNT] = {};
+  uint32_t missed_[BOARD_COUNT]   = {};
 };
 
 struct DataDump {
