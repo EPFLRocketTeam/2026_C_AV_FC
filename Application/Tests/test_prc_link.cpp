@@ -79,17 +79,34 @@ TEST(PrcLinkMonitor, NowWrapKeepsLiveBoardAlive) {
 
 TEST(PrcLinkMonitor, BootGraceReportsNeverSeenOnce) {
     PrcLinkMonitor m;
-    EXPECT_EQ(m.takeReport(100), 0u);                    // silent inside the grace
+    EXPECT_EQ(m.takeReport(100), 0u);                    // first call: the grace runs to 2100
     m.onHeartbeat(Board::Engine, 0, 1800);
     EXPECT_EQ(m.takeReport(1800), 0x1u);                 // engine came alive: edge
-    EXPECT_EQ(m.takeReport(1999), 0u);
-    EXPECT_EQ(m.takeReport(2000), 0x6u);                 // eth and lox never seen: one dead line each
-    EXPECT_EQ(m.aliveMask(2000), 0x1u);
-    EXPECT_EQ(m.takeReport(2050), 0u);                   // the grace fires once
+    EXPECT_EQ(m.takeReport(2099), 0u);
+    EXPECT_EQ(m.takeReport(2100), 0x6u);                 // eth and lox never seen: one dead line each
+    EXPECT_EQ(m.aliveMask(2100), 0x1u);
+    EXPECT_EQ(m.takeReport(2150), 0u);                   // the grace fires once
+}
+
+// The grace counts from the first call, not from reset: a setup longer than
+// 2 s with the boards already sending prints no false "dead".
+TEST(PrcLinkMonitor, GraceAnchorsOnFirstCall) {
+    PrcLinkMonitor m;
+    EXPECT_EQ(m.takeReport(5000), 0u);                   // first call 5 s after reset, nothing drained yet
+    m.onHeartbeat(Board::Engine, 0, 5010);
+    m.onHeartbeat(Board::Eth, 0, 5010);
+    EXPECT_EQ(m.takeReport(5010), 0x3u);                 // engine and eth alive, no false dead
+    m.onHeartbeat(Board::Engine, 39, 6990);
+    m.onHeartbeat(Board::Eth, 39, 6990);
+    EXPECT_EQ(m.takeReport(6999), 0u);                   // still inside the grace
+    EXPECT_EQ(m.takeReport(7000), 0x4u);                 // lox silent 2 s after the first call: dead once
+    EXPECT_EQ(m.aliveMask(7000), 0x3u);
+    EXPECT_EQ(m.takeReport(7050), 0u);
 }
 
 TEST(PrcLinkMonitor, AfterGraceOnlyEdges) {
     PrcLinkMonitor m;
+    EXPECT_EQ(m.takeReport(0), 0u);                      // first call at reset
     m.onHeartbeat(Board::Eth, 0, 1900);
     EXPECT_EQ(m.takeReport(1900), 0x2u);                 // eth alive
     EXPECT_EQ(m.takeReport(2100), 0x5u);                 // grace: engine and lox never seen
@@ -107,7 +124,7 @@ TEST(PrcLinkMonitor, SeenBoardDyingInGraceIsNotRepeated) {
     m.onHeartbeat(Board::Lox, 0, 100);
     EXPECT_EQ(m.takeReport(100), 0x7u);
     EXPECT_EQ(m.takeReport(700), 0x7u);                  // all dead: edges
-    EXPECT_EQ(m.takeReport(2000), 0u);                   // all were seen: grace adds nothing
+    EXPECT_EQ(m.takeReport(2100), 0u);                   // all were seen: grace adds nothing
 }
 
 TEST(PrcLinkMonitor, MaskBits) {

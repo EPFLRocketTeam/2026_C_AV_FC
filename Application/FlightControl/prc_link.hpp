@@ -56,13 +56,19 @@ public:
   const Link& link(Board board) const { return links_[index(board)]; }
 
   // Bits whose state should be printed now (same order as aliveMask): every
-  // alive or dead edge, plus one "dead" for each board never heard from by
-  // the time now_ms (ms since boot) reaches BOOT_GRACE_MS.
+  // alive or dead edge, plus one "dead" for each board never heard from
+  // BOOT_GRACE_MS after the first call. The grace counts from that first
+  // call, not from reset, so a long setup with the boards already sending
+  // (frames not yet drained) is not reported dead.
   uint8_t takeReport(uint32_t now_ms) {
+    if (!started_) {
+      started_  = true;
+      first_ms_ = now_ms;
+    }
     const uint8_t mask = aliveMask(now_ms);
     uint8_t report = mask ^ reported_mask_;
     reported_mask_ = mask;
-    if (!grace_done_ && now_ms >= BOOT_GRACE_MS) {
+    if (!grace_done_ && (now_ms - first_ms_) >= BOOT_GRACE_MS) {
       grace_done_ = true;
       for (uint8_t i = 0; i < BOARD_COUNT; i++) {
         if (!links_[i].seen) report |= static_cast<uint8_t>(1u << i);
@@ -77,6 +83,8 @@ private:
   Link    links_[BOARD_COUNT];
   uint8_t reported_mask_ = 0;
   bool    grace_done_    = false;
+  bool    started_       = false;
+  uint32_t first_ms_     = 0;
 };
 
 #endif // APP_FC_PRC_LINK_HPP
