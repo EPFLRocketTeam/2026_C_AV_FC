@@ -3,7 +3,8 @@
 #   FW_{ASM,C,CXX}_INCLUDES            include paths, resolved against FW_ROOT
 #   FW_{ASM,C,CXX}_DEFINES             preprocessor defines
 #
-# What is read, inside the cconfiguration whose id contains ".debug.":
+# What is read, inside the first cconfiguration whose id contains ".debug."
+# (configure stops on a <fileInfo> or a <folderInfo> with a resourcePath there):
 #   <tool id="...tool.assembler|c.compiler|cpp.compiler...">
 #     <option id="...option.includepaths..."> and <option id="...option.definedsymbols...">
 #       <listOptionValue value="..."/> one per line, up to </option>
@@ -30,13 +31,24 @@ foreach(_lang ASM C CXX)
 endforeach()
 
 foreach(_line IN LISTS _cp)
+    # Only the first Debug configuration; a copy made from it also has ".debug.".
     if(_line MATCHES "<cconfiguration id=\"[^\"]*\\.debug\\.")
         set(_cp_debug TRUE)
-    elseif(_line MATCHES "</cconfiguration>")
-        set(_cp_debug FALSE)
+    elseif(_cp_debug AND _line MATCHES "</cconfiguration>")
+        break()
     endif()
     if(NOT _cp_debug)
         continue()
+    endif()
+
+    # Per file and per folder settings are not modelled; refuse them.
+    if(_line MATCHES "<fileInfo[ >]")
+        message(FATAL_ERROR ".cproject Debug holds a per file override, which this build does not model: ${_line}")
+    endif()
+    if(_line MATCHES "<folderInfo [^>]*resourcePath=\"([^\"]*)\"")
+        if(NOT "${CMAKE_MATCH_1}" STREQUAL "")
+            message(FATAL_ERROR ".cproject Debug holds a folder override for ${CMAKE_MATCH_1}, which this build does not model")
+        endif()
     endif()
 
     if(_line MATCHES "<tool id=\"[^\"]*\\.tool\\.(assembler|c\\.compiler|cpp\\.compiler)\\.")
