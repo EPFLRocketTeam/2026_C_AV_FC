@@ -11,6 +11,8 @@
 #include "Modules/sd_logger.hpp"
 #include "Modules/fc_temp_module.hpp"
 #include "Drivers/Buzzer/buzzer.hpp"
+#include "Drivers/RgbLed/ws2812_bitbang.hpp"
+#include "Application/Modules/status_led.hpp"
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Config/config.hpp"
 #include "Application/FlightControl/fc_shell.hpp"
@@ -393,6 +395,11 @@ struct SuperLoopContext {
     AppImuRingBuffer* ringArr[4] = {&imuData1, &imuData2, &imuData3, &imuData4};
     ImuModule<4> imuModule{invArr, ringArr};
     buzzer::Buzzer<13> buzzer;
+    // Status LEDs U4 -> U5 -> U6, data on PG12 (net LEDCTRL).
+#if !defined(UNIT_TEST_ENV)
+    Drivers::RgbLed::Ws2812BitBang rgbLed{GPIOG, GPIO_PIN_12};
+#endif
+    flight_computer::StatusLed statusLed;
 
 #ifdef UNIT_TEST_ENV
     Drivers::BMP390::BMP390_Mock baro1{};
@@ -620,6 +627,12 @@ extern "C" void app_super_loop_setup(void) {
     g_superloop.setup_done = true;
 
     app_timebase_init();
+#if !defined(UNIT_TEST_ENV)
+    g_superloop.rgbLed.init();  // before any early return, so errors show
+    if (!g_superloop.rgbLed.ready()) {
+        app_printf("[LED] status LEDs off: DWT cycle counter not running\r\n");
+    }
+#endif
 
     if (!g_superloop.imuModule.init()) {
         g_imu_module = nullptr;
@@ -870,6 +883,37 @@ extern "C" void app_super_loop_iterate(void) {
                (unsigned long)kLiftoffArmDelayMs);
     }
     app_perf_end(APP_PERF_PERIPH, perf_t0);
+
+    // ── Status LEDs ────────────────────────────────────────────────────────
+    // Before the !ready return so an IMU init failure still blinks the error.
+    perf_t0 = app_perf_begin();
+    RUN_EVERY(flight_computer::StatusLed::kMinUpdateMs) {
+        bool imu_ok = false;
+        bool baro_ok = false;
+        for (int i = 0; i < 4; ++i) {
+            imu_ok = imu_ok || g_imu_healthy[i] != 0u;
+            baro_ok = baro_ok || g_baro_healthy[i] != 0u;
+        }
+        const flight_computer::StatusLed::Input led_in{
+            flight_computer::GOATStore::get_instance().stateStore.get(),
+            imu_ok && baro_ok,
+            g_sd_logging_active,
+            g_superloop.setup_done && !g_superloop.ready,
+            HAL_GetTick(),
+        };
+        Drivers::RgbLed::Rgb led_out[flight_computer::StatusLed::kLedCount];
+        if (g_superloop.statusLed.update(led_in, led_out)) {
+#if !defined(UNIT_TEST_ENV)
+            g_superloop.rgbLed.show(led_out, flight_computer::StatusLed::kLedCount);
+            static bool led_fault_reported = false;
+            if (g_superloop.rgbLed.faulted() && !led_fault_reported) {
+                led_fault_reported = true;
+                app_printf("[LED] status LEDs faulted: cycle counter stopped, strip left stale\r\n");
+            }
+#endif
+        }
+    }
+    app_perf_end(APP_PERF_LED, perf_t0);
 
     if (!g_superloop.ready) {
         return;
