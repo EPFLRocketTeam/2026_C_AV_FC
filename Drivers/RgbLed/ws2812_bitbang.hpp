@@ -24,10 +24,11 @@ struct Rgb {
 // here for the real part. Colour order is GRB, most significant bit first.
 namespace Timing {
 constexpr uint32_t kBitPeriodNs = 1250u;  // one bit, 800 kbit/s
-constexpr uint32_t kZeroHighNs  = 350u;   // high time of a 0 bit; inside both the
-                                          // classic WS2812B (250..550) and the
-                                          // WS2812B V5 (220..380) windows
-constexpr uint32_t kOneHighNs   = 800u;   // high time of a 1 bit
+// Low times are the period minus the high time: 0 bit 350 high, 900 low;
+// 1 bit 650 high, 600 low. Both halves fit the classic WS2812B and the
+// WS2812B V5 windows (V5 wants T0H about 220..380 and lows of 580 or more).
+constexpr uint32_t kZeroHighNs  = 350u;   // high time of a 0 bit
+constexpr uint32_t kOneHighNs   = 650u;   // high time of a 1 bit
 constexpr uint32_t kResetLowUs  = 300u;   // low gap that latches the frame
 } // namespace Timing
 

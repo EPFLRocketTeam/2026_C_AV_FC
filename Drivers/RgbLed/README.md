@@ -45,7 +45,8 @@ it is never replayed afterwards.
 ## Timing
 
 The LED part is not named in the BOM, so the driver assumes WS2812B: 1.25 us
-bit period, 0.35 us and 0.80 us high times, 300 us reset, GRB order, most
+bit period, a 0 bit of 0.35 us high and 0.90 us low, a 1 bit of 0.65 us high
+and 0.60 us low (inside both the classic WS2812B and the V5 windows), 300 us reset, GRB order, most
 significant bit first. All of these are in `Timing` at the top of
 `ws2812_bitbang.hpp`; retune them there for the real part. A frame of three LEDs
 is 72 bits, 90 us with interrupts masked, and that is the whole cost of a
