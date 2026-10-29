@@ -1,0 +1,34 @@
+name: firmware
+on:
+  push:
+    branches:
+      - "**"
+jobs:
+  arm-build:
+    name: arm-none-eabi firmware build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      # Drivers/Capsule and Drivers/ERT_RF_Protocol_Interface use ssh URLs; fetch every submodule over https.
+      - name: checkout submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive
+      - name: install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
+      - name: compile
+        run: |
+          cmake -B build-arm -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-arm -j8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 2026_C_AV_FC-firmware
+          path: |
+            build-arm/2026_C_AV_FC.elf
+            build-arm/2026_C_AV_FC.bin
+            build-arm/2026_C_AV_FC.hex
