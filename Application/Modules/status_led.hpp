@@ -44,6 +44,15 @@ public:
     static constexpr uint32_t kSensorHalfMs  = 250;  // 2 Hz
     static constexpr uint32_t kErrorHalfMs   = 125;  // 4 Hz
 
+    // Continuous blinks are counted from an epoch that starts at state entry
+    // and moves forward in whole cycles of this length, so every elapsed time
+    // is a small (now - start) uint32_t difference and the 2^32 ms wrap of
+    // now_ms causes no glitch. Every blink period must divide it.
+    static constexpr uint32_t kBlinkCycleMs  = 500;
+    static_assert(kBlinkCycleMs % (2 * kAbortHalfMs) == 0, "abort period divides the cycle");
+    static_assert(kBlinkCycleMs % (2 * kSensorHalfMs) == 0, "sensor period divides the cycle");
+    static_assert(kBlinkCycleMs % (2 * kErrorHalfMs) == 0, "error period divides the cycle");
+
     // Full scale colour per State value, indexed by the enum.
     static constexpr Rgb kStatePalette[] = {
         {255, 255, 255},  // INIT             white
@@ -82,21 +91,30 @@ public:
 
     // Computes the three colours for this instant. Returns true only when
     // they differ from the previous call (always true on the first call).
+    // now_ms must not jump forward by 2^31 ms or more between calls.
     bool update(const Input& in, Rgb out[kLedCount]) {
         if (!has_state_ || in.av_state != state_) {
             state_ = in.av_state;
             entry_ms_ = in.now_ms;
+            epoch_ms_ = in.now_ms;
+            entry_done_ = false;
             has_state_ = true;
+        }
+        const uint32_t since_epoch = in.now_ms - epoch_ms_;
+        epoch_ms_ += since_epoch - since_epoch % kBlinkCycleMs;
+        const uint32_t phase = in.now_ms - epoch_ms_;  // 0 .. kBlinkCycleMs - 1
+        if (!entry_done_ && in.now_ms - entry_ms_ >= entryBlinkMs()) {
+            entry_done_ = true;  // latched, so the wrap cannot replay it
         }
 
         Rgb next[kLedCount];
         if (in.error) {
-            const Rgb c = blinkOn(in.now_ms, kErrorHalfMs) ? scale(kRed) : kOff;
+            const Rgb c = blinkOn(phase, kErrorHalfMs) ? scale(kRed) : kOff;
             next[0] = next[1] = next[2] = c;
         } else {
-            next[0] = stateLed(in.now_ms);
+            next[0] = stateLed(in.now_ms, phase);
             next[1] = in.sensors_ok ? scale(kGreen)
-                                    : (blinkOn(in.now_ms, kSensorHalfMs) ? scale(kRed) : kOff);
+                                    : (blinkOn(phase, kSensorHalfMs) ? scale(kRed) : kOff);
             next[2] = in.sd_ok ? scale(kGreen) : kOff;
         }
 
@@ -116,17 +134,17 @@ private:
     }
     static constexpr uint32_t entryBlinkMs() { return 2 * kEntryHalfMs * kEntryBlinks; }
 
-    // On during the first half of each period, counted from origin.
-    static constexpr bool blinkOn(uint32_t t, uint32_t half_ms, uint32_t origin = 0) {
-        return ((t - origin) / half_ms) % 2 == 0;
+    // On during the first half of each period; elapsed is a small difference.
+    static constexpr bool blinkOn(uint32_t elapsed, uint32_t half_ms) {
+        return (elapsed / half_ms) % 2 == 0;
     }
 
-    Rgb stateLed(uint32_t now) const {
+    Rgb stateLed(uint32_t now, uint32_t phase) const {
         if (isAbort(state_)) {
-            return blinkOn(now, kAbortHalfMs, entry_ms_) ? scale(kRed) : kOff;
+            return blinkOn(phase, kAbortHalfMs) ? scale(kRed) : kOff;
         }
-        if (now - entry_ms_ < entryBlinkMs()) {
-            return blinkOn(now, kEntryHalfMs, entry_ms_) ? stateColour(state_) : kOff;
+        if (!entry_done_) {
+            return blinkOn(now - entry_ms_, kEntryHalfMs) ? stateColour(state_) : kOff;
         }
         return stateColour(state_);
     }
@@ -134,7 +152,9 @@ private:
     bool has_state_ = false;
     bool has_out_ = false;
     State state_ = INIT;
+    bool entry_done_ = false;
     uint32_t entry_ms_ = 0;
+    uint32_t epoch_ms_ = 0;
     Rgb last_[kLedCount] = {};
 };
 

@@ -183,3 +183,64 @@ TEST_F(StatusLedTest, ReturnsTrueOnlyOnChange) {
     EXPECT_FALSE(at(5100));  // still red
     EXPECT_TRUE(at(5250));   // off
 }
+
+// now_ms wraps at 2^32 ms (49.7 days). Times below are tracked in 64 bits and
+// fed truncated, as HAL_GetTick() would deliver them.
+TEST_F(StatusLedTest, SteadyStateAcrossTheWrapHasNoEntryBlink) {
+    const uint64_t t0 = (1ull << 32) - 700;
+    in.av_state = flight_computer::ARMED;
+    const Rgb yellow = StatusLed::stateColour(flight_computer::ARMED);
+    at(static_cast<uint32_t>(t0));
+    at(static_cast<uint32_t>(t0 + 600));
+    ASSERT_EQ(out[0], yellow);
+    // Across the wrap itself, 20 ms steps.
+    for (uint64_t t = t0 + 620; t < t0 + 10000; t += 20) {
+        EXPECT_FALSE(at(static_cast<uint32_t>(t))) << "t " << t;
+        EXPECT_EQ(out[0], yellow) << "t " << t;
+    }
+    // Long jumps up to 2^32 ms after the entry, then 20 ms steps through the
+    // point where (now - entry) comes back small.
+    for (uint64_t t = t0 + 10000; t < t0 + (1ull << 32) - 2000; t += 999983) {
+        EXPECT_FALSE(at(static_cast<uint32_t>(t))) << "t " << t;
+        EXPECT_EQ(out[0], yellow) << "t " << t;
+    }
+    for (uint64_t t = t0 + (1ull << 32) - 2000; t < t0 + (1ull << 32) + 2000; t += 20) {
+        EXPECT_FALSE(at(static_cast<uint32_t>(t))) << "t " << t;
+    }
+}
+
+TEST_F(StatusLedTest, BlinksKeepTheirPhaseAcrossTheWrap) {
+    // Abort on LED 1 and failed sensors on LED 2, both 2 Hz from the entry.
+    const uint64_t t0 = (1ull << 32) - 1003;
+    in.av_state = flight_computer::ABORT_IN_FLIGHT;
+    in.sensors_ok = false;
+    auto check = [&](uint64_t t) {
+        at(static_cast<uint32_t>(t));
+        const Rgb want = ((t - t0) / 250) % 2 == 0 ? kRed : kOff;
+        EXPECT_EQ(out[0], want) << "t " << t;
+        EXPECT_EQ(out[1], want) << "t " << t;
+    };
+    for (uint64_t t = t0; t < t0 + 3000; ++t) {
+        check(t);
+    }
+    // Long jumps, not multiples of the period, past a full 2^32 ms.
+    for (uint64_t t = t0 + 3000; t < t0 + (1ull << 32) - 1500; t += 1234567) {
+        check(t);
+    }
+    for (uint64_t t = t0 + (1ull << 32) - 1500; t < t0 + (1ull << 32) + 1500; ++t) {
+        check(t);
+    }
+}
+
+TEST_F(StatusLedTest, ErrorBlinkKeepsItsPhaseAcrossTheWrap) {
+    const uint64_t t0 = (1ull << 32) - 333;
+    in.av_state = flight_computer::FILLING;
+    in.error = true;
+    for (uint64_t t = t0; t < t0 + 2000; ++t) {
+        at(static_cast<uint32_t>(t));
+        const Rgb want = ((t - t0) / 125) % 2 == 0 ? kRed : kOff;
+        for (int i = 0; i < 3; ++i) {
+            EXPECT_EQ(out[i], want) << "led " << i << " t " << t;
+        }
+    }
+}
