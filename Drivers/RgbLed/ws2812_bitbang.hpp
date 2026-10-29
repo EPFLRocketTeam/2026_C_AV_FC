@@ -18,12 +18,15 @@ struct Rgb {
 };
 
 // ── WS2812 class timing ─────────────────────────────────────────────────────
-// Every timing constant lives here. The FC schematic does not name the LED part
-// (U4, U5, U6, symbol ert:NEW_RGB_LED), so these are WS2812B values; retune
-// them here for the real part. Colour order is GRB, most significant bit first.
+// Every timing constant lives here. The part number is unconfirmed: the FC
+// schematic names no LED part (U4, U5, U6, symbol ert:NEW_RGB_LED, BOM
+// manufacturer field "JULIAN"), so these are WS2812B class values; retune them
+// here for the real part. Colour order is GRB, most significant bit first.
 namespace Timing {
 constexpr uint32_t kBitPeriodNs = 1250u;  // one bit, 800 kbit/s
-constexpr uint32_t kZeroHighNs  = 400u;   // high time of a 0 bit
+constexpr uint32_t kZeroHighNs  = 350u;   // high time of a 0 bit; inside both the
+                                          // classic WS2812B (250..550) and the
+                                          // WS2812B V5 (220..380) windows
 constexpr uint32_t kOneHighNs   = 800u;   // high time of a 1 bit
 constexpr uint32_t kResetLowUs  = 300u;   // low gap that latches the frame
 } // namespace Timing

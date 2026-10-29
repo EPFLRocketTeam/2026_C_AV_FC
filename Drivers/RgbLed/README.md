@@ -39,7 +39,7 @@ loop. Brightness is capped at 25 percent (`StatusLed::kMaxChannel`).
 ## Timing
 
 The LED part is not named in the BOM, so the driver assumes WS2812B: 1.25 us
-bit period, 0.40 us and 0.80 us high times, 300 us reset, GRB order, most
+bit period, 0.35 us and 0.80 us high times, 300 us reset, GRB order, most
 significant bit first. All of these are in `Timing` at the top of
 `ws2812_bitbang.hpp`; retune them there for the real part. A frame of three LEDs
 is 72 bits, 90 us with interrupts masked, followed by the reset gap with
