@@ -6,6 +6,7 @@
 #include "Application/Config/config.hpp"
 #include "Application/app_printf.h"
 #include "Application/FlightControl/fc_commands.hpp"
+#include "Application/FlightControl/fc_shell_intake.hpp"
 #include "Application/FlightControl/prc_can.hpp"
 #include "fc_commands_generated.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
@@ -14,9 +15,10 @@
 
 namespace {
 
-constexpr uint32_t kLineBufferSize = 128;
-char     g_line_buffer[kLineBufferSize];
-uint32_t g_line_len = 0;
+// Bytes from the USB interrupt wait in g_rx_ring until FC_Shell_Tick
+// drains them into g_line, which rebuilds lines across USB packets.
+fc_shell::SpscRing<256>      g_rx_ring;
+fc_shell::LineAssembler<128> g_line;
 
 context g_cmd_ctx;
 driver  g_driver;
@@ -450,60 +452,25 @@ void EnsureInit() {
 
 };
 
-namespace {
-volatile uint8_t  rx_flag = 0;
-uint8_t  rx_buffer[64];
-uint16_t rx_len = 0;
-};
-
+// USB interrupt context: only stores the bytes. A packet that does not
+// fit in the ring loses its excess bytes, the rest are kept.
 void Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length) {
-	if (length + rx_len <= sizeof(rx_buffer)) {
-		memcpy(rx_buffer + rx_len, data, length);
-		rx_len += length;
-		rx_flag = 1; // Set flag for main loop
-	}
+    g_rx_ring.Push(data, length);
 }
 
-void __Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length) {
+// Main loop: drains the ring and replays each complete line through the
+// generated trie, followed by its \n. Bytes of an unfinished line stay in
+// g_line until the rest arrives in a later packet.
+void FC_Shell_Tick () {
     EnsureInit();
 
-    for (uint32_t i = 0; i < length; i++) {
-        uint8_t byte = data[i];
-
-        // Skip CR so CRLF terminals don't leave a stray \r in bool/float args.
-        if (byte == '\r') {
-            continue;
-        }
-
-        if (byte == '\n') {
-            // Trim trailing spaces so e.g. "main lox open " (typed with a
-            // stray space before Enter) doesn't fail the %bool leaf's exact
-            // strcmp(arg_buffer, "open") match and silently fall through
-            // to the false/close case.
-            while (g_line_len > 0 && g_line_buffer[g_line_len - 1] == ' ') {
-                g_line_len--;
-            }
-            for (uint32_t j = 0; j < g_line_len; j++) {
-                push_char(&g_cmd_ctx, &g_driver, g_line_buffer[j]);
+    uint8_t byte;
+    while (g_rx_ring.Pop(byte)) {
+        g_line.Feed(byte, [](const char* line, uint32_t length) {
+            for (uint32_t i = 0; i < length; i++) {
+                push_char(&g_cmd_ctx, &g_driver, line[i]);
             }
             push_char(&g_cmd_ctx, &g_driver, '\n');
-            g_line_len = 0;
-        } else if (g_line_len < kLineBufferSize) {
-            g_line_buffer[g_line_len++] = byte;
-        }
+        });
     }
-}
-void FC_Shell_Tick () {
-	if (rx_flag == 0) return ;
-
-	int start = 0;
-	for (int offset = 0; offset < rx_len; offset ++) {
-		if (rx_buffer[offset] == '\n') {
-			__Fc_Shell_ProcessRxBytes(rx_buffer + start, offset + 1 - start);
-			start = offset + 1;
-		}
-	}
-
-	rx_len = 0;
-	rx_flag = 0;
 }
