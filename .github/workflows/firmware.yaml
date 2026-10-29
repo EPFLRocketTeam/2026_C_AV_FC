@@ -3,10 +3,12 @@ on:
   push:
     branches:
       - "**"
+permissions:
+  contents: read
 jobs:
   arm-build:
     name: arm-none-eabi firmware build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         shell: bash
