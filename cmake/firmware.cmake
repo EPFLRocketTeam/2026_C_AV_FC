@@ -26,7 +26,9 @@ include(${CMAKE_CURRENT_LIST_DIR}/cproject.cmake)
 
 set(FW_NAME 2026_C_AV_FC)
 add_executable(${FW_NAME} ${FW_SOURCES})
-set_target_properties(${FW_NAME} PROPERTIES SUFFIX ".elf")
+# Link with the gcc driver so it adds no C++ library of its own; the group
+# below names the nano ones (standard_c_nano_cpp) on any GCC version.
+set_target_properties(${FW_NAME} PROPERTIES SUFFIX ".elf" LINKER_LANGUAGE C)
 foreach(_lang C CXX)
     if(NOT FW_${_lang}_STANDARD STREQUAL "")
         set_target_properties(${FW_NAME} PROPERTIES
@@ -59,7 +61,6 @@ target_link_options(${FW_NAME} PRIVATE
     -T${FW_LINKER_SCRIPT}
     --specs=nosys.specs
     -static
-    -nostdlib++
     -Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/${FW_NAME}.map
     -Wl,--gc-sections
     ${FW_LINK_OPTIONS})
