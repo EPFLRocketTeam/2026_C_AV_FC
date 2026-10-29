@@ -6,17 +6,26 @@
 #include "Application/Config/config.hpp"
 #include "Application/app_printf.h"
 #include "Application/FlightControl/fc_commands.hpp"
+#include "Application/FlightControl/fc_shell_intake.hpp"
+#include "Application/FlightControl/fc_shell_replay.hpp"
+#include "Application/FlightControl/fc_shell_guard.hpp"
 #include "Application/FlightControl/prc_can.hpp"
 #include "fc_commands_generated.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 #include "Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET/include/prc_intranet/payload.hpp"
 #include "Drivers/Camera/Camera.hpp"
+#include "Application/System/bootloader.h"
+#include "stm32h7xx_hal.h"
 
 namespace {
 
-constexpr uint32_t kLineBufferSize = 128;
-char     g_line_buffer[kLineBufferSize];
-uint32_t g_line_len = 0;
+// Bytes from the USB interrupt wait in a 256 byte ring until FC_Shell_Tick
+// drains them into a 128 byte line, rebuilt across USB packets.
+fc_shell::Intake<256, 128> g_intake;
+
+// The first bytes from a host turn the USB log on, once, so a fresh board
+// answers without `logs usb fc on`. `logs usb fc off` still holds after.
+volatile bool g_usb_log_auto_enabled = false;
 
 context g_cmd_ctx;
 driver  g_driver;
@@ -359,6 +368,60 @@ void cameras_stop (void* ctx) {
   cameraDriver.stop();
 }
 
+// system dfu and system reboot both reset the FC, so both refuse outside
+// the ground states of fc_shell::IsResetAllowed (fc_shell_guard.hpp), and
+// neither acts on its own: each arms a 10 s window, and only a different
+// command, system confirm, acts. FILLING is the bench idle state and also
+// the loaded rocket, which the FC cannot tell apart.
+fc_shell::ConfirmWindow g_reset_confirm;
+
+// Prints the refusal and disarms when the FC state forbids a reset.
+bool ResetAllowedNow(const char* command) {
+  const flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
+  if (fc_shell::IsResetAllowed(state)) return true;
+  g_reset_confirm.Disarm();
+  app_printf("[SHELL] %s refused: FC state %s, allowed only in INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND\r\n",
+             command, fc_shell::StateName(state));
+  return false;
+}
+
+void ArmReset(const char* command, fc_shell::ConfirmWindow::Command which) {
+  if (!ResetAllowedNow(command)) return;
+  g_reset_confirm.Arm(which, HAL_GetTick());
+  const flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
+  // 0x90 is ROM bootloader V9.0, with AN2606 Rev 61 Table 114 limitations.
+  app_printf("[SHELL] %s armed: FC state %s, ROM bootloader id 0x%02X, type system confirm within 10 s\r\n",
+             command, fc_shell::StateName(state), static_cast<unsigned>(Bootloader_RomId()));
+}
+
+// Reboots into the STM32H743 ROM DFU bootloader (Application/System/
+// bootloader.h) once confirmed; the host then flashes over the DFU USB port.
+void OnSystemDfu(void*) noexcept {
+  app_printf("[SHELL] system dfu\r\n");
+  ArmReset("system dfu", fc_shell::ConfirmWindow::Command::kDfu);
+}
+void OnSystemReboot(void*) noexcept {
+  app_printf("[SHELL] system reboot\r\n");
+  ArmReset("system reboot", fc_shell::ConfirmWindow::Command::kReboot);
+}
+void OnSystemConfirm(void*) noexcept {
+  app_printf("[SHELL] system confirm\r\n");
+  const fc_shell::ConfirmWindow::Command armed = g_reset_confirm.Confirm(HAL_GetTick());
+  if (armed == fc_shell::ConfirmWindow::Command::kNone) {
+    app_printf("[SHELL] system confirm: nothing armed in the last 10 s, type system dfu or system reboot first\r\n");
+    return;
+  }
+  if (!ResetAllowedNow("system confirm")) return;
+  if (armed == fc_shell::ConfirmWindow::Command::kDfu) {
+    app_printf("[SHELL] rebooting into the ROM DFU bootloader, flash over the DFU USB port\r\n");
+    HAL_Delay(50);  // let the last USB packet leave before the reset
+    Bootloader_RequestDfu();
+  }
+  app_printf("[SHELL] rebooting\r\n");
+  HAL_Delay(50);  // let the last USB packet leave before the reset
+  Bootloader_Reboot();
+}
+
 void FillDriver(driver& drv) {
     drv.av_calibrate = OnAvCalibrate;
     drv.av_arm = OnAvArm;
@@ -433,6 +496,11 @@ void FillDriver(driver& drv) {
     drv.logs_usb_eth = logs_usb_eth;
     drv.logs_usb_fc = logs_usb_fc;
     drv.logs_usb_lox = logs_usb_lox;
+    drv.system_dfu = OnSystemDfu;
+    drv.system_reboot = OnSystemReboot;
+    drv.system_confirm = OnSystemConfirm;
+    // on_bad_argument and on_unknown_command stay null so the FC shell keeps
+    // its behaviour: no reply to an unknown line or a bad bool argument.
 }
 
 }  // namespace fc_commands
@@ -450,60 +518,24 @@ void EnsureInit() {
 
 };
 
-namespace {
-volatile uint8_t  rx_flag = 0;
-uint8_t  rx_buffer[64];
-uint16_t rx_len = 0;
-};
-
+// USB interrupt context: only stores the bytes. When the ring is full the
+// excess is dropped and the intake throws away the line it cut (see
+// SpscRing in fc_shell_intake.hpp), so a cut line never runs.
 void Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length) {
-	if (length + rx_len <= sizeof(rx_buffer)) {
-		memcpy(rx_buffer + rx_len, data, length);
-		rx_len += length;
-		rx_flag = 1; // Set flag for main loop
-	}
+    if (!g_usb_log_auto_enabled) {
+        g_usb_log_auto_enabled = true;
+        app_printf_use_usb(true);
+    }
+    g_intake.Receive(data, length);
 }
 
-void __Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length) {
+// Main loop: drains the ring and replays each complete line through the
+// generated trie. Bytes of an unfinished line wait for the rest to arrive
+// in a later packet.
+void FC_Shell_Tick () {
     EnsureInit();
 
-    for (uint32_t i = 0; i < length; i++) {
-        uint8_t byte = data[i];
-
-        // Skip CR so CRLF terminals don't leave a stray \r in bool/float args.
-        if (byte == '\r') {
-            continue;
-        }
-
-        if (byte == '\n') {
-            // Trim trailing spaces so e.g. "main lox open " (typed with a
-            // stray space before Enter) doesn't fail the %bool leaf's exact
-            // strcmp(arg_buffer, "open") match and silently fall through
-            // to the false/close case.
-            while (g_line_len > 0 && g_line_buffer[g_line_len - 1] == ' ') {
-                g_line_len--;
-            }
-            for (uint32_t j = 0; j < g_line_len; j++) {
-                push_char(&g_cmd_ctx, &g_driver, g_line_buffer[j]);
-            }
-            push_char(&g_cmd_ctx, &g_driver, '\n');
-            g_line_len = 0;
-        } else if (g_line_len < kLineBufferSize) {
-            g_line_buffer[g_line_len++] = byte;
-        }
-    }
-}
-void FC_Shell_Tick () {
-	if (rx_flag == 0) return ;
-
-	int start = 0;
-	for (int offset = 0; offset < rx_len; offset ++) {
-		if (rx_buffer[offset] == '\n') {
-			__Fc_Shell_ProcessRxBytes(rx_buffer + start, offset + 1 - start);
-			start = offset + 1;
-		}
-	}
-
-	rx_len = 0;
-	rx_flag = 0;
+    g_intake.Drain([](const char* line, uint32_t length) {
+        fc_shell::ReplayLine(&g_cmd_ctx, &g_driver, line, length);
+    });
 }

@@ -77,6 +77,13 @@
 #define USB_SIZ_BOS_DESC            0x0C
 
 /* USER CODE BEGIN PRIVATE_DEFINES */
+/* Board name for the VCP; replaces the CubeMX product string. */
+#undef USBD_PRODUCT_STRING_HS
+#define USBD_PRODUCT_STRING_HS     "ERT Firehorn II FC"
+/* Serial number: the full 96 bit unique id as 24 hex digits, so two
+ * boards on one host get distinct, stable port names. */
+#define USBD_SERIAL_UID_DIGITS      24U
+#define USBD_SIZ_STRING_SERIAL_UID  (2U + 2U * USBD_SERIAL_UID_DIGITS)
 
 /* USER CODE END PRIVATE_DEFINES */
 
@@ -85,6 +92,25 @@
   */
 
 /* USER CODE BEGIN 0 */
+static void IntToUnicode(uint32_t value, uint8_t * pbuf, uint8_t len);
+
+#if defined ( __ICCARM__ ) /*!< IAR Compiler */
+  #pragma data_alignment=4
+#endif
+__ALIGN_BEGIN static uint8_t USBD_StringSerialUid[USBD_SIZ_STRING_SERIAL_UID] __ALIGN_END = {
+  USBD_SIZ_STRING_SERIAL_UID,
+  USB_DESC_TYPE_STRING,
+};
+
+/* UID registers at UID_BASE (0x1FF1E800 on the STM32H743). */
+static uint8_t *Get_SerialNumUid(uint16_t *length)
+{
+  IntToUnicode(HAL_GetUIDw0(), &USBD_StringSerialUid[2], 8);
+  IntToUnicode(HAL_GetUIDw1(), &USBD_StringSerialUid[18], 8);
+  IntToUnicode(HAL_GetUIDw2(), &USBD_StringSerialUid[34], 8);
+  *length = USBD_SIZ_STRING_SERIAL_UID;
+  return USBD_StringSerialUid;
+}
 
 /* USER CODE END 0 */
 
@@ -401,6 +427,7 @@ uint8_t * USBD_HS_SerialStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *length)
    * ID */
   Get_SerialNum();
   /* USER CODE BEGIN USBD_HS_SerialStrDescriptor */
+  return Get_SerialNumUid(length);
 
   /* USER CODE END USBD_HS_SerialStrDescriptor */
 
