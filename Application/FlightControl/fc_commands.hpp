@@ -97,7 +97,7 @@ void cameras_stop (void* ctx);
 // Reboots into the ROM DFU bootloader; refused with a printed reason unless
 // the FC state is INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND.
 void OnSystemDfu(void*) noexcept;
-// Plain reset into the application.
+// Plain reset into the application, refused in the same states as dfu.
 void OnSystemReboot(void*) noexcept;
 
 void handleRxCommand(void* data) noexcept;

@@ -8,6 +8,7 @@
 #include "Application/FlightControl/fc_commands.hpp"
 #include "Application/FlightControl/fc_shell_intake.hpp"
 #include "Application/FlightControl/fc_shell_replay.hpp"
+#include "Application/FlightControl/fc_shell_guard.hpp"
 #include "Application/FlightControl/prc_can.hpp"
 #include "fc_commands_generated.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
@@ -363,32 +364,32 @@ void cameras_stop (void* ctx) {
   cameraDriver.stop();
 }
 
+// system dfu and system reboot both reset the FC, so both refuse outside
+// the ground states of fc_shell::IsResetAllowed (fc_shell_guard.hpp).
+// Returns true, after printing the reason, when the command is refused.
+bool RefuseReset(const char* command, flight_computer::State state) {
+  if (fc_shell::IsResetAllowed(state)) return false;
+  app_printf("[SHELL] %s refused: FC state %s, allowed only in INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND\r\n",
+             command, fc_shell::StateName(state));
+  return true;
+}
+
 // Reboots into the STM32H743 ROM DFU bootloader (Application/System/
-// bootloader.h); the host then flashes over the DFU USB port. Ground states
-// only: never from an armed, pressurized or flying state.
+// bootloader.h); the host then flashes over the DFU USB port.
 void OnSystemDfu(void*) noexcept {
   // 0x90 is ROM bootloader V9.0, with AN2606 Rev 61 Table 114 limitations.
   app_printf("[SHELL] system dfu (ROM bootloader id 0x%02X)\r\n",
              static_cast<unsigned>(Bootloader_RomId()));
   const flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
-  switch (state) {
-    case flight_computer::State::INIT:
-    case flight_computer::State::CALIBRATION:
-    case flight_computer::State::FILLING:
-    case flight_computer::State::LANDED:
-    case flight_computer::State::ABORT_ON_GROUND:
-      break;
-    default:
-      app_printf("[SHELL] system dfu refused: FC state %u is not INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND\r\n",
-                 static_cast<unsigned>(state));
-      return;
-  }
+  if (RefuseReset("system dfu", state)) return;
   app_printf("[SHELL] rebooting into the ROM DFU bootloader, flash over the DFU USB port\r\n");
   HAL_Delay(50);  // let the last USB packet leave before the reset
   Bootloader_RequestDfu();
 }
 void OnSystemReboot(void*) noexcept {
   app_printf("[SHELL] system reboot\r\n");
+  const flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
+  if (RefuseReset("system reboot", state)) return;
   HAL_Delay(50);  // let the last USB packet leave before the reset
   Bootloader_Reboot();
 }
