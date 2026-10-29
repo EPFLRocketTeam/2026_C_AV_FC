@@ -282,14 +282,15 @@ int main(void)
 
   /* Small delay to let USB enumerate -- but drain (and discard) FIFO0 while
    * waiting instead of a blind HAL_Delay(5000). Just removing the delay
-   * wasn't enough on its own: app_printf()/_write() blocks up to 100 ms
-   * retrying CDC_Transmit_HS while USB isn't ready yet, and every
+   * wasn't enough on its own: app_printf()/_write() used to block up to
+   * 100 ms retrying CDC_Transmit_HS while USB wasn't ready yet, and every
    * reassembled CAN log line triggers a app_printf -- each one of those early
-   * blocked calls freezes this same loop's CAN drain for up to 100 ms,
-   * during which frames from all 3 boards keep piling up. Draining and
-   * discarding FIFO0 here (no app_printf involved) keeps the FIFO empty
-   * through the whole USB enumeration window regardless of how long any
-   * individual app_printf would have blocked. */
+   * blocked calls froze this same loop's CAN drain for up to 100 ms,
+   * during which frames from all 3 boards kept piling up. Draining and
+   * discarding FIFO0 here (no app_printf involved) kept the FIFO empty
+   * through the whole USB enumeration window. _write now returns at once
+   * until the host has configured the port and waits at most 5 ms on a
+   * busy endpoint (Application/usb_log.h), so that stall is gone. */
   /* TEMPORARY: disabled to test whether this 5s busy-wait (added for the
    * PRC-CAN work, doesn't exist on the known-working plume branch) is
    * delaying app_super_loop_setup()/iterate() long enough that IMU
