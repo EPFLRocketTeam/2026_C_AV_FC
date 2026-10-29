@@ -195,18 +195,16 @@ void OnHeartbeatDprLox (void*, pi::payload::heartbeat hb) noexcept {
 }
 
 // Publishes the alive mask to GOATStore and prints a line only when a
-// board goes dead or comes back.
+// board goes dead or comes back, or never showed up 2 s after boot.
 void PublishPrcLink(uint32_t now_ms) {
   static const char* const kNames[PrcLinkMonitor::BOARD_COUNT] = {"ENGINE", "ETH", "LOX"};
-  static uint8_t last_mask = 0;
   const uint8_t mask = g_prc_link.aliveMask(now_ms);
-  const uint8_t changed = mask ^ last_mask;
+  const uint8_t report = g_prc_link.takeReport(now_ms);
   for (uint8_t i = 0; i < PrcLinkMonitor::BOARD_COUNT; i++) {
-    if (changed & (1u << i)) {
+    if (report & (1u << i)) {
       app_printf("[PRC LINK] %s %s\r\n", kNames[i], (mask & (1u << i)) ? "alive" : "dead");
     }
   }
-  last_mask = mask;
   GOATStore::get_instance().prcLinkStore.set_prc_alive_mask(mask);
 }
 

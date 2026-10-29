@@ -13,6 +13,7 @@ public:
   enum class Board : uint8_t { Engine = 0, Eth = 1, Lox = 2 };
   static constexpr uint8_t BOARD_COUNT = 3;
   static constexpr uint32_t TIMEOUT_MS = 500;
+  static constexpr uint32_t BOOT_GRACE_MS = 2000;
 
   struct Link {
     uint32_t last_counter = 0;
@@ -54,10 +55,28 @@ public:
 
   const Link& link(Board board) const { return links_[index(board)]; }
 
+  // Bits whose state should be printed now (same order as aliveMask): every
+  // alive or dead edge, plus one "dead" for each board never heard from by
+  // the time now_ms (ms since boot) reaches BOOT_GRACE_MS.
+  uint8_t takeReport(uint32_t now_ms) {
+    const uint8_t mask = aliveMask(now_ms);
+    uint8_t report = mask ^ reported_mask_;
+    reported_mask_ = mask;
+    if (!grace_done_ && now_ms >= BOOT_GRACE_MS) {
+      grace_done_ = true;
+      for (uint8_t i = 0; i < BOARD_COUNT; i++) {
+        if (!links_[i].seen) report |= static_cast<uint8_t>(1u << i);
+      }
+    }
+    return report;
+  }
+
 private:
   static uint8_t index(Board board) { return static_cast<uint8_t>(board); }
 
-  Link links_[BOARD_COUNT];
+  Link    links_[BOARD_COUNT];
+  uint8_t reported_mask_ = 0;
+  bool    grace_done_    = false;
 };
 
 #endif // APP_FC_PRC_LINK_HPP
