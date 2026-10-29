@@ -8,10 +8,13 @@
 //          statement of main(), finds the word, clears it and jumps to the
 //          ROM bootloader before HAL_Init() touches any peripheral, so the
 //          bootloader starts from an almost reset state. See bootloader.cpp
-//          for the sources behind the addresses.
+//          for the sources behind the addresses (ST AN2606 Rev 61,
+//          section 52, Tables 113, 114 and 177).
 
 #ifndef APP_SYSTEM_BOOTLOADER_H
 #define APP_SYSTEM_BOOTLOADER_H
+
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,6 +30,10 @@ void Bootloader_CheckAndJump(void);
 
 // Plain reset into the application. Never returns.
 void Bootloader_Reboot(void);
+
+// The ROM bootloader version byte at 0x1FF1E7FE (AN2606 Rev 61, Table 177):
+// 0x91 is V9.1; 0x90 is V9.0, which has the Table 114 limitations.
+uint8_t Bootloader_RomId(void);
 
 #ifdef __cplusplus
 }

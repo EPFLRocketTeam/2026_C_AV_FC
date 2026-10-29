@@ -367,7 +367,9 @@ void cameras_stop (void* ctx) {
 // bootloader.h); the host then flashes over the DFU USB port. Ground states
 // only: never from an armed, pressurized or flying state.
 void OnSystemDfu(void*) noexcept {
-  app_printf("[SHELL] system dfu\r\n");
+  // 0x90 is ROM bootloader V9.0, with AN2606 Rev 61 Table 114 limitations.
+  app_printf("[SHELL] system dfu (ROM bootloader id 0x%02X)\r\n",
+             static_cast<unsigned>(Bootloader_RomId()));
   const flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
   switch (state) {
     case flight_computer::State::INIT:

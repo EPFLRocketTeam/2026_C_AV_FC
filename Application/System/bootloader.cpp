@@ -2,15 +2,24 @@
 // PURPOSE: Software entry into the STM32H743 ROM DFU bootloader.
 //
 // Sources:
-//  * ST AN2606 "STM32 microcontroller system memory boot mode", the
-//    STM32H74xxx/75xxx bootloader section: DFU runs on USB OTG_FS only
-//    (PA11 DM, PA12 DP), and the bootloader only starts from a reset.
-//    The entry address 0x1FF09800 (initial MSP at +0, reset vector at +4)
-//    is the value ST's community article "How to jump to system bootloader
-//    from application code on STM32 microcontrollers" lists for the
-//    STM32H743/753; the AN2606 table itself could not be read when this was
-//    written, so check it against the current revision before trusting a
-//    new silicon revision.
+//  * ST AN2606 Rev 61 (January 2024), section 52 "STM32H74xxx/75xxx
+//    devices bootloader":
+//    - Section 52.1, Table 113: "The bootloader start address is
+//      0x1FF09800." The jump takes the initial MSP from [0x1FF09800] and
+//      the reset handler from [0x1FF09804].
+//    - Table 113, DFU: "USB FS configured in forced device mode", USB_DM
+//      PA11, USB_DP PA12, "No external pull-up resistor is required."
+//    - Table 113, RCC: the bootloader runs at 64 MHz on HSI and enables the
+//      CRS so USB runs on HSI48; no HSE crystal is needed.
+//    - Table 114, V9.0 (0x90) limitation: "Application stack pointer must
+//      be lower than (RAM end @ - 16 bytes)". The jump below loads the
+//      bootloader's own initial MSP, so the application stack never
+//      reaches it. V9.1 (0x91) fixes the V9.0 limitations.
+//    - Table 177: bootloader ID 0x91 at 0x1FF1E7FE (kBootloaderIdAddress).
+//    - Figure 64: after its reset the bootloader disables all interrupt
+//      sources and peripheral clocks and runs its own System Init (clock,
+//      GPIOs, IWDG, SysTick), which is why jumping from the reset state at
+//      the top of main() is enough.
 //  * RM0433 (STM32H742/743/750/753 reference manual):
 //    - RTC chapter, "RTC backup registers": RTC_BKPxR sit in the backup
 //      domain, survive a system reset (NVIC_SystemReset), are reset only by
@@ -39,6 +48,7 @@ namespace {
 
 constexpr uint32_t kDfuMagic = 0xDF0B007u;
 constexpr uint32_t kRomBootloader = 0x1FF09800u;
+constexpr uint32_t kBootloaderIdAddress = 0x1FF1E7FEu;
 
 void OpenBackupDomain() {
   __HAL_RCC_RTC_CLK_ENABLE();
@@ -58,6 +68,10 @@ extern "C" void Bootloader_RequestDfu(void) {
 
 extern "C" void Bootloader_Reboot(void) {
   NVIC_SystemReset();
+}
+
+extern "C" uint8_t Bootloader_RomId(void) {
+  return *reinterpret_cast<volatile const uint8_t*>(kBootloaderIdAddress);
 }
 
 extern "C" void Bootloader_CheckAndJump(void) {

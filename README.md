@@ -31,4 +31,13 @@ What to expect:
 * After flashing, `:leave` (or `--start`) exits the bootloader and the board reboots into the new image. With the BOOT0 fallback, every reset enters the bootloader until BOOT0 is back low.
 * `system reboot` on the VCP port resets into the application.
 
+What the ROM bootloader needs (ST AN2606 Rev 61, section 52 "STM32H74xxx/75xxx devices bootloader"):
+
+* Entry point: "The bootloader start address is 0x1FF09800" (section 52.1, Table 113). The jump loads the initial stack pointer from 0x1FF09800 and the reset handler from 0x1FF09804.
+* USB: DFU runs on "USB FS configured in forced device mode" on PA11 (DM) and PA12 (DP), and "No external pull-up resistor is required" (Table 113).
+* Clock: the bootloader runs at 64 MHz on HSI and uses the CRS to clock USB from HSI48 (Table 113), so no crystal is involved.
+* Supply: "DFU mode does not support USBREGEN mode. If STM32 is powered by 1.8 V source, it is not possible to use the BL DFU unless 3.3 V is provided" (Table 113).
+* Version: the bootloader ID byte at 0x1FF1E7FE is 0x91 for V9.1 (Table 177); `system dfu` prints it. A part reading 0x90 has V9.0, whose known limitations (Table 114) are a jump issue unless the application stack pointer is below RAM end minus 16 bytes (the jump here hands over the bootloader's own initial stack pointer, which avoids it) and an extra reset needed after a power cycle before the bootloader answers (ST's workaround is a pull-up on PA11). V9.1 fixes both.
+* After its own reset the bootloader disables every interrupt source and peripheral clock and initialises its clock, GPIOs, IWDG and SysTick itself (Figure 64), so it starts cleanly from the reset state the jump hands over. It refreshes the IWDG it configures (Table 113).
+
 CubeMX note: `USB_DEVICE/App/usb_device.c` starts no DFU class on OTG_FS, which the `.ioc` does not describe yet. Regenerating code from the current `.ioc` brings the DFU stub back on the DFU port; update the `.ioc` first.
