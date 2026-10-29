@@ -2,10 +2,12 @@
 # Included from the root CMakeLists.txt only when cross compiling with
 # cmake/arm-none-eabi.cmake; the header of that file lists what is read.
 #
-# Source folders, their exclusions, include paths and defines are read from
-# .cproject at configure time, so a .cproject edit reaches this build too.
-# Only what .cproject does not store is written here: MCU flags (toolchain
-# file), CubeIDE default flags, optimisation, runtime and the linker script.
+# Source folders, exclusions, include paths, defines, optimisation, language
+# standards, compiler and linker other flags and the linker script are read
+# from .cproject at configure time by cmake/cproject.cmake, which also stops
+# on any .cproject option it does not model. Written by hand here: the -g3
+# debug level (checked against .cproject), the CubeIDE default flags, and the
+# runtime and specs choice (FW_RUNTIME_CPP is checked against .cproject).
 
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(FATAL_ERROR "Only the .cproject Debug configuration is modelled; pass -DCMAKE_BUILD_TYPE=Debug")
@@ -19,15 +21,20 @@ set(CMAKE_CXX_FLAGS_DEBUG "")
 set(CMAKE_ASM_FLAGS_DEBUG "")
 
 set(FW_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+set(FW_RUNTIME_CPP "standard_c_nano_cpp")
 include(${CMAKE_CURRENT_LIST_DIR}/cproject.cmake)
 
 set(FW_NAME 2026_C_AV_FC)
 add_executable(${FW_NAME} ${FW_SOURCES})
-set_target_properties(${FW_NAME} PROPERTIES
-    SUFFIX ".elf"
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED ON
-    CXX_EXTENSIONS ON)
+set_target_properties(${FW_NAME} PROPERTIES SUFFIX ".elf")
+foreach(_lang C CXX)
+    if(NOT FW_${_lang}_STANDARD STREQUAL "")
+        set_target_properties(${FW_NAME} PROPERTIES
+            ${_lang}_STANDARD ${FW_${_lang}_STANDARD}
+            ${_lang}_STANDARD_REQUIRED ON
+            ${_lang}_EXTENSIONS ${FW_${_lang}_EXTENSIONS})
+    endif()
+endforeach()
 
 target_include_directories(${FW_NAME} PRIVATE
     "$<$<COMPILE_LANGUAGE:C>:${FW_C_INCLUDES}>"
@@ -41,19 +48,21 @@ target_compile_definitions(${FW_NAME} PRIVATE
 
 target_compile_options(${FW_NAME} PRIVATE
     -g3
-    "$<$<COMPILE_LANGUAGE:C,CXX>:-O2;-ffunction-sections;-fdata-sections;-Wall;-fstack-usage>"
+    "$<$<COMPILE_LANGUAGE:C>:${FW_C_OPTIONS}>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${FW_CXX_OPTIONS}>"
+    "$<$<COMPILE_LANGUAGE:ASM>:${FW_ASM_OPTIONS}>"
+    "$<$<COMPILE_LANGUAGE:C,CXX>:-ffunction-sections;-fdata-sections;-Wall;-fstack-usage>"
     "$<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions;-fno-rtti;-fno-use-cxa-atexit>")
 
 # standard_c_nano_cpp: standard newlib C with the nano C++ libraries.
 target_link_options(${FW_NAME} PRIVATE
-    -T${FW_ROOT}/STM32H743ZITX_FLASH.ld
+    -T${FW_LINKER_SCRIPT}
     --specs=nosys.specs
     -static
     -nostdlib++
     -Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/${FW_NAME}.map
     -Wl,--gc-sections
-    "SHELL:-u _printf_float"
-    "SHELL:-u _printf_i64")
+    ${FW_LINK_OPTIONS})
 target_link_libraries(${FW_NAME} PRIVATE
     -Wl,--start-group c m stdc++_nano supc++_nano -Wl,--end-group)
 

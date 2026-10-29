@@ -1,8 +1,19 @@
 # arm-none-eabi toolchain for the FC firmware (STM32H743ZITx, Cortex-M7).
 #
-# Source folders, exclusions, include paths and defines are read from .cproject at
-# configure time by cmake/cproject.cmake (the values below are what it reads on main);
-# the rest is written by hand in this file and cmake/firmware.cmake.
+# Read from .cproject at configure time by cmake/cproject.cmake (the values below are
+# what it reads on main): source folders and exclusions, include paths, defines,
+# optimisation level, C and C++ language standards, compiler and linker other flags,
+# linker script. Any other Debug option, or a value outside its allow list, stops
+# configure with the option id and value.
+#
+# Written by hand, because .cproject does not store them or the upstream toolchain
+# lacks ST's specs files:
+#   MCU flags in this file (cproject.cmake checks fpu fpv5-d16, float abi hard and an
+#     STM32H743 part)
+#   -g3 in firmware.cmake (cproject.cmake checks the debug level is g3)
+#   the CubeIDE default flags listed at the end of this block
+#   the runtime and specs choice in firmware.cmake (FW_RUNTIME_CPP must equal the
+#     .cproject runtimelibrary_cpp value; system calls must be minimal, i.e. nosys.specs)
 #
 # What was read from .cproject, Debug configuration (line numbers on main a671cca):
 #   MCU            STM32H743ZITx, fpu fpv5-d16, float abi hard            (:20,23,24)
