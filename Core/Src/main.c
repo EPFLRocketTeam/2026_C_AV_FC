@@ -39,6 +39,7 @@
 #include "../../Application/main.h"
 #include "../../Application/app_timebase.h"
 #include "../../Application/app_printf.h"
+#include "../../Application/System/bootloader.h"
 #include "SX127X.h"
 /* USER CODE END Includes */
 
@@ -212,6 +213,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  Bootloader_CheckAndJump();
 
   /* USER CODE END 1 */
 
