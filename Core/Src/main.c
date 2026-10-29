@@ -39,6 +39,7 @@
 #include "../../Application/main.h"
 #include "../../Application/app_timebase.h"
 #include "../../Application/app_printf.h"
+#include "../../Application/usb_log.h"
 #include "../../Application/System/bootloader.h"
 #include "SX127X.h"
 /* USER CODE END Includes */
@@ -179,31 +180,25 @@ static void board_configure_data_cache(void)
 #ifdef OUTPUT_LOG
 extern USBD_HandleTypeDef hUsbDeviceHS;
 
-// Set when the CDC IN endpoint stayed busy past the 2 ms budget below (no
-// host reading the port, or a lost completion). Later writes are dropped
-// at once instead of each stalling the main loop, until the host shows
-// it is back: USB_Log_ClearStall() from CDC_TransmitCplt_HS or
-// CDC_Receive_HS (usbd_cdc_if.c).
-static volatile uint8_t usb_log_stalled = 0;
+// USB output rules, HAL free in Application/usb_log.h: only to a configured
+// host, at most 5 ms on a busy endpoint, then stalled and counting drops
+// until USB_Log_ClearStall() (usbd_cdc_if.c: transfer complete, bytes
+// received, new configuration). The next write that goes out first reports
+// "[USB] dropped N lines". Logging must never stall the flight loop.
+static UsbLog usb_log;
 
 void USB_Log_ClearStall(void) {
-    usb_log_stalled = 0;
+    usb_log_clear_stall(&usb_log);
+}
+
+static int usb_log_transmit(const uint8_t *data, uint16_t length) {
+    return CDC_Transmit_HS((uint8_t *)data, length) == USBD_BUSY;
 }
 
 int _write(int file, char *ptr, int len) {
-    // Send only to an enumerated host, wait at most 2 ms on a busy
-    // endpoint, then drop: logging must never stall the flight loop.
     if (!app_printf_is_enabled()) return len;
-    if (hUsbDeviceHS.dev_state != USBD_STATE_CONFIGURED) return len;
-    if (usb_log_stalled) return len;
-
-    uint32_t start = HAL_GetTick();
-    while (CDC_Transmit_HS((uint8_t*)ptr, len) == USBD_BUSY) {
-        if (HAL_GetTick() - start >= 2) {
-            usb_log_stalled = 1;
-            break;
-        }
-    }
+    usb_log_write(&usb_log, ptr, len, hUsbDeviceHS.dev_state == USBD_STATE_CONFIGURED,
+                  usb_log_transmit, HAL_GetTick);
     return len;
 }
 #else
