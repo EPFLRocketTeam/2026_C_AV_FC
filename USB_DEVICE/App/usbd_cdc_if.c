@@ -157,6 +157,9 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_HS =
 static int8_t CDC_Init_HS(void)
 {
   /* USER CODE BEGIN 8 */
+  /* A new configuration (replug, host reboot) aborts any pending IN
+   * transfer, so its completion never comes: let _write send again. */
+  USB_Log_ClearStall();
   /* Set Application Buffers */
   USBD_CDC_SetTxBuffer(&hUsbDeviceHS, UserTxBufferHS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceHS, UserRxBufferHS);

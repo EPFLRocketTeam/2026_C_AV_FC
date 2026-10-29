@@ -5,7 +5,7 @@ Firehorn II flight computer firmware (STM32H743ZI).
 ## Serial console (VCP)
 
 * The first bytes the FC receives on the VCP port turn its USB log on, once, so a fresh board answers shell commands without `logs usb fc on`; `logs usb fc off` still turns it off for good.
-* Output goes out only while a host has the port enumerated. If the host stops reading, a write waits at most 2 ms, then the FC drops its output until the host takes a packet or sends a byte, so a stalled terminal never slows the flight loop.
+* Output goes out only while a host has the port enumerated. If the host stops reading, a write waits at most 2 ms, then the FC drops its output until the host takes a packet, sends a byte or configures the port again (a replug or a host reboot), so a stalled terminal never slows the flight loop and a read only logger gets output back after a replug.
 * A command split across USB packets is reassembled. Lines longer than 128 bytes are dropped, and when the 256 byte receive buffer overflows the line it cut is dropped too, so a cut command never joins the next one.
 
 ## Flashing over USB (DFU)
