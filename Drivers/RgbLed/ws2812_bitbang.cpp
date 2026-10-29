@@ -86,6 +86,12 @@ void Ws2812BitBang::show(const Rgb* colours, size_t n) {
     if (!ready_ || faulted_ || colours == nullptr) {
         return;
     }
+    // Reset gap guard: the previous frame must have latched. Under 2 ms by
+    // the tick, the cycle difference is below the 8.9 s wrap and exact.
+    if (has_shown_ && (HAL_GetTick() - last_end_ms_) < 2u &&
+        (DWT->CYCCNT - last_end_cycle_) < reset_cycles_) {
+        return;
+    }
     // Cheap recheck before interrupts go off.
     if (!counterMoves(kShowProbeSpins)) {
         faulted_ = true;
@@ -118,11 +124,10 @@ void Ws2812BitBang::show(const Rgb* colours, size_t n) {
     if ((primask & 0x1u) == 0u) {
         __enable_irq();
     }
-
-    // Reset gap: the line stays low; interrupts may run.
-    if (!waitCycles(bit_start, reset_cycles_)) {
-        faulted_ = true;
-    }
+    // The line stays low; the frame latches after the reset gap.
+    has_shown_ = true;
+    last_end_cycle_ = bit_start;
+    last_end_ms_ = HAL_GetTick();
 }
 
 } // namespace RgbLed

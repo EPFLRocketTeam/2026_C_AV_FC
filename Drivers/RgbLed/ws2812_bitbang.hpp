@@ -46,10 +46,13 @@ namespace RgbLed {
 // series, 4.7k pull down). No timer reaches PG12, hence the bit bang.
 //
 // show() masks interrupts for the bit stream of one frame only: 24 bits per
-// LED at 1.25 us, so three LEDs are 72 bits = 90 us with interrupts off.
-// The 300 us reset gap that follows runs with interrupts enabled, so one
-// show() of three LEDs costs about 390 us of loop time. Call it only when a
-// colour changed.
+// LED at 1.25 us, so three LEDs are 72 bits = 90 us with interrupts off, and
+// that is all a show() costs. It does not wait out the 300 us reset gap after
+// the frame: the caller's 20 ms tick already guarantees it. Instead show()
+// skips the frame when less than the reset gap has passed since the previous
+// frame ended (cycle counter, wrap safe subtraction; a HAL tick check rules
+// out a false skip once the 8.9 s CYCCNT wrap aliases). Call it only when a
+// colour changed, and no faster than the reset gap.
 //
 // Bit timing uses the DWT cycle counter. app_timebase_init() already enables
 // it; init() unlocks the DWT, enables it only if it is not running, never
@@ -72,8 +75,9 @@ public:
     // cycle counts. Call once SystemCoreClock is final.
     void init();
 
-    // Sends n colours down the chain, then holds the line low for the reset
-    // gap. Does nothing before a successful init() or after a fault.
+    // Sends n colours down the chain and leaves the line low. Does nothing
+    // before a successful init(), after a fault, or within the reset gap of
+    // the previous frame.
     void show(const Rgb* colours, size_t n);
 
     // True once a wait gave up or the counter was found stopped. Sticky.
@@ -92,6 +96,9 @@ private:
     uint32_t zero_high_cycles_ = 0;
     uint32_t one_high_cycles_ = 0;
     uint32_t reset_cycles_ = 0;
+    bool has_shown_ = false;
+    uint32_t last_end_cycle_ = 0;  // CYCCNT when the previous frame ended
+    uint32_t last_end_ms_ = 0;     // HAL_GetTick() at the same moment
 };
 
 } // namespace RgbLed

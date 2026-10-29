@@ -42,5 +42,7 @@ The LED part is not named in the BOM, so the driver assumes WS2812B: 1.25 us
 bit period, 0.35 us and 0.80 us high times, 300 us reset, GRB order, most
 significant bit first. All of these are in `Timing` at the top of
 `ws2812_bitbang.hpp`; retune them there for the real part. A frame of three LEDs
-is 72 bits, 90 us with interrupts masked, followed by the reset gap with
-interrupts enabled. The strip is only rewritten when a colour changes.
+is 72 bits, 90 us with interrupts masked, and that is the whole cost of a
+refresh: the 300 us reset gap is not waited out, because the 20 ms tick already
+spaces frames far apart; a frame asked for within the gap is skipped. The strip
+is only rewritten when a colour changes.
