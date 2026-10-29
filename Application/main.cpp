@@ -396,7 +396,9 @@ struct SuperLoopContext {
     ImuModule<4> imuModule{invArr, ringArr};
     buzzer::Buzzer<13> buzzer;
     // Status LEDs U4 -> U5 -> U6, data on PG12 (net LEDCTRL).
+#if !defined(UNIT_TEST_ENV)
     Drivers::RgbLed::Ws2812BitBang rgbLed{GPIOG, GPIO_PIN_12};
+#endif
     flight_computer::StatusLed statusLed;
 
 #ifdef UNIT_TEST_ENV
@@ -625,7 +627,9 @@ extern "C" void app_super_loop_setup(void) {
     g_superloop.setup_done = true;
 
     app_timebase_init();
+#if !defined(UNIT_TEST_ENV)
     g_superloop.rgbLed.init();  // before any early return, so errors show
+#endif
 
     if (!g_superloop.imuModule.init()) {
         g_imu_module = nullptr;
@@ -879,6 +883,7 @@ extern "C" void app_super_loop_iterate(void) {
 
     // ── Status LEDs ────────────────────────────────────────────────────────
     // Before the !ready return so an IMU init failure still blinks the error.
+    perf_t0 = app_perf_begin();
     RUN_EVERY(flight_computer::StatusLed::kMinUpdateMs) {
         bool imu_ok = false;
         bool baro_ok = false;
@@ -895,9 +900,12 @@ extern "C" void app_super_loop_iterate(void) {
         };
         Drivers::RgbLed::Rgb led_out[flight_computer::StatusLed::kLedCount];
         if (g_superloop.statusLed.update(led_in, led_out)) {
+#if !defined(UNIT_TEST_ENV)
             g_superloop.rgbLed.show(led_out, flight_computer::StatusLed::kLedCount);
+#endif
         }
     }
+    app_perf_end(APP_PERF_LED, perf_t0);
 
     if (!g_superloop.ready) {
         return;

@@ -42,6 +42,7 @@ typedef enum {
 	APP_PERF_RADIO,     /* simple_radio_tick */
 	APP_PERF_CAN,       /* CAN RX drain in Core/Src/main.c */
 	APP_PERF_REPORT,    /* the perf/IMU/radio report itself */
+	APP_PERF_LED,       /* status LED engine and strip refresh */
 	APP_PERF_SECTION_COUNT
 } app_perf_section_t;
 
