@@ -52,9 +52,16 @@ namespace RgbLed {
 // colour changed.
 //
 // Bit timing uses the DWT cycle counter. app_timebase_init() already enables
-// it; init() only enables it if it is not running and never resets CYCCNT,
-// so the app timebase is left untouched. Cycle counts come from
+// it; init() unlocks the DWT, enables it only if it is not running, never
+// resets CYCCNT (so the app timebase is left untouched), and marks the driver
+// ready only once it has seen the counter move. Cycle counts come from
 // SystemCoreClock at init().
+//
+// No wait can hang the board: each one gives up after twice its target in
+// loop iterations (one iteration is at least one cycle, so a counting CYCCNT
+// always finishes first). A wait that gives up, or a counter found stopped by
+// the recheck at the top of show(), aborts the frame with the line low and
+// sets a sticky fault; from then on show() does nothing and faulted() is true.
 //
 // The GPIO port clock must already be on (MX_GPIO_Init enables GPIOG).
 class Ws2812BitBang {
@@ -66,15 +73,21 @@ public:
     void init();
 
     // Sends n colours down the chain, then holds the line low for the reset
-    // gap. Does nothing before init().
+    // gap. Does nothing before a successful init() or after a fault.
     void show(const Rgb* colours, size_t n);
 
+    // True once a wait gave up or the counter was found stopped. Sticky.
+    bool faulted() const { return faulted_; }
+
 private:
-    void waitCycles(uint32_t start, uint32_t cycles) const;
+    static bool counterMoves(uint32_t spins);
+    bool waitCycles(uint32_t start, uint32_t cycles) const;
+    void abortFrame(uint32_t primask);
 
     GPIO_TypeDef* port_;
     uint16_t pin_;
     bool ready_ = false;
+    bool faulted_ = false;
     uint32_t period_cycles_ = 0;
     uint32_t zero_high_cycles_ = 0;
     uint32_t one_high_cycles_ = 0;
