@@ -66,7 +66,7 @@
 #define USBD_LANGID_STRING     1033
 #define USBD_MANUFACTURER_STRING     "STMicroelectronics"
 #define USBD_PID_HS     22336
-#define USBD_PRODUCT_STRING_HS     "ERT Firehorn II FC"
+#define USBD_PRODUCT_STRING_HS     "STM32 Virtual ComPort"
 #define USBD_CONFIGURATION_STRING_HS     "CDC Config"
 #define USBD_INTERFACE_STRING_HS     "CDC Interface"
 #define USBD_PID_FS     57105
@@ -77,6 +77,9 @@
 #define USB_SIZ_BOS_DESC            0x0C
 
 /* USER CODE BEGIN PRIVATE_DEFINES */
+/* Board name for the VCP; replaces the CubeMX product string. */
+#undef USBD_PRODUCT_STRING_HS
+#define USBD_PRODUCT_STRING_HS     "ERT Firehorn II FC"
 /* Serial number: the full 96 bit unique id as 24 hex digits, so two
  * boards on one host get distinct, stable port names. */
 #define USBD_SERIAL_UID_DIGITS      24U
@@ -89,6 +92,25 @@
   */
 
 /* USER CODE BEGIN 0 */
+static void IntToUnicode(uint32_t value, uint8_t * pbuf, uint8_t len);
+
+#if defined ( __ICCARM__ ) /*!< IAR Compiler */
+  #pragma data_alignment=4
+#endif
+__ALIGN_BEGIN static uint8_t USBD_StringSerialUid[USBD_SIZ_STRING_SERIAL_UID] __ALIGN_END = {
+  USBD_SIZ_STRING_SERIAL_UID,
+  USB_DESC_TYPE_STRING,
+};
+
+/* UID registers at UID_BASE (0x1FF1E800 on the STM32H743). */
+static uint8_t *Get_SerialNumUid(uint16_t *length)
+{
+  IntToUnicode(HAL_GetUIDw0(), &USBD_StringSerialUid[2], 8);
+  IntToUnicode(HAL_GetUIDw1(), &USBD_StringSerialUid[18], 8);
+  IntToUnicode(HAL_GetUIDw2(), &USBD_StringSerialUid[34], 8);
+  *length = USBD_SIZ_STRING_SERIAL_UID;
+  return USBD_StringSerialUid;
+}
 
 /* USER CODE END 0 */
 
@@ -318,8 +340,8 @@ __ALIGN_BEGIN uint8_t USBD_StrDesc[USBD_MAX_STR_DESC_SIZ] __ALIGN_END;
 #if defined ( __ICCARM__ ) /*!< IAR Compiler */
   #pragma data_alignment=4
 #endif
-__ALIGN_BEGIN uint8_t USBD_StringSerial[USBD_SIZ_STRING_SERIAL_UID] __ALIGN_END = {
-  USBD_SIZ_STRING_SERIAL_UID,
+__ALIGN_BEGIN uint8_t USBD_StringSerial[USB_SIZ_STRING_SERIAL] __ALIGN_END = {
+  USB_SIZ_STRING_SERIAL,
   USB_DESC_TYPE_STRING,
 };
 
@@ -399,12 +421,13 @@ uint8_t * USBD_HS_ManufacturerStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *l
 uint8_t * USBD_HS_SerialStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *length)
 {
   UNUSED(speed);
-  *length = USBD_SIZ_STRING_SERIAL_UID;
+  *length = USB_SIZ_STRING_SERIAL;
 
   /* Update the serial number string descriptor with the data from the unique
    * ID */
   Get_SerialNum();
   /* USER CODE BEGIN USBD_HS_SerialStrDescriptor */
+  return Get_SerialNumUid(length);
 
   /* USER CODE END USBD_HS_SerialStrDescriptor */
 
@@ -531,7 +554,7 @@ uint8_t * USBD_FS_ManufacturerStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *l
 uint8_t * USBD_FS_SerialStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *length)
 {
   UNUSED(speed);
-  *length = USBD_SIZ_STRING_SERIAL_UID;
+  *length = USB_SIZ_STRING_SERIAL;
 
   /* Update the serial number string descriptor with the data from the unique
    * ID */
@@ -587,10 +610,21 @@ uint8_t * USBD_FS_InterfaceStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *leng
   */
 static void Get_SerialNum(void)
 {
-  /* UID registers at UID_BASE (0x1FF1E800 on the STM32H743). */
-  IntToUnicode(HAL_GetUIDw0(), &USBD_StringSerial[2], 8);
-  IntToUnicode(HAL_GetUIDw1(), &USBD_StringSerial[18], 8);
-  IntToUnicode(HAL_GetUIDw2(), &USBD_StringSerial[34], 8);
+  uint32_t deviceserial0;
+  uint32_t deviceserial1;
+  uint32_t deviceserial2;
+
+  deviceserial0 = *(uint32_t *) DEVICE_ID1;
+  deviceserial1 = *(uint32_t *) DEVICE_ID2;
+  deviceserial2 = *(uint32_t *) DEVICE_ID3;
+
+  deviceserial0 += deviceserial2;
+
+  if (deviceserial0 != 0)
+  {
+    IntToUnicode(deviceserial0, &USBD_StringSerial[2], 8);
+    IntToUnicode(deviceserial1, &USBD_StringSerial[18], 4);
+  }
 }
 
 /**

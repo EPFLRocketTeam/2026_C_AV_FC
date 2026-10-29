@@ -48,4 +48,18 @@ What the ROM bootloader needs (ST AN2606 Rev 61, section 52 "STM32H74xxx/75xxx d
 * Version: the bootloader ID byte at 0x1FF1E7FE is 0x91 for V9.1 (Table 177); `system dfu` prints it. A part reading 0x90 has V9.0, whose known limitations (Table 114) are a jump issue unless the application stack pointer is below RAM end minus 16 bytes (the jump here hands over the bootloader's own initial stack pointer, which avoids it) and an extra reset needed after a power cycle before the bootloader answers (ST's workaround is a pull-up on PA11). V9.1 fixes both.
 * After its own reset the bootloader disables every interrupt source and peripheral clock and initialises its clock, GPIOs, IWDG and SysTick itself (Figure 64), so it starts cleanly from the reset state the jump hands over. It refreshes the IWDG it configures (Table 113).
 
-CubeMX note: `USB_DEVICE/App/usb_device.c` starts no DFU class on OTG_FS, which the `.ioc` does not describe yet. Regenerating code from the current `.ioc` brings the DFU stub back on the DFU port; update the `.ioc` first.
+## CubeMX regeneration
+
+Kept by a regeneration, because they sit inside USER CODE blocks: the `Bootloader_CheckAndJump()` call and its include in `Core/Src/main.c`, the `_write` stall handling in `Core/Src/main.c`, the stall clears in `USB_DEVICE/App/usbd_cdc_if.c`, and the product string and UID serial number in `USB_DEVICE/App/usbd_desc.c` (an `#undef` of `USBD_PRODUCT_STRING_HS` and a serial descriptor that returns early).
+
+Reverted by a regeneration from the current `.ioc`: `USB_DEVICE/App/usb_device.c`, which gets the stub DFU device back on OTG_FS (the `usbd_dfu.h` and `usbd_dfu_if.h` includes, the `hUsbDeviceFS` handle and its init block). The stub advertises the ROM bootloader's own `0483:df11` while the application runs. Also check that the `excluding="App/usbd_dfu_if.c"` entry on the `USB_DEVICE` source folder in `.cproject` is still there.
+
+To make the `.ioc` match, remove the DFU class on OTG_FS (`2026_C_AV_FC.ioc`):
+
+* `Mcu.Pin60=VP_USB_DEVICE_VS_USB_DEVICE_DFU_FS` (line 125), and renumber the later `Mcu.Pin` entries and `Mcu.PinsNb`
+* `USB_DEVICE.CLASS_NAME_FS=DFU` (line 496)
+* `USB_DEVICE.IPParameters` (line 498): drop `VirtualModeFS`, `CLASS_NAME_FS` and `VirtualMode-DFU_FS`
+* `USB_DEVICE.VirtualMode-DFU_FS=Dfu` and `USB_DEVICE.VirtualModeFS=Dfu_FS` (lines 500 and 501)
+* `VP_USB_DEVICE_VS_USB_DEVICE_DFU_FS.Mode` and `.Signal` (lines 513 and 514)
+
+Keep `USB_OTG_FS` and PA11/PA12 (lines 55, 110, 111, 151 to 154, 503, 504): the ROM bootloader uses that port. The product string can also be set on the USB_DEVICE middleware page; the 96 bit serial has no CubeMX parameter.
