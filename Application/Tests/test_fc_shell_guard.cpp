@@ -44,3 +44,42 @@ TEST(FcShellGuard, EveryStateHasItsName) {
     EXPECT_STREQ(fc_shell::StateName(State::ABORT_IN_FLIGHT), "ABORT_IN_FLIGHT");
     EXPECT_STREQ(fc_shell::StateName(static_cast<State>(200)), "UNKNOWN");
 }
+
+using Command = fc_shell::ConfirmWindow::Command;
+
+TEST(FcShellConfirm, SecondCallInsideTheWindowConfirms) {
+    fc_shell::ConfirmWindow w;
+    EXPECT_FALSE(w.Request(Command::kDfu, 1000));
+    EXPECT_TRUE(w.Request(Command::kDfu, 1000 + 9999));
+    // Confirming consumes the window: the next call arms again.
+    EXPECT_FALSE(w.Request(Command::kDfu, 12000));
+}
+
+TEST(FcShellConfirm, WindowOfTenSecondsRunsOut) {
+    fc_shell::ConfirmWindow w;
+    EXPECT_FALSE(w.Request(Command::kReboot, 0));
+    EXPECT_FALSE(w.Request(Command::kReboot, 10000));  // too late: re-armed
+    EXPECT_TRUE(w.Request(Command::kReboot, 10001));
+}
+
+TEST(FcShellConfirm, OtherCommandInBetweenRearms) {
+    fc_shell::ConfirmWindow w;
+    EXPECT_FALSE(w.Request(Command::kDfu, 0));
+    EXPECT_FALSE(w.Request(Command::kReboot, 100));
+    EXPECT_FALSE(w.Request(Command::kDfu, 200));
+    EXPECT_TRUE(w.Request(Command::kDfu, 300));
+}
+
+TEST(FcShellConfirm, DisarmCancelsTheWindow) {
+    fc_shell::ConfirmWindow w;
+    EXPECT_FALSE(w.Request(Command::kDfu, 0));
+    w.Disarm();
+    EXPECT_FALSE(w.Request(Command::kDfu, 1));
+    EXPECT_TRUE(w.Request(Command::kDfu, 2));
+}
+
+TEST(FcShellConfirm, TickWrapAroundIsHandled) {
+    fc_shell::ConfirmWindow w;
+    EXPECT_FALSE(w.Request(Command::kDfu, 0xFFFFF000u));
+    EXPECT_TRUE(w.Request(Command::kDfu, 0x00000500u));
+}

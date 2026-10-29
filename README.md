@@ -8,7 +8,7 @@ The FC flashes over USB without an ST-Link, through the STM32H743 ROM bootloader
 
 The board has two USB ports. The VCP port (OTG_HS in full speed mode, PB14/PB15) is the serial console; it enumerates as "ERT Firehorn II FC" with the chip's 96 bit unique id as its serial number, so each board keeps a stable port name. The DFU port is the dedicated mini USB connector on OTG_FS (PA11/PA12), the only USB port the ROM bootloader listens on.
 
-1. Enter the bootloader. On the VCP port, type `system dfu`. The FC only accepts it in INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND and prints the reason when it refuses; its replies show after `logs usb fc on`. Fallback: set the BOOT0 switch high, press NRST (the green LED shows BOOT0), and set BOOT0 back low once flashed.
+1. Enter the bootloader. On the VCP port, type `system dfu`. The FC only accepts it in INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND and prints the reason when it refuses. In those states the first `system dfu` only prints the FC state and the ROM bootloader ID and asks for a repeat; typing `system dfu` again within 10 s reboots into the bootloader. `system reboot` works the same way. Fallback: set the BOOT0 switch high, press NRST (the green LED shows BOOT0), and set BOOT0 back low once flashed.
 2. Plug the DFU port. `dfu-util -l` lists the bootloader as `0483:df11`.
 3. Flash a raw binary (`arm-none-eabi-objcopy -O binary firmware.elf firmware.bin` turns the CubeIDE output into one):
 
@@ -23,6 +23,8 @@ The board has two USB ports. The VCP port (OTG_HS in full speed mode, PB14/PB15)
    ```
 
    On Windows, dfu-util needs the WinUSB driver bound to the DFU device (Zadig); STM32CubeProgrammer ships ST's own driver.
+
+Operational rule: never enter DFU or reboot on a loaded rocket. FILLING is both the bench idle state and the propellant loading state, and the FC cannot tell them apart. In the ROM bootloader the FC relays no radio link, so the ground loses telemetry, vent and abort, and the bootloader has no timeout: it stays there until NRST or a power cycle.
 
 What to expect:
 

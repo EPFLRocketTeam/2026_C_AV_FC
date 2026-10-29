@@ -48,6 +48,35 @@ inline const char* StateName(flight_computer::State state) {
   return "UNKNOWN";
 }
 
+// Two step confirmation for system dfu and system reboot: the first call
+// arms a 10 s window for that command, a second call of the same command
+// inside the window confirms it. Anything else (the window ran out, or the
+// other command came in between) arms again. A refused call disarms.
+// Times are milliseconds from any free running clock (HAL_GetTick on the
+// board); wrap around is handled.
+class ConfirmWindow {
+ public:
+  enum class Command : uint8_t { kNone, kDfu, kReboot };
+  static constexpr uint32_t kWindowMs = 10000;
+
+  // Returns true when this call confirms the command; false when it armed.
+  bool Request(Command command, uint32_t now_ms) {
+    if (command == armed_ && now_ms - armed_at_ms_ < kWindowMs) {
+      armed_ = Command::kNone;
+      return true;
+    }
+    armed_ = command;
+    armed_at_ms_ = now_ms;
+    return false;
+  }
+
+  void Disarm() { armed_ = Command::kNone; }
+
+ private:
+  Command armed_ = Command::kNone;
+  uint32_t armed_at_ms_ = 0;
+};
+
 }  // namespace fc_shell
 
 #endif  // APP_FC_SHELL_GUARD_H

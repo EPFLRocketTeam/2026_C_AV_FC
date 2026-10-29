@@ -365,31 +365,41 @@ void cameras_stop (void* ctx) {
 }
 
 // system dfu and system reboot both reset the FC, so both refuse outside
-// the ground states of fc_shell::IsResetAllowed (fc_shell_guard.hpp).
-// Returns true, after printing the reason, when the command is refused.
-bool RefuseReset(const char* command, flight_computer::State state) {
-  if (fc_shell::IsResetAllowed(state)) return false;
-  app_printf("[SHELL] %s refused: FC state %s, allowed only in INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND\r\n",
-             command, fc_shell::StateName(state));
-  return true;
+// the ground states of fc_shell::IsResetAllowed (fc_shell_guard.hpp), and
+// both need the same command twice within 10 s: FILLING is the bench idle
+// state and also the loaded rocket, which the FC cannot tell apart.
+fc_shell::ConfirmWindow g_reset_confirm;
+
+// Returns true when the reset may go ahead now. Otherwise prints why not:
+// refused in this state, or armed and waiting for the repeat.
+bool ConfirmReset(const char* command, fc_shell::ConfirmWindow::Command which) {
+  const flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
+  if (!fc_shell::IsResetAllowed(state)) {
+    g_reset_confirm.Disarm();
+    app_printf("[SHELL] %s refused: FC state %s, allowed only in INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND\r\n",
+               command, fc_shell::StateName(state));
+    return false;
+  }
+  if (g_reset_confirm.Request(which, HAL_GetTick())) return true;
+  // 0x90 is ROM bootloader V9.0, with AN2606 Rev 61 Table 114 limitations.
+  app_printf("[SHELL] %s: FC state %s, ROM bootloader id 0x%02X, repeat within 10 s to confirm\r\n",
+             command, fc_shell::StateName(state), static_cast<unsigned>(Bootloader_RomId()));
+  return false;
 }
 
 // Reboots into the STM32H743 ROM DFU bootloader (Application/System/
 // bootloader.h); the host then flashes over the DFU USB port.
 void OnSystemDfu(void*) noexcept {
-  // 0x90 is ROM bootloader V9.0, with AN2606 Rev 61 Table 114 limitations.
-  app_printf("[SHELL] system dfu (ROM bootloader id 0x%02X)\r\n",
-             static_cast<unsigned>(Bootloader_RomId()));
-  const flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
-  if (RefuseReset("system dfu", state)) return;
+  app_printf("[SHELL] system dfu\r\n");
+  if (!ConfirmReset("system dfu", fc_shell::ConfirmWindow::Command::kDfu)) return;
   app_printf("[SHELL] rebooting into the ROM DFU bootloader, flash over the DFU USB port\r\n");
   HAL_Delay(50);  // let the last USB packet leave before the reset
   Bootloader_RequestDfu();
 }
 void OnSystemReboot(void*) noexcept {
   app_printf("[SHELL] system reboot\r\n");
-  const flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
-  if (RefuseReset("system reboot", state)) return;
+  if (!ConfirmReset("system reboot", fc_shell::ConfirmWindow::Command::kReboot)) return;
+  app_printf("[SHELL] rebooting\r\n");
   HAL_Delay(50);  // let the last USB packet leave before the reset
   Bootloader_Reboot();
 }
