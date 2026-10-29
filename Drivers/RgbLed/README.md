@@ -36,6 +36,12 @@ loop. Brightness is capped at 25 percent (`StatusLed::kMaxChannel`).
 | LED 2 blinks red at 2 Hz | No healthy IMU or no healthy baro |
 | All three blink red at 4 Hz | Error; overrides everything. Today: IMU init failed at boot |
 
+Every blink counts from the last state entry, so it starts in the on half. In an
+abort with failed sensors, LED 1 and LED 2 therefore flash red together. A state
+change while the error override is on still starts its entry blink, hidden under
+the override: if the error clears within 600 ms the rest of the blink shows, and
+it is never replayed afterwards.
+
 ## Timing
 
 The LED part is not named in the BOM, so the driver assumes WS2812B: 1.25 us

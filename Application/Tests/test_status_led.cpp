@@ -244,3 +244,143 @@ TEST_F(StatusLedTest, ErrorBlinkKeepsItsPhaseAcrossTheWrap) {
         }
     }
 }
+
+// ── Interactions ───────────────────────────────────────────────────────────
+
+namespace {
+Rgb errorWant(uint32_t t, uint32_t origin) { return ((t - origin) / 125) % 2 == 0 ? kRed : kOff; }
+} // namespace
+
+TEST_F(StatusLedTest, StateChangeUnderErrorRunsEntryBlinkHidden) {
+    settle(flight_computer::FILLING, 1000);
+    in.error = true;
+    at(2000);
+    in.av_state = flight_computer::ARMED;  // blinks count from this entry
+    for (uint32_t t = 2050; t < 2350; t += 5) {
+        at(t);
+        for (int i = 0; i < 3; ++i) {
+            EXPECT_EQ(out[i], errorWant(t, 2050)) << "led " << i << " t " << t;
+        }
+    }
+    // Error clears 300 ms into the entry blink: the rest of it shows.
+    in.error = false;
+    EXPECT_TRUE(at(2350));
+    EXPECT_EQ(out[0], kOff);  // 300..400 is an off slot
+    at(2450);
+    EXPECT_EQ(out[0], StatusLed::stateColour(flight_computer::ARMED));
+    at(2550);
+    EXPECT_EQ(out[0], kOff);
+    at(2650);
+    EXPECT_EQ(out[0], StatusLed::stateColour(flight_computer::ARMED));
+}
+
+TEST_F(StatusLedTest, EntryBlinkConsumedUnderErrorIsNotReplayed) {
+    settle(flight_computer::FILLING, 1000);
+    in.error = true;
+    in.av_state = flight_computer::ARMED;
+    at(2000);
+    at(2500);
+    in.error = false;
+    EXPECT_TRUE(at(2700));
+    for (uint32_t t = 2700; t < 4000; t += 20) {
+        at(t);
+        EXPECT_EQ(out[0], StatusLed::stateColour(flight_computer::ARMED)) << "t " << t;
+    }
+}
+
+TEST_F(StatusLedTest, ErrorStartingDuringEntryBlinkOverrides) {
+    in.av_state = flight_computer::ARMED;
+    at(1000);
+    at(1050);
+    EXPECT_EQ(out[0], StatusLed::stateColour(flight_computer::ARMED));
+    in.error = true;
+    for (uint32_t t = 1060; t < 2000; t += 5) {
+        at(t);
+        for (int i = 0; i < 3; ++i) {
+            EXPECT_EQ(out[i], errorWant(t, 1000)) << "led " << i << " t " << t;
+        }
+    }
+}
+
+TEST_F(StatusLedTest, ErrorClearingAloneResumesAbortPhase) {
+    in.av_state = flight_computer::ABORT_ON_GROUND;
+    in.error = true;
+    for (uint32_t t = 1000; t < 2000; t += 10) {
+        at(t);
+    }
+    in.error = false;
+    for (uint32_t t = 2010; t < 4000; t += 10) {
+        at(t);
+        EXPECT_EQ(out[0], ((t - 1000) / 250) % 2 == 0 ? kRed : kOff) << "t " << t;
+        EXPECT_EQ(out[1], kGreen);
+        EXPECT_EQ(out[2], kGreen);
+    }
+}
+
+TEST_F(StatusLedTest, HiddenChangesUnderErrorReturnFalse) {
+    in.error = true;
+    at(1000);  // red slot 1000..1125
+    in.sensors_ok = false;
+    EXPECT_FALSE(at(1010));
+    in.sd_ok = false;
+    EXPECT_FALSE(at(1020));
+    in.av_state = flight_computer::FILLING;  // new epoch at 1030, still red
+    EXPECT_FALSE(at(1030));
+    EXPECT_TRUE(at(1155));  // 125 ms after the new epoch: off
+}
+
+TEST_F(StatusLedTest, UnknownStateThroughUpdate) {
+    const State unknown = static_cast<State>(200);
+    in.av_state = unknown;
+    at(1000);
+    EXPECT_EQ(out[0], kRed);
+    at(1100);
+    EXPECT_EQ(out[0], kOff);  // entry blink, not the 2 Hz abort blink
+    at(1200);
+    EXPECT_EQ(out[0], kRed);
+    at(1600);
+    EXPECT_EQ(out[0], kRed);
+    for (uint32_t t = 1620; t < 3000; t += 10) {
+        EXPECT_FALSE(at(t)) << "t " << t;
+        EXPECT_EQ(out[0], kRed);
+    }
+}
+
+TEST_F(StatusLedTest, ReturnsTrueWhenOnlyLed1Changes) {
+    in.av_state = flight_computer::ARMED;
+    EXPECT_TRUE(at(1000));
+    for (uint32_t t = 1020; t <= 1700; t += 20) {
+        const bool edge = t <= 1600 && (t - 1000) % 100 == 0;
+        EXPECT_EQ(at(t), edge) << "t " << t;
+        EXPECT_EQ(out[1], kGreen);
+        EXPECT_EQ(out[2], kGreen);
+    }
+}
+
+TEST_F(StatusLedTest, AbortEnteredMidEntryBlink) {
+    in.av_state = flight_computer::ASCENT;
+    at(1000);
+    at(1120);
+    EXPECT_EQ(out[0], kOff);  // off slot of the ASCENT entry blink
+    in.av_state = flight_computer::ABORT_IN_FLIGHT;
+    EXPECT_TRUE(at(1150));
+    EXPECT_EQ(out[0], kRed);
+    for (uint32_t t = 1150; t < 3000; t += 10) {
+        at(t);
+        EXPECT_EQ(out[0], ((t - 1150) / 250) % 2 == 0 ? kRed : kOff) << "t " << t;
+    }
+}
+
+TEST_F(StatusLedTest, AbortWithFailedSensorsBlinksInPhase) {
+    // Both 2 Hz blinks count from the abort entry, so LED 1 and LED 2 flash
+    // together rather than drifting apart.
+    in.sensors_ok = false;
+    settle(flight_computer::ASCENT, 1000);
+    in.av_state = flight_computer::ABORT_IN_FLIGHT;
+    for (uint32_t t = 1337; t < 4000; ++t) {
+        at(t);
+        const Rgb want = ((t - 1337) / 250) % 2 == 0 ? kRed : kOff;
+        EXPECT_EQ(out[0], want) << "t " << t;
+        EXPECT_EQ(out[1], want) << "t " << t;
+    }
+}
