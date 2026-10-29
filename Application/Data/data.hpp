@@ -789,6 +789,10 @@ struct DataDump {
   UplinkCmd uplinkCmd; // X
   PrcLink prcLink; // X
 };
+// Pins the SD record length that Client/PostFlightV2/container.hpp checks
+// at decode time. prcLink sits in what was tail padding (offset 801, the
+// struct still rounds up to 808 on host x86-64 and arm-none-eabi alike).
+static_assert(sizeof(DataDump) == 808);
 
 class GpsStore : public IStore<GpsBasicFixData> {
 public:
