@@ -206,6 +206,11 @@ int _write(int file, char *ptr, int len) {
     }
     return len;
 }
+#else
+// usbd_cdc_if.c calls this whatever OUTPUT_LOG says; with no USB log there
+// is no stall to clear.
+void USB_Log_ClearStall(void) {
+}
 #endif
 
 void app_on_imu_exti(uint16_t gpio_pin);
