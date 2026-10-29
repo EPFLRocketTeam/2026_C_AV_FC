@@ -37,7 +37,7 @@ public:
     // are full scale and get scaled down to this.
     static constexpr uint8_t kMaxChannel = 64;
 
-    static constexpr uint32_t kMinUpdateMs   = 20;   // never needs a faster tick
+    static constexpr uint32_t kMinUpdateMs   = 20;   // poll period: the caller ticks update() this often
     static constexpr uint32_t kEntryHalfMs   = 100;  // entry blink: 100 on, 100 off
     static constexpr uint32_t kEntryBlinks   = 3;
     static constexpr uint32_t kAbortHalfMs   = 250;  // 2 Hz
@@ -88,9 +88,6 @@ public:
             entry_ms_ = in.now_ms;
             has_state_ = true;
         }
-        now_ms_ = in.now_ms;
-        error_ = in.error;
-        sensors_ok_ = in.sensors_ok;
 
         Rgb next[kLedCount];
         if (in.error) {
@@ -113,33 +110,6 @@ public:
         return changed;
     }
 
-    // Earliest time the output can change on its own with the same inputs,
-    // never sooner than kMinUpdateMs after the last update(). With nothing
-    // blinking it is last update + kMinUpdateMs, the rate at which inputs
-    // should be polled.
-    uint32_t nextDueMs() const {
-        const uint32_t floor = now_ms_ + kMinUpdateMs;
-        uint32_t due = UINT32_MAX;
-        if (error_) {
-            due = nextEdge(0, now_ms_, kErrorHalfMs);
-        } else {
-            const uint32_t el = now_ms_ - entry_ms_;
-            if (isAbort(state_)) {
-                due = nextEdge(entry_ms_, now_ms_, kAbortHalfMs);
-            } else if (el < entryBlinkMs()) {
-                due = nextEdge(entry_ms_, now_ms_, kEntryHalfMs);
-            }
-            if (!sensors_ok_) {
-                const uint32_t s = nextEdge(0, now_ms_, kSensorHalfMs);
-                due = (s < due) ? s : due;
-            }
-        }
-        if (due == UINT32_MAX) {
-            return floor;
-        }
-        return (due < floor) ? floor : due;
-    }
-
 private:
     static constexpr bool isAbort(State s) {
         return s == ABORT_ON_GROUND || s == ABORT_IN_FLIGHT;
@@ -149,9 +119,6 @@ private:
     // On during the first half of each period, counted from origin.
     static constexpr bool blinkOn(uint32_t t, uint32_t half_ms, uint32_t origin = 0) {
         return ((t - origin) / half_ms) % 2 == 0;
-    }
-    static constexpr uint32_t nextEdge(uint32_t origin, uint32_t t, uint32_t half_ms) {
-        return origin + ((t - origin) / half_ms + 1) * half_ms;
     }
 
     Rgb stateLed(uint32_t now) const {
@@ -168,9 +135,6 @@ private:
     bool has_out_ = false;
     State state_ = INIT;
     uint32_t entry_ms_ = 0;
-    uint32_t now_ms_ = 0;
-    bool error_ = false;
-    bool sensors_ok_ = true;
     Rgb last_[kLedCount] = {};
 };
 
