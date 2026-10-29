@@ -44,7 +44,9 @@
 #                  Drivers/LOG_AGGREGATOR/2026_C_AV_LOG_AGGREGATOR/include,
 #                  Drivers/CLI/2026_C_AV_CLI, Drivers/BMP390               (:91-116)
 #   Optimisation   -O2 -g3 for C and C++, -g3 for ASM                      (:33,44-45,80-81)
-#   C standard     not set (compiler default)
+#   C standard     not set, so no -std is passed and GCC 13 uses gnu17. Unconfirmed:
+#                  CubeIDE may pass its own default (possibly -std=gnu11) for an
+#                  unset C standard; one line of a CubeIDE Debug build log settles it.
 #   C++ standard   gnu++20                                                 (:118)
 #   Runtime        standard_c_nano_cpp: standard newlib C, nano libstdc++  (:29)
 #   System calls   not set: CubeIDE default, minimal (--specs=nosys.specs)
