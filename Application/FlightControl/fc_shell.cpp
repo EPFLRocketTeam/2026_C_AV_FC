@@ -7,6 +7,7 @@
 #include "Application/app_printf.h"
 #include "Application/FlightControl/fc_commands.hpp"
 #include "Application/FlightControl/fc_shell_intake.hpp"
+#include "Application/FlightControl/fc_shell_replay.hpp"
 #include "Application/FlightControl/prc_can.hpp"
 #include "fc_commands_generated.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
@@ -17,10 +18,9 @@
 
 namespace {
 
-// Bytes from the USB interrupt wait in g_rx_ring until FC_Shell_Tick
-// drains them into g_line, which rebuilds lines across USB packets.
-fc_shell::SpscRing<256>      g_rx_ring;
-fc_shell::LineAssembler<128> g_line;
+// Bytes from the USB interrupt wait in a 256 byte ring until FC_Shell_Tick
+// drains them into a 128 byte line, rebuilt across USB packets.
+fc_shell::Intake<256, 128> g_intake;
 
 context g_cmd_ctx;
 driver  g_driver;
@@ -486,25 +486,20 @@ void EnsureInit() {
 
 };
 
-// USB interrupt context: only stores the bytes. A packet that does not
-// fit in the ring loses its excess bytes, the rest are kept.
+// USB interrupt context: only stores the bytes. When the ring is full the
+// excess is dropped and the intake throws away the line it cut (see
+// SpscRing in fc_shell_intake.hpp), so a cut line never runs.
 void Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length) {
-    g_rx_ring.Push(data, length);
+    g_intake.Receive(data, length);
 }
 
 // Main loop: drains the ring and replays each complete line through the
-// generated trie, followed by its \n. Bytes of an unfinished line stay in
-// g_line until the rest arrives in a later packet.
+// generated trie. Bytes of an unfinished line wait for the rest to arrive
+// in a later packet.
 void FC_Shell_Tick () {
     EnsureInit();
 
-    uint8_t byte;
-    while (g_rx_ring.Pop(byte)) {
-        g_line.Feed(byte, [](const char* line, uint32_t length) {
-            for (uint32_t i = 0; i < length; i++) {
-                push_char(&g_cmd_ctx, &g_driver, line[i]);
-            }
-            push_char(&g_cmd_ctx, &g_driver, '\n');
-        });
-    }
+    g_intake.Drain([](const char* line, uint32_t length) {
+        fc_shell::ReplayLine(&g_cmd_ctx, &g_driver, line, length);
+    });
 }

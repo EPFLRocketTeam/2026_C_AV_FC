@@ -23,3 +23,6 @@ create_test(test_gps_module test_gps_module.cpp)
 create_test(test_imu_module test_imu_module.cpp)
 create_test(test_baro_module test_baro_module.cpp)
 create_test(test_fc_shell_intake test_fc_shell_intake.cpp)
+# The handoff test drives the generated command trie from the CLI submodule.
+target_sources(test_fc_shell_intake PRIVATE ${CMAKE_SOURCE_DIR}/Drivers/CLI/2026_C_AV_CLI/fc_commands_generated.cpp)
+target_include_directories(test_fc_shell_intake PRIVATE ${CMAKE_SOURCE_DIR}/Drivers/CLI/2026_C_AV_CLI)
