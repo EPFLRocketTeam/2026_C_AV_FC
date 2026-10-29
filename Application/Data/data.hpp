@@ -755,6 +755,34 @@ public:
   StateStore();
 };
 
+// PRC heartbeat liveness, published by prc_can.cpp from PrcLinkMonitor
+// (prc_link.hpp). Bit 0 engine, bit 1 ethanol, bit 2 LOX.
+struct PrcLink {
+  uint8_t prc_alive_mask = 0;
+};
+static_assert(sizeof(PrcLink) == 1);
+
+class PrcLinkStore : public IStore<PrcLink> {
+public:
+  uint8_t get_prc_alive_mask() const { return data_.prc_alive_mask; }
+  void set_prc_alive_mask(uint8_t value) { data_.prc_alive_mask = value; }
+
+  // Heartbeats received and missed per board (0 engine, 1 ethanol, 2 LOX).
+  // Held here only: DataDump carries the mask, not these counts.
+  static constexpr uint8_t BOARD_COUNT = 3;
+  uint32_t get_received(uint8_t board) const { return board < BOARD_COUNT ? received_[board] : 0; }
+  uint32_t get_missed(uint8_t board) const { return board < BOARD_COUNT ? missed_[board] : 0; }
+  void set_counts(uint8_t board, uint32_t received, uint32_t missed) {
+    if (board >= BOARD_COUNT) return;
+    received_[board] = received;
+    missed_[board]   = missed;
+  }
+
+private:
+  uint32_t received_[BOARD_COUNT] = {};
+  uint32_t missed_[BOARD_COUNT]   = {};
+};
+
 struct DataDump {
   State av_state; // Y
   // Timestamp contract: GOATStore::get() stamps this field from the shared
@@ -774,7 +802,12 @@ struct DataDump {
   Batteries batteries; // X
   CamsRecording camsRecording; // X
   UplinkCmd uplinkCmd; // X
+  PrcLink prcLink; // X
 };
+// Pins the SD record length that Client/PostFlightV2/container.hpp checks
+// at decode time. prcLink sits in what was tail padding (offset 801, the
+// struct still rounds up to 808 on host x86-64 and arm-none-eabi alike).
+static_assert(sizeof(DataDump) == 808);
 
 class GpsStore : public IStore<GpsBasicFixData> {
 public:
@@ -819,6 +852,7 @@ public:
   BatteriesStore batteriesStore;
   CamsRecordingStore camsRecordingStore;
   UplinkCmdStore uplinkCmdStore;
+  PrcLinkStore prcLinkStore;
 
   void set(const DataDump &value);
   const DataDump &get() const;
