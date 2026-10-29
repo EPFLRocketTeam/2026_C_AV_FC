@@ -12,6 +12,8 @@
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 #include "Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET/include/prc_intranet/payload.hpp"
 #include "Drivers/Camera/Camera.hpp"
+#include "Application/System/bootloader.h"
+#include "stm32h7xx_hal.h"
 
 namespace {
 
@@ -361,6 +363,34 @@ void cameras_stop (void* ctx) {
   cameraDriver.stop();
 }
 
+// Reboots into the STM32H743 ROM DFU bootloader (Application/System/
+// bootloader.h); the host then flashes over the DFU USB port. Ground states
+// only: never from an armed, pressurized or flying state.
+void OnSystemDfu(void*) noexcept {
+  app_printf("[SHELL] system dfu\r\n");
+  const flight_computer::State state = flight_computer::GOATStore::get_instance().stateStore.get();
+  switch (state) {
+    case flight_computer::State::INIT:
+    case flight_computer::State::CALIBRATION:
+    case flight_computer::State::FILLING:
+    case flight_computer::State::LANDED:
+    case flight_computer::State::ABORT_ON_GROUND:
+      break;
+    default:
+      app_printf("[SHELL] system dfu refused: FC state %u is not INIT, CALIBRATION, FILLING, LANDED or ABORT_ON_GROUND\r\n",
+                 static_cast<unsigned>(state));
+      return;
+  }
+  app_printf("[SHELL] rebooting into the ROM DFU bootloader, flash over the DFU USB port\r\n");
+  HAL_Delay(50);  // let the last USB packet leave before the reset
+  Bootloader_RequestDfu();
+}
+void OnSystemReboot(void*) noexcept {
+  app_printf("[SHELL] system reboot\r\n");
+  HAL_Delay(50);  // let the last USB packet leave before the reset
+  Bootloader_Reboot();
+}
+
 void FillDriver(driver& drv) {
     drv.av_calibrate = OnAvCalibrate;
     drv.av_arm = OnAvArm;
@@ -435,6 +465,8 @@ void FillDriver(driver& drv) {
     drv.logs_usb_eth = logs_usb_eth;
     drv.logs_usb_fc = logs_usb_fc;
     drv.logs_usb_lox = logs_usb_lox;
+    drv.system_dfu = OnSystemDfu;
+    drv.system_reboot = OnSystemReboot;
 }
 
 }  // namespace fc_commands
