@@ -499,6 +499,8 @@ void FillDriver(driver& drv) {
     drv.system_dfu = OnSystemDfu;
     drv.system_reboot = OnSystemReboot;
     drv.system_confirm = OnSystemConfirm;
+    // on_bad_argument and on_unknown_command stay null so the FC shell keeps
+    // its behaviour: no reply to an unknown line or a bad bool argument.
 }
 
 }  // namespace fc_commands
