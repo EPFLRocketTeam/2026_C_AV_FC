@@ -5,6 +5,7 @@
 #include "Application/Data/data.hpp"
 #include "Application/Config/config.hpp"
 #include "Application/app_printf.h"
+#include "Application/app_timebase.h"
 #include "Application/FlightControl/fc_commands.hpp"
 #include "Application/FlightControl/prc_can.hpp"
 #include "fc_commands_generated.hpp"
@@ -97,6 +98,50 @@ void OnBallFuel(void*, float value) noexcept {
   if (IsProtectedMode()) return ;
   app_printf("[SHELL] ball fuel %.1f\r\n", value);
   Fc_Can_SendDprEthBallValve(value);
+}
+
+// Both valves get the same step each period; kBallLoopEthOffsetSteps shifts
+// the ETH one ahead if they should differ.
+constexpr float    kBallLoopStepPercent    = 10.0f;
+constexpr int      kBallLoopSteps          = 11;  // 0, 10, ... 100
+constexpr int      kBallLoopEthOffsetSteps = 0;
+constexpr uint32_t kBallLoopPeriodMs       = 2000;
+
+bool     g_ball_loop_active = false;
+int      g_ball_loop_step = 0;
+uint32_t g_ball_loop_last_ms = 0;
+
+void BallLoopSend() {
+  const float lox = kBallLoopStepPercent * g_ball_loop_step;
+  const float eth = kBallLoopStepPercent * ((g_ball_loop_step + kBallLoopEthOffsetSteps) % kBallLoopSteps);
+  app_printf("[SHELL] ballloop lox %.1f fuel %.1f\r\n", lox, eth);
+  Fc_Can_SendDprLoxBallValve(lox);
+  Fc_Can_SendDprEthBallValve(eth);
+}
+void OnBallLoopStart(void*) noexcept {
+  if (IsProtectedMode()) return ;
+  app_printf("[SHELL] ballloop start\r\n");
+  g_ball_loop_active = true;
+  g_ball_loop_step = 0;
+  g_ball_loop_last_ms = app_timebase_now_ms();
+  BallLoopSend();
+}
+void OnBallLoopStop(void*) noexcept {
+  app_printf("[SHELL] ballloop stop\r\n");
+  g_ball_loop_active = false;
+}
+void BallLoopTick() noexcept {
+  if (!g_ball_loop_active) return ;
+  if (IsProtectedMode()) {
+    app_printf("[SHELL] ballloop stopped: protected state\r\n");
+    g_ball_loop_active = false;
+    return ;
+  }
+  const uint32_t now = app_timebase_now_ms();
+  if (now - g_ball_loop_last_ms < kBallLoopPeriodMs) return ;
+  g_ball_loop_last_ms = now;
+  g_ball_loop_step = (g_ball_loop_step + 1) % kBallLoopSteps;
+  BallLoopSend();
 }
 
 // Drives AvState's own top-level FSM (av_state.cpp), separate from the
@@ -375,6 +420,8 @@ void FillDriver(driver& drv) {
     drv.safety_fuel = OnSafetyFuel;
     drv.ball_lox = OnBallLox;
     drv.ball_fuel = OnBallFuel;
+    drv.ballloop_start = OnBallLoopStart;
+    drv.ballloop_stop = OnBallLoopStop;
     drv.prc_clear_to_ignite = OnPrcClearToIgnite;
     drv.prc_ignite = OnPrcIgnite;
     drv.prc_passivate = OnPrcPassivate;
@@ -494,6 +541,7 @@ void __Fc_Shell_ProcessRxBytes(const uint8_t *data, uint32_t length) {
     }
 }
 void FC_Shell_Tick () {
+	fc_commands::BallLoopTick();
 	if (rx_flag == 0) return ;
 
 	int start = 0;

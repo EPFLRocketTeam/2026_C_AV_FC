@@ -64,6 +64,14 @@ void OnSafetyFuel(void*, bool value) noexcept;
 void OnBallLox(void*, float value) noexcept;
 void OnBallFuel(void*, float value) noexcept;
 
+// Bench loop: `ballloop start` steps both DPR ball valves 0..100 % in steps
+// of 10 every 2 s (see fc_shell.cpp), repeating until `ballloop stop`.
+// BallLoopTick runs from FC_Shell_Tick and stops the loop by itself in the
+// protected states.
+void OnBallLoopStart(void*) noexcept;
+void OnBallLoopStop(void*) noexcept;
+void BallLoopTick() noexcept;
+
 // -- PRC / Engine bay ------------------------------------------------------
 void OnPrcClearToIgnite(void*) noexcept;
 void OnPrcIgnite(void*) noexcept;
