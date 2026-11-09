@@ -1,139 +1,122 @@
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "Application/FlightControl/prc_link.hpp"
 
-using Board = PrcLinkMonitor::Board;
+using prc_intranet::link::LinkMatrix;
+using prc_intranet::payload::heartbeat;
+using namespace prc_intranet::constants;
 
-TEST(PrcLinkMonitor, DeadBeforeAnyBeat) {
-    PrcLinkMonitor m;
-    EXPECT_FALSE(m.alive(Board::Engine, 0));
-    EXPECT_EQ(m.aliveMask(0), 0u);
+namespace {
+
+constexpr uint8_t FC  = LINK_BIT_FC;
+constexpr uint8_t ENG = LINK_BIT_ENGINE;
+constexpr uint8_t ETH = LINK_BIT_ETH;
+constexpr uint8_t LOX = LINK_BIT_LOX;
+
+heartbeat Beat(uint32_t uptime_ms, uint16_t counter, uint8_t alive_mask) {
+    heartbeat hb{};
+    hb.uptime_ms  = uptime_ms;
+    hb.counter    = counter;
+    hb.alive_mask = alive_mask;
+    return hb;
 }
 
-TEST(PrcLinkMonitor, AliveAfterOneBeat) {
-    PrcLinkMonitor m;
-    m.onHeartbeat(Board::Engine, 0, 1000);
-    EXPECT_TRUE(m.alive(Board::Engine, 1000));
-    EXPECT_TRUE(m.alive(Board::Engine, 1499));
-    EXPECT_FALSE(m.alive(Board::Eth, 1000));
-    EXPECT_EQ(m.link(Board::Engine).received, 1u);
-    EXPECT_EQ(m.link(Board::Engine).last_rx_ms, 1000u);
+std::string Line(uint16_t matrix, uint8_t line) {
+    char buf[64];
+    EXPECT_TRUE(fc_link::format_matrix_line(matrix, line, buf, sizeof(buf)));
+    return buf;
 }
 
-TEST(PrcLinkMonitor, DeadAfter500ms) {
-    PrcLinkMonitor m;
-    m.onHeartbeat(Board::Lox, 0, 1000);
-    EXPECT_FALSE(m.alive(Board::Lox, 1500));
-    m.onHeartbeat(Board::Lox, 1, 1600);
-    EXPECT_TRUE(m.alive(Board::Lox, 1600));
+} // namespace
+
+// --- The FC's matrix, built by LinkMatrix with self = FC ---------------------
+
+TEST(FcLinkMatrix, OnlyFcBitBeforeAnyBeat) {
+    LinkMatrix m(FC);
+    EXPECT_EQ(m.matrix(0), 0x0001u);
+    EXPECT_EQ(m.ownRow(0), 0x1u);                  // sent in heartbeat_fc
 }
 
-TEST(PrcLinkMonitor, CounterWrapIsOneStep) {
-    PrcLinkMonitor m;
-    m.onHeartbeat(Board::Eth, 0xFFFFFFFFu, 0);
-    m.onHeartbeat(Board::Eth, 0, 50);
-    EXPECT_EQ(m.link(Board::Eth).missed, 0u);
-    EXPECT_EQ(m.link(Board::Eth).last_counter, 0u);
+TEST(FcLinkMatrix, AssemblesTheRowsOfThePrcBoards) {
+    LinkMatrix m(FC);
+    m.onHeartbeat(ENG, Beat(5000, 0, 0x3), 100);   // engine hears FC, itself
+    m.onHeartbeat(ETH, Beat(5000, 0, 0xF), 100);   // eth hears all
+    m.onHeartbeat(LOX, Beat(5000, 0, 0x9), 100);   // lox hears FC, itself
+    EXPECT_EQ(m.ownRow(200), 0xFu);
+    EXPECT_EQ(m.matrix(200), 0x9F3Fu);
 }
 
-TEST(PrcLinkMonitor, MissedCountsCounterJumps) {
-    PrcLinkMonitor m;
-    m.onHeartbeat(Board::Engine, 10, 0);
-    m.onHeartbeat(Board::Engine, 11, 50);
-    m.onHeartbeat(Board::Engine, 15, 250);   // 12, 13, 14 lost
-    EXPECT_EQ(m.link(Board::Engine).missed, 3u);
-    m.onHeartbeat(Board::Engine, 0, 300);    // reboot, not a loss
-    EXPECT_EQ(m.link(Board::Engine).missed, 3u);
-    EXPECT_EQ(m.link(Board::Engine).received, 4u);
+TEST(FcLinkMatrix, SilentBoardRowAndBitDrop) {
+    LinkMatrix m(FC);
+    m.onHeartbeat(ENG, Beat(5000, 0, 0x3), 100);
+    m.onHeartbeat(LOX, Beat(5000, 0, 0x9), 400);
+    // At 650 the engine is silent for 550 ms: its row is 0, the FC's bit 1 too.
+    EXPECT_EQ(m.matrix(650), 0x9009u);
 }
 
-TEST(PrcLinkMonitor, DuplicateBeatCountsNoLoss) {
-    PrcLinkMonitor m;
-    m.onHeartbeat(Board::Eth, 5, 100);
-    m.onHeartbeat(Board::Eth, 5, 150);
-    EXPECT_EQ(m.link(Board::Eth).missed, 0u);
-    EXPECT_EQ(m.link(Board::Eth).received, 2u);
-    EXPECT_EQ(m.link(Board::Eth).last_rx_ms, 150u);
+TEST(FcLinkMatrix, ReportsEdgesAndReboots) {
+    LinkMatrix m(FC);
+    EXPECT_EQ(m.takeReport(0), 0u);
+    m.onHeartbeat(ETH, Beat(60000, 1200, 0x5), 1000);
+    EXPECT_EQ(m.takeReport(1000), 0x4u);           // eth alive
+    m.onHeartbeat(ETH, Beat(3000, 0, 0x5), 1600);  // its uptime went back
+    EXPECT_EQ(m.takeRebootReport(), 0x4u);
+    EXPECT_EQ(m.takeReport(2000), 0xAu);           // grace: engine, lox never heard
 }
 
-TEST(PrcLinkMonitor, RebootThresholdAtTwoPow31) {
-    PrcLinkMonitor m;
-    m.onHeartbeat(Board::Lox, 0, 0);
-    m.onHeartbeat(Board::Lox, 0x80000000u, 50);  // step 2^31: reboot, nothing counted
-    EXPECT_EQ(m.link(Board::Lox).missed, 0u);
+// --- Radio field -------------------------------------------------------------
+
+TEST(PrcAliveFromMatrix, EachBoardKeepsItsDownlinkBit) {
+    // FC row bits: 1 engine, 2 eth, 3 lox; the FC bit (0) is always set.
+    EXPECT_EQ(fc_link::prc_alive_from_matrix(0x0001), 0u);
+    EXPECT_EQ(fc_link::prc_alive_from_matrix(0x0003), AV_PRC_ALIVE_ENGINE);
+    EXPECT_EQ(fc_link::prc_alive_from_matrix(0x0005), AV_PRC_ALIVE_ETH);
+    EXPECT_EQ(fc_link::prc_alive_from_matrix(0x0009), AV_PRC_ALIVE_LOX);
+    EXPECT_EQ(fc_link::prc_alive_from_matrix(0x000F),
+              AV_PRC_ALIVE_ENGINE | AV_PRC_ALIVE_ETH | AV_PRC_ALIVE_LOX);
 }
 
-TEST(PrcLinkMonitor, JumpJustBelowTwoPow31IsLoss) {
-    PrcLinkMonitor m;
-    m.onHeartbeat(Board::Lox, 0, 0);
-    m.onHeartbeat(Board::Lox, 0x7FFFFFFFu, 50);  // step 2^31 - 1
-    EXPECT_EQ(m.link(Board::Lox).missed, 0x7FFFFFFEu);
+// Same 3 bits as before the matrix: bit 0 engine, bit 1 eth, bit 2 lox.
+TEST(PrcAliveFromMatrix, SameMeaningAsTheOldMask) {
+    EXPECT_EQ(AV_PRC_ALIVE_ENGINE, 1 << 0);
+    EXPECT_EQ(AV_PRC_ALIVE_ETH,    1 << 1);
+    EXPECT_EQ(AV_PRC_ALIVE_LOX,    1 << 2);
+    for (uint8_t old_mask = 0; old_mask < 8; old_mask++) {
+        const uint16_t fc_row = static_cast<uint16_t>(0x1 | (old_mask << 1));
+        EXPECT_EQ(fc_link::prc_alive_from_matrix(fc_row), old_mask) << int(old_mask);
+    }
 }
 
-TEST(PrcLinkMonitor, NowWrapKeepsLiveBoardAlive) {
-    PrcLinkMonitor m;
-    m.onHeartbeat(Board::Engine, 1, 0xFFFFFF00u);
-    EXPECT_TRUE(m.alive(Board::Engine, 0x00000010u));    // 272 ms later
-    EXPECT_FALSE(m.alive(Board::Engine, 0x00000200u));   // 768 ms later
+TEST(PrcAliveFromMatrix, OnlyTheFcRowCounts) {
+    // The PRC rows say what the PRC boards hear, not what the FC hears.
+    EXPECT_EQ(fc_link::prc_alive_from_matrix(0xFFF1), 0u);
 }
 
-TEST(PrcLinkMonitor, BootGraceReportsNeverSeenOnce) {
-    PrcLinkMonitor m;
-    EXPECT_EQ(m.takeReport(100), 0u);                    // first call: the grace runs to 2100
-    m.onHeartbeat(Board::Engine, 0, 1800);
-    EXPECT_EQ(m.takeReport(1800), 0x1u);                 // engine came alive: edge
-    EXPECT_EQ(m.takeReport(2099), 0u);
-    EXPECT_EQ(m.takeReport(2100), 0x6u);                 // eth and lox never seen: one dead line each
-    EXPECT_EQ(m.aliveMask(2100), 0x1u);
-    EXPECT_EQ(m.takeReport(2150), 0u);                   // the grace fires once
+// --- Console view ------------------------------------------------------------
+
+TEST(FormatMatrixLine, HeaderNamesTheColumns) {
+    EXPECT_EQ(Line(0x0001, 0), "             FC ENGINE    ETH    LOX");
 }
 
-// The grace counts from the first call, not from reset: a setup longer than
-// 2 s with the boards already sending prints no false "dead".
-TEST(PrcLinkMonitor, GraceAnchorsOnFirstCall) {
-    PrcLinkMonitor m;
-    EXPECT_EQ(m.takeReport(5000), 0u);                   // first call 5 s after reset, nothing drained yet
-    m.onHeartbeat(Board::Engine, 0, 5010);
-    m.onHeartbeat(Board::Eth, 0, 5010);
-    EXPECT_EQ(m.takeReport(5010), 0x3u);                 // engine and eth alive, no false dead
-    m.onHeartbeat(Board::Engine, 39, 6990);
-    m.onHeartbeat(Board::Eth, 39, 6990);
-    EXPECT_EQ(m.takeReport(6999), 0u);                   // still inside the grace
-    EXPECT_EQ(m.takeReport(7000), 0x4u);                 // lox silent 2 s after the first call: dead once
-    EXPECT_EQ(m.aliveMask(7000), 0x3u);
-    EXPECT_EQ(m.takeReport(7050), 0u);
+TEST(FormatMatrixLine, RowsShowWhoHearsWho) {
+    const uint16_t m = 0x0F77u;                     // LOX silent
+    EXPECT_EQ(Line(m, 1), "FC            X      X      X      .");
+    EXPECT_EQ(Line(m, 2), "ENGINE        X      X      X      .");
+    EXPECT_EQ(Line(m, 3), "ETH           X      X      X      X");
+    EXPECT_EQ(Line(m, 4), "LOX           -      -      -      -   silent");
 }
 
-TEST(PrcLinkMonitor, AfterGraceOnlyEdges) {
-    PrcLinkMonitor m;
-    EXPECT_EQ(m.takeReport(0), 0u);                      // first call at reset
-    m.onHeartbeat(Board::Eth, 0, 1900);
-    EXPECT_EQ(m.takeReport(1900), 0x2u);                 // eth alive
-    EXPECT_EQ(m.takeReport(2100), 0x5u);                 // grace: engine and lox never seen
-    EXPECT_EQ(m.takeReport(2200), 0u);                   // no repeat
-    EXPECT_EQ(m.takeReport(2400), 0x2u);                 // eth dead at 2400
-    EXPECT_EQ(m.takeReport(3000), 0u);
-    m.onHeartbeat(Board::Lox, 0, 3000);
-    EXPECT_EQ(m.takeReport(3000), 0x4u);                 // lox comes back: edge
+TEST(FormatMatrixLine, OutOfRangeLineAndNoBuffer) {
+    char buf[64];
+    EXPECT_FALSE(fc_link::format_matrix_line(0x0001, fc_link::MATRIX_LINES, buf, sizeof(buf)));
+    EXPECT_FALSE(fc_link::format_matrix_line(0x0001, 1, nullptr, sizeof(buf)));
 }
 
-TEST(PrcLinkMonitor, SeenBoardDyingInGraceIsNotRepeated) {
-    PrcLinkMonitor m;
-    m.onHeartbeat(Board::Engine, 0, 100);
-    m.onHeartbeat(Board::Eth, 0, 100);
-    m.onHeartbeat(Board::Lox, 0, 100);
-    EXPECT_EQ(m.takeReport(100), 0x7u);
-    EXPECT_EQ(m.takeReport(700), 0x7u);                  // all dead: edges
-    EXPECT_EQ(m.takeReport(2100), 0u);                   // all were seen: grace adds nothing
-}
-
-TEST(PrcLinkMonitor, MaskBits) {
-    PrcLinkMonitor m;
-    m.onHeartbeat(Board::Engine, 0, 0);
-    EXPECT_EQ(m.aliveMask(10), 0x1u);
-    m.onHeartbeat(Board::Eth, 0, 0);
-    EXPECT_EQ(m.aliveMask(10), 0x3u);
-    m.onHeartbeat(Board::Lox, 0, 300);
-    EXPECT_EQ(m.aliveMask(310), 0x7u);
-    EXPECT_EQ(m.aliveMask(600), 0x4u);       // engine and eth timed out
+// prc_can.cpp prints with a 64-byte buffer: the longest line (a silent row)
+// must fit in it.
+TEST(FormatMatrixLine, LongestLineFitsTheConsoleBuffer) {
+    EXPECT_LT(Line(0x0001, 4).size(), 64u);         // LOX silent
+    EXPECT_EQ(Line(0x0001, 4).size(), 45u);
 }

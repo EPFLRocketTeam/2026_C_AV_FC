@@ -3,6 +3,7 @@
 #include "Application/main.h"
 #include "Application/app_timebase.h"
 #include "Application/Data/data.hpp"
+#include "Application/FlightControl/prc_link.hpp"
 #include "Drivers/SX127X/SX127X_capsule.hpp"
 #include "Drivers/ERT_RF_Protocol_Interface/DownlinkCompression_Firehorn2.h"
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
@@ -114,8 +115,10 @@ PREPARE_DOWNLINK(flight_computer::UplinkCmd) {
     (void) packet; (void) dump;
 }
 PREPARE_DOWNLINK(flight_computer::PrcLink) {
-    // Same bit order as AV_PRC_ALIVE_*: engine, eth, lox.
-    packet.prc_alive = dump.prc_alive_mask & 0x7;
+    // Packet unchanged: the 3 bits still say whether the FC hears the
+    // engine, eth and lox boards (AV_PRC_ALIVE_*), now read from the FC's
+    // own row of the link matrix. See fc_link::prc_alive_from_matrix().
+    packet.prc_alive = fc_link::prc_alive_from_matrix(dump.link_matrix);
 }
 
 PREPARE_DOWNLINK(flight_computer::DataDump) {

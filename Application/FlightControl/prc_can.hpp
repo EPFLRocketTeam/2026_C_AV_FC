@@ -14,9 +14,11 @@ void Fc_Can_Init(FDCAN_HandleTypeDef *hfdcan);
 
 void Fc_Can_ProcessRxMessage(uint32_t can_id, const uint8_t *data, uint32_t dlc);
 
-// Call every 50 ms. Sends heartbeat_fc, then publishes the PRC alive mask
-// (500 ms timeout per board) to GOATStore and prints a line on each change,
-// plus one "dead" line 2 s after the first call for a board never heard from.
+// Call every 50 ms. Publishes the 4x4 link matrix (500 ms timeout per board)
+// to GOATStore, prints each PRC alive/dead edge and detected reboot, plus
+// one "dead" line 2 s after the first call for a board never heard from,
+// and the full matrix when it changed (at most once per second). Then sends
+// heartbeat_fc, carrying the FC's row of the matrix.
 void Fc_Can_SendHeartbeat(void);
 
 // Toggles the engine board's MO/ME valves directly, bypassing the FSM.

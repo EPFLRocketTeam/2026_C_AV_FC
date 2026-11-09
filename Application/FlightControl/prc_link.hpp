@@ -1,90 +1,92 @@
 //    FILE: prc_link.hpp
-// PURPOSE: Tracks the heartbeat of each PRC board (engine, ethanol, LOX) as
-//          received over CAN. Pure and HAL free: the caller passes the
-//          receive time, so it is host tested (Tests/test_prc_link.cpp).
+// PURPOSE: FC side of the CAN connectivity matrix. The tracking itself
+//          (alive state, rows, lost beats, reboots) is
+//          prc_intranet::link::LinkMatrix, in the intranet's link_matrix.hpp,
+//          shared by the 4 boards. This file only holds what is specific to
+//          the FC: the 3-bit prc_alive field of the radio downlink, and the
+//          console view of the matrix. Pure and HAL free, so it is host
+//          tested (Tests/test_prc_link.cpp, Tests/test_downlink_prc_alive.cpp).
+//
+// Matrix layout: row i at bits 4i..4i+3, bit j of row i = "board i hears
+// board j", boards 0 FC, 1 Engine, 2 Eth, 3 LOX (constants::LINK_BIT_*). A
+// silent board's row is 0.
 
 #ifndef APP_FC_PRC_LINK_HPP
 #define APP_FC_PRC_LINK_HPP
 
+#include <cstddef>
 #include <cstdint>
+#include <cstdio>
 
-class PrcLinkMonitor {
-public:
-  enum class Board : uint8_t { Engine = 0, Eth = 1, Lox = 2 };
-  static constexpr uint8_t BOARD_COUNT = 3;
-  static constexpr uint32_t TIMEOUT_MS = 500;
-  static constexpr uint32_t BOOT_GRACE_MS = 2000;
+#include "prc_intranet/const.hpp"
+#include "prc_intranet/link_matrix.hpp"
+#include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 
-  struct Link {
-    uint32_t last_counter = 0;
-    uint32_t last_rx_ms   = 0;
-    uint32_t received     = 0;
-    uint32_t missed       = 0; // beats skipped, from counter jumps
-    bool     seen         = false;
-  };
+namespace fc_link {
 
-  // A forward jump of n counts n - 1 missed beats; the unsigned difference
-  // keeps the 2^32 wrap a step of 1. A backward step (difference of 2^31 or
-  // more) is a reboot, counter reset to 0, and counts nothing.
-  void onHeartbeat(Board board, uint32_t counter, uint32_t now_ms) {
-    Link& l = links_[index(board)];
-    if (l.seen) {
-      const uint32_t step = counter - l.last_counter;
-      if (step > 1 && step < 0x80000000u) l.missed += step - 1;
-    }
-    l.last_counter = counter;
-    l.last_rx_ms   = now_ms;
-    l.received++;
-    l.seen = true;
+namespace pc = prc_intranet::constants;
+
+constexpr uint8_t BOARD_COUNT = prc_intranet::link::BOARD_COUNT;
+
+// Console names, indexed like the matrix.
+inline const char* board_name(uint8_t board) {
+  static const char* const kNames[BOARD_COUNT] = {"FC", "ENGINE", "ETH", "LOX"};
+  return board < BOARD_COUNT ? kNames[board] : "?";
+}
+
+// Row `row` of the matrix.
+inline uint8_t matrix_row(uint16_t matrix, uint8_t row) {
+  return static_cast<uint8_t>((matrix >> (4u * row)) & 0x0Fu);
+}
+
+// The downlink prc_alive field, with the same meaning as before the matrix:
+// AV_PRC_ALIVE_ENGINE / _ETH / _LOX set when the FC hears that board (a
+// heartbeat less than 500 ms ago). Taken from the FC's own row; the FC's own
+// bit and the rows of the PRC boards are not sent.
+inline uint8_t prc_alive_from_matrix(uint16_t matrix) {
+  const uint8_t fc_row = matrix_row(matrix, pc::LINK_BIT_FC);
+  uint8_t alive = 0;
+  if (fc_row & (1u << pc::LINK_BIT_ENGINE)) alive |= AV_PRC_ALIVE_ENGINE;
+  if (fc_row & (1u << pc::LINK_BIT_ETH))    alive |= AV_PRC_ALIVE_ETH;
+  if (fc_row & (1u << pc::LINK_BIT_LOX))    alive |= AV_PRC_ALIVE_LOX;
+  return alive;
+}
+
+// Number of lines of the console view: a header, then one line per board.
+constexpr uint8_t MATRIX_LINES = 1 + BOARD_COUNT;
+
+// Writes line `line` (0 .. MATRIX_LINES - 1) of the console view into
+// `out`, NUL terminated. Rows are the board that hears, columns the board
+// heard. "X" = hears, "." = does not hear, "-" = the row's board is silent
+// (row 0, nothing received from it). Returns false for a line out of range.
+//
+//               FC ENGINE    ETH    LOX
+//   FC           X      X      X      .
+//   ENGINE       X      X      X      .
+//   ETH          X      X      X      .
+//   LOX          -      -      -      -   silent
+inline bool format_matrix_line(uint16_t matrix, uint8_t line, char* out, size_t size) {
+  if (line >= MATRIX_LINES || out == nullptr || size == 0) return false;
+
+  if (line == 0) {
+    std::snprintf(out, size, "%-8s%7s%7s%7s%7s", "",
+                  board_name(0), board_name(1), board_name(2), board_name(3));
+    return true;
   }
 
-  // True when a beat arrived less than TIMEOUT_MS before now_ms.
-  bool alive(Board board, uint32_t now_ms) const {
-    const Link& l = links_[index(board)];
-    return l.seen && (now_ms - l.last_rx_ms) < TIMEOUT_MS;
+  const uint8_t board = static_cast<uint8_t>(line - 1);
+  const uint8_t row   = matrix_row(matrix, board);
+  int n = std::snprintf(out, size, "%-8s", board_name(board));
+  for (uint8_t col = 0; col < BOARD_COUNT && n >= 0 && static_cast<size_t>(n) < size; col++) {
+    const char* cell = (row == 0) ? "-" : ((row & (1u << col)) ? "X" : ".");
+    n += std::snprintf(out + n, size - static_cast<size_t>(n), "%7s", cell);
   }
-
-  // Bit 0 engine, bit 1 ethanol, bit 2 LOX.
-  uint8_t aliveMask(uint32_t now_ms) const {
-    uint8_t mask = 0;
-    for (uint8_t i = 0; i < BOARD_COUNT; i++) {
-      if (alive(static_cast<Board>(i), now_ms)) mask |= static_cast<uint8_t>(1u << i);
-    }
-    return mask;
+  if (row == 0 && n >= 0 && static_cast<size_t>(n) < size) {
+    std::snprintf(out + n, size - static_cast<size_t>(n), "   silent");
   }
+  return true;
+}
 
-  const Link& link(Board board) const { return links_[index(board)]; }
-
-  // Bits whose state should be printed now (same order as aliveMask): every
-  // alive or dead edge, plus one "dead" for each board never heard from
-  // BOOT_GRACE_MS after the first call. The grace counts from that first
-  // call, not from reset, so a long setup with the boards already sending
-  // (frames not yet drained) is not reported dead.
-  uint8_t takeReport(uint32_t now_ms) {
-    if (!started_) {
-      started_  = true;
-      first_ms_ = now_ms;
-    }
-    const uint8_t mask = aliveMask(now_ms);
-    uint8_t report = mask ^ reported_mask_;
-    reported_mask_ = mask;
-    if (!grace_done_ && (now_ms - first_ms_) >= BOOT_GRACE_MS) {
-      grace_done_ = true;
-      for (uint8_t i = 0; i < BOARD_COUNT; i++) {
-        if (!links_[i].seen) report |= static_cast<uint8_t>(1u << i);
-      }
-    }
-    return report;
-  }
-
-private:
-  static uint8_t index(Board board) { return static_cast<uint8_t>(board); }
-
-  Link    links_[BOARD_COUNT];
-  uint8_t reported_mask_ = 0;
-  bool    grace_done_    = false;
-  bool    started_       = false;
-  uint32_t first_ms_     = 0;
-};
+} // namespace fc_link
 
 #endif // APP_FC_PRC_LINK_HPP

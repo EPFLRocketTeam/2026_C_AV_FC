@@ -4,6 +4,7 @@
 
 #include "Drivers/ERT_RF_Protocol_Interface/PacketDefinition_Firehorn2.h"
 #include "Drivers/ERT_RF_Protocol_Interface/DownlinkCompression_Firehorn2.h"
+#include "Application/FlightControl/prc_link.hpp"
 
 namespace {
 
@@ -76,4 +77,40 @@ TEST(DownlinkPrcAlive, RoundTripsEveryValueAndTouchesNothingElse) {
 TEST(DownlinkPrcAlive, EncodeMasksToThreeBits) {
     const av_downlink_unpacked_t d = decode_downlink(Encode(0xFF));
     EXPECT_EQ(d.prc_alive, 0x7);
+}
+
+// prc_alive now comes from the link matrix (the FC's own row). The packet
+// does not change: the ground still reads AV_PRC_ALIVE_ENGINE/ETH/LOX with
+// the same meaning, "the FC hears that board".
+TEST(DownlinkPrcAlive, FromMatrixReachesTheGroundUnchanged) {
+    struct Case { uint16_t matrix; uint8_t expected; };
+    const Case cases[] = {
+        {0x0001, 0},                                  // FC alone
+        {0x0003, AV_PRC_ALIVE_ENGINE},
+        {0x0005, AV_PRC_ALIVE_ETH},
+        {0x0009, AV_PRC_ALIVE_LOX},
+        {0x000B, AV_PRC_ALIVE_ENGINE | AV_PRC_ALIVE_LOX},
+        {0x000F, AV_PRC_ALIVE_ENGINE | AV_PRC_ALIVE_ETH | AV_PRC_ALIVE_LOX},
+        {0xFFF1, 0},                                  // PRC rows are not sent
+    };
+    (void) Encode(0);                                 // sd_fail_count warm-up, see above
+    for (const Case& c : cases) {
+        const uint8_t alive = fc_link::prc_alive_from_matrix(c.matrix);
+        const av_downlink_unpacked_t d = decode_downlink(Encode(alive));
+        EXPECT_EQ(d.prc_alive, c.expected) << "matrix 0x" << std::hex << c.matrix;
+    }
+}
+
+// End to end on the FC: heartbeats in, LinkMatrix, matrix, downlink bits.
+TEST(DownlinkPrcAlive, FromHeartbeatsToDownlinkBits) {
+    prc_intranet::link::LinkMatrix m(prc_intranet::constants::LINK_BIT_FC);
+    prc_intranet::payload::heartbeat hb{};
+    hb.uptime_ms  = 5000;
+    hb.alive_mask = 0x3;
+    m.onHeartbeat(prc_intranet::constants::LINK_BIT_ENGINE, hb, 100);
+    m.onHeartbeat(prc_intranet::constants::LINK_BIT_LOX,    hb, 100);
+
+    EXPECT_EQ(fc_link::prc_alive_from_matrix(m.matrix(200)),
+              AV_PRC_ALIVE_ENGINE | AV_PRC_ALIVE_LOX);
+    EXPECT_EQ(fc_link::prc_alive_from_matrix(m.matrix(700)), 0u);   // both timed out
 }

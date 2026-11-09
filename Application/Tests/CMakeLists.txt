@@ -1,3 +1,7 @@
+# The link matrix tests (test_prc_link, test_downlink_prc_alive) include the
+# intranet headers (prc_intranet/...).
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/PRC_CAN/2026_C_AV_FC_PRC_INTRANET/include)
+
 create_test(appdata_tests test_data.cpp)
 create_test(test_ring_buffer test_ring_buffer.cpp)
 create_test(test_av_state test_av_state.cpp)
