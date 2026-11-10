@@ -775,12 +775,17 @@ bool EskfYieldable::catchUp(uint64_t target_timestamp_us, uint32_t budget_us) {
     // With the IMU-horizon gate above, steady-state stale events should be
     // near-zero.  This guard remains as a safety net for rewind edge cases
     // and any residual out-of-order timestamps.
+    // A ready baro entry behind the clock is not stale: it is a late
+    // completion that processNextBaro() applies by innovation transport.
+    // Its age is already bounded by baro_snapshot_max_age_us in
+    // completeBaro() and discardStalePendingBaro().
     constexpr uint64_t kStaleThresholdUs = 1000;
-    if (earliest + kStaleThresholdUs < kalman_timestamp_us_) {
+    const bool earliest_is_baro =
+        (earliest != next_imu_ts && earliest == next_baro_ts);
+    if (!earliest_is_baro && earliest + kStaleThresholdUs < kalman_timestamp_us_) {
       // Advance the correct read index past this stale entry.
       const char* stale_type = "evt";
       if (earliest == next_imu_ts)       { imu_read_seq_++; stale_type = "imu"; }
-      else if (earliest == next_baro_ts) { baro_read_idx_++; stale_type = "baro"; }
       else                               { event_read_idx_++; stale_type = "evt"; }
       stats_.stale_skips++;
 #if KALMAN_DEBUG_PRINT

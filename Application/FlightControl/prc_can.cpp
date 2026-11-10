@@ -5,6 +5,8 @@
 
 #include "Application/Data/data.hpp"
 #include "Application/app_printf.h"
+#include "Application/app_timebase.h"
+#include "Application/FlightControl/prc_link.hpp"
 #include "log_aggregator/reassembler.hpp"
 #include "prc_intranet/const.hpp"
 #include "prc_intranet/dispatch.hpp"
@@ -180,6 +182,38 @@ void OnDprEthBVState (void*, pi::payload::ball_valve_position bv_state) noexcept
   GOATStore::get_instance().valvesStore.set_ball_valve_fuel(bv_state.percent_open);
 }
 
+PrcLinkMonitor g_prc_link;
+
+void OnHeartbeatPrcEngine (void*, pi::payload::heartbeat hb) noexcept {
+  g_prc_link.onHeartbeat(PrcLinkMonitor::Board::Engine, hb.counter, app_timebase_now_ms());
+}
+void OnHeartbeatDprEth (void*, pi::payload::heartbeat hb) noexcept {
+  g_prc_link.onHeartbeat(PrcLinkMonitor::Board::Eth, hb.counter, app_timebase_now_ms());
+}
+void OnHeartbeatDprLox (void*, pi::payload::heartbeat hb) noexcept {
+  g_prc_link.onHeartbeat(PrcLinkMonitor::Board::Lox, hb.counter, app_timebase_now_ms());
+}
+
+// Publishes the alive mask to GOATStore and prints a line only when a
+// board goes dead or comes back, or never showed up 2 s after the first call.
+void PublishPrcLink(uint32_t now_ms) {
+  static const char* const kNames[PrcLinkMonitor::BOARD_COUNT] = {"ENGINE", "ETH", "LOX"};
+  const uint8_t mask = g_prc_link.aliveMask(now_ms);
+  const uint8_t report = g_prc_link.takeReport(now_ms);
+  PrcLinkStore& store = GOATStore::get_instance().prcLinkStore;
+  for (uint8_t i = 0; i < PrcLinkMonitor::BOARD_COUNT; i++) {
+    const PrcLinkMonitor::Link& link = g_prc_link.link(static_cast<PrcLinkMonitor::Board>(i));
+    store.set_counts(i, link.received, link.missed);
+    if (report & (1u << i)) {
+      app_printf("[PRC LINK] %s %s (rx %lu, missed %lu)\r\n", kNames[i],
+                 (mask & (1u << i)) ? "alive" : "dead",
+                 static_cast<unsigned long>(link.received),
+                 static_cast<unsigned long>(link.missed));
+    }
+  }
+  store.set_prc_alive_mask(mask);
+}
+
 pi::context& Ctx() {
   static pi::context ctx = [] {
     pi::prc_driver driver{};
@@ -206,6 +240,9 @@ pi::context& Ctx() {
     driver.on_dpr_lox_publish_cable = OnDprLoxPublishCable;
     driver.on_dpr_lox_bv_state = OnDprLoxBVState;
     driver.on_dpr_eth_bv_state = OnDprEthBVState;
+    driver.on_heartbeat_prc_engine = OnHeartbeatPrcEngine;
+    driver.on_heartbeat_dpr_eth    = OnHeartbeatDprEth;
+    driver.on_heartbeat_dpr_lox    = OnHeartbeatDprLox;
     return pi::create_context(driver);
   }();
   return ctx;
@@ -219,6 +256,19 @@ void Fc_Can_ProcessRxMessage(uint32_t can_id, const uint8_t *data, uint32_t dlc)
 
 void Fc_Can_Init(FDCAN_HandleTypeDef *hfdcan) {
   g_hfdcan = hfdcan;
+}
+
+void Fc_Can_SendHeartbeat(void) {
+  PublishPrcLink(app_timebase_now_ms());
+
+  if (g_hfdcan == nullptr) return;
+  static uint32_t counter = 0;
+  pi::payload::heartbeat hb{};
+  hb.counter   = counter++;
+  hb.uptime_ms = HAL_GetTick();
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_heartbeat_fc(&ctx, hb);
 }
 
 // Targets the engine board's own MO/ME valves, not a DPR board.

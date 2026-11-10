@@ -113,6 +113,10 @@ PREPARE_DOWNLINK(flight_computer::CamsRecording) {
 PREPARE_DOWNLINK(flight_computer::UplinkCmd) {
     (void) packet; (void) dump;
 }
+PREPARE_DOWNLINK(flight_computer::PrcLink) {
+    // Same bit order as AV_PRC_ALIVE_*: engine, eth, lox.
+    packet.prc_alive = dump.prc_alive_mask & 0x7;
+}
 
 PREPARE_DOWNLINK(flight_computer::DataDump) {
     packet.av_state     = static_cast<uint8_t>(dump.av_state);
@@ -138,6 +142,7 @@ PREPARE_DOWNLINK(flight_computer::DataDump) {
     prepare_downlink_packet(packet, dump.batteries);
     prepare_downlink_packet(packet, dump.camsRecording);
     prepare_downlink_packet(packet, dump.uplinkCmd);
+    prepare_downlink_packet(packet, dump.prcLink);
 }
 
 /// Downlink counters since the last takeStats().

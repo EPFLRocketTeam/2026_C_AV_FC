@@ -207,8 +207,18 @@ static void test_quatToDcm_orthogonal() {
 // ============================================================
 
 static void test_gravityMagnitude_sealevel() {
+  // gravityMagnitude defaults g_local to constants::kGravityLocal, the
+  // latitude model of computeLocalGravity (eskf_sizes.hpp) at the launch
+  // site, not standard gravity 9.80665. Commit 1917a11 ("added launch site
+  // params") moved ESKF_LAUNCH_SITE_LATITUDE_DEG from 46.0 to Payerne
+  // 46.848199, where
+  //   g = 9.7803253359 * (1 + 0.0053024 sin^2(phi) - 0.0000058 sin^2(2 phi))
+  //     = 9.7803253359 * (1 + 0.0028219 - 0.0000058) = 9.80787 m/s^2.
+  // At 46.0 deg the same formula gives 9.80710, inside the old 0.001
+  // tolerance around 9.80665, which is why this test passed before.
   eskf_scalar g = gravityMagnitude(0);
-  TEST_ASSERT_DOUBLE_WITHIN(0.001, 9.80665, g);
+  TEST_ASSERT_DOUBLE_WITHIN(1e-9, constants::kGravityLocal, g);
+  TEST_ASSERT_DOUBLE_WITHIN(0.001, 9.80787, g);
 }
 
 static void test_gravityMagnitude_10km() {
