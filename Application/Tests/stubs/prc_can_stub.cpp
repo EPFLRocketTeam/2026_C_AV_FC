@@ -25,3 +25,4 @@ void Fc_Can_SendDprLoxCopvVent(uint8_t open) {}
 void Fc_Can_SendDprEthCopvVent(uint8_t open) {}
 void Fc_Can_SendDprLoxBallValve(float percent_open) {}
 void Fc_Can_SendDprEthBallValve(float percent_open) {}
+void Fc_Can_SendHeartbeat(void) {}
