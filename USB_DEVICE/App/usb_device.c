@@ -25,8 +25,6 @@
 #include "usbd_desc.h"
 #include "usbd_cdc.h"
 #include "usbd_cdc_if.h"
-#include "usbd_dfu.h"
-#include "usbd_dfu_if.h"
 
 /* USER CODE BEGIN Includes */
 
@@ -44,7 +42,6 @@
 
 /* USB Device Core handle declaration. */
 USBD_HandleTypeDef hUsbDeviceHS;
-USBD_HandleTypeDef hUsbDeviceFS;
 
 /*
  * -- Insert your variables declaration here --
@@ -87,27 +84,9 @@ void MX_USB_DEVICE_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USB_DEVICE_Init_PreTreatment */
-
-  /* USER CODE END USB_DEVICE_Init_PreTreatment */
-
-  /* Init Device Library, add supported class and start the library. */
-  if (USBD_Init(&hUsbDeviceFS, &FS_Desc, DEVICE_FS) != USBD_OK)
-  {
-    Error_Handler();
-  }
-  if (USBD_RegisterClass(&hUsbDeviceFS, &USBD_DFU) != USBD_OK)
-  {
-    Error_Handler();
-  }
-  if (USBD_DFU_RegisterMedia(&hUsbDeviceFS, &USBD_DFU_fops_FS) != USBD_OK)
-  {
-    Error_Handler();
-  }
-  if (USBD_Start(&hUsbDeviceFS) != USBD_OK)
-  {
-    Error_Handler();
-  }
+  /* No application DFU device on OTG_FS: the OTG_FS core (PA11/PA12, the
+   * DFU connector) stays idle until the ROM bootloader claims it after
+   * Bootloader_RequestDfu(). See Application/System/bootloader.h. */
 
   /* USER CODE BEGIN USB_DEVICE_Init_PostTreatment */
   HAL_PWREx_EnableUSBVoltageDetector();

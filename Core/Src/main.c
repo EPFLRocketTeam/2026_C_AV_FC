@@ -39,6 +39,8 @@
 #include "../../Application/main.h"
 #include "../../Application/app_timebase.h"
 #include "../../Application/app_printf.h"
+#include "../../Application/usb_log.h"
+#include "../../Application/System/bootloader.h"
 #include "SX127X.h"
 /* USER CODE END Includes */
 
@@ -176,19 +178,33 @@ static void board_configure_data_cache(void)
 }
 
 #ifdef OUTPUT_LOG
-int _write(int file, char *ptr, int len) {
-    // Wait until USB is ready, but never wedge: if the CDC endpoint stays
-    // busy (host not draining, missed completion), drop the output instead
-    // of spinning forever.
-    if (!app_printf_is_enabled()) return len;
+extern USBD_HandleTypeDef hUsbDeviceHS;
 
-    uint32_t start = HAL_GetTick();
-    while (CDC_Transmit_HS((uint8_t*)ptr, len) == USBD_BUSY) {
-        if (HAL_GetTick() - start > 100) {
-            break;
-        }
-    }
+// USB output rules, HAL free in Application/usb_log.h: only to a configured
+// host, at most 5 ms on a busy endpoint, then stalled and counting drops
+// until USB_Log_ClearStall() (usbd_cdc_if.c: transfer complete, bytes
+// received, new configuration). The next write that goes out first reports
+// "[USB] dropped N lines". Logging must never stall the flight loop.
+static UsbLog usb_log;
+
+void USB_Log_ClearStall(void) {
+    usb_log_clear_stall(&usb_log);
+}
+
+static int usb_log_transmit(const uint8_t *data, uint16_t length) {
+    return CDC_Transmit_HS((uint8_t *)data, length) == USBD_BUSY;
+}
+
+int _write(int file, char *ptr, int len) {
+    if (!app_printf_is_enabled()) return len;
+    usb_log_write(&usb_log, ptr, len, hUsbDeviceHS.dev_state == USBD_STATE_CONFIGURED,
+                  usb_log_transmit, HAL_GetTick);
     return len;
+}
+#else
+// usbd_cdc_if.c calls this whatever OUTPUT_LOG says; with no USB log there
+// is no stall to clear.
+void USB_Log_ClearStall(void) {
 }
 #endif
 
@@ -212,6 +228,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  Bootloader_CheckAndJump();
 
   /* USER CODE END 1 */
 
@@ -265,14 +282,15 @@ int main(void)
 
   /* Small delay to let USB enumerate -- but drain (and discard) FIFO0 while
    * waiting instead of a blind HAL_Delay(5000). Just removing the delay
-   * wasn't enough on its own: app_printf()/_write() blocks up to 100 ms
-   * retrying CDC_Transmit_HS while USB isn't ready yet, and every
+   * wasn't enough on its own: app_printf()/_write() used to block up to
+   * 100 ms retrying CDC_Transmit_HS while USB wasn't ready yet, and every
    * reassembled CAN log line triggers a app_printf -- each one of those early
-   * blocked calls freezes this same loop's CAN drain for up to 100 ms,
-   * during which frames from all 3 boards keep piling up. Draining and
-   * discarding FIFO0 here (no app_printf involved) keeps the FIFO empty
-   * through the whole USB enumeration window regardless of how long any
-   * individual app_printf would have blocked. */
+   * blocked calls froze this same loop's CAN drain for up to 100 ms,
+   * during which frames from all 3 boards kept piling up. Draining and
+   * discarding FIFO0 here (no app_printf involved) kept the FIFO empty
+   * through the whole USB enumeration window. _write now returns at once
+   * until the host has configured the port and waits at most 5 ms on a
+   * busy endpoint (Application/usb_log.h), so that stall is gone. */
   /* TEMPORARY: disabled to test whether this 5s busy-wait (added for the
    * PRC-CAN work, doesn't exist on the known-working plume branch) is
    * delaying app_super_loop_setup()/iterate() long enough that IMU
