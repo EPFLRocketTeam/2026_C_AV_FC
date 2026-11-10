@@ -26,7 +26,7 @@ uint64_t g_last_mark_us = 0;
 
 const char *const kSectionNames[APP_PERF_SECTION_COUNT] = {
 	"shell", "periph", "sdlog", "sd", "imu", "baro", "kal", "fsm",
-	"radio", "can", "report",
+	"radio", "can", "report", "led",
 };
 
 } // namespace
