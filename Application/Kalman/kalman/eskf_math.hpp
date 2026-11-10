@@ -341,7 +341,8 @@ inline bool quatIsFinite(const eskf_scalar q[4]) {
 /// Altitude-dependent gravity magnitude (simple inverse-square model).
 /// g(z) = g_local * (Rₑ / (Rₑ + z))²
 /// @param altitude_m Altitude above sea level in meters
-/// @param g_local Local gravity at sea level (default: standard 9.80665)
+/// @param g_local Local gravity at sea level (default: kGravityLocal, the
+///        launch site latitude model, about 9.80787 at Payerne)
 /// @return Gravity magnitude (m/s²)
 inline eskf_scalar gravityMagnitude(eskf_scalar altitude_m, eskf_scalar g_local = constants::kGravityLocal) {
   eskf_scalar ratio = constants::kEarthRadius / (constants::kEarthRadius + altitude_m);

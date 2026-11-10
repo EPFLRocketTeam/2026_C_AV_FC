@@ -881,6 +881,15 @@ static void test_yieldable_contract_06_ring_overflow_asymmetry() {
 static void test_yieldable_contract_07_out_of_order_processed_chronologically() {
   // Subsystem: out-of-order events replay chronologically (equivalent to
   // explicit in-order insertion) while timeline remains monotonic.
+  //
+  // Since 23213ca ("baro fixed, imu in kalman fixed") IMU is the time
+  // authority in catchUp(): aiding events wait until IMU propagation has
+  // reached their timestamp, and only IMU samples advance the filter clock.
+  // Without IMU frames neither mag event is processed and the clock stays at
+  // 0, so both filters now get an IMU stream to 60 ms and the clock is
+  // expected at the last IMU sample rather than at the last mag event.
+  constexpr uint64_t kImuStepUs = 1000;
+  constexpr uint64_t kImuEndUs = 60000;
   EskfYieldable reference;
   {
     State initial = createDefaultState();
@@ -890,6 +899,9 @@ static void test_yieldable_contract_07_out_of_order_processed_chronologically() 
     reference.resetStats();
     reference.pushMagHeading(1.0, 0.001, 30000);
     reference.pushMagHeading(-1.0, 0.001, 50000);
+    for (uint64_t ts = kImuStepUs; ts <= kImuEndUs; ts += kImuStepUs) {
+      reference.pushImu(createImuFrame(ts), 0.001);
+    }
     reference.catchUp(60000, kNoBudget);
   }
 
@@ -903,13 +915,18 @@ static void test_yieldable_contract_07_out_of_order_processed_chronologically() 
 
   filter.pushMagHeading(-1.0, 0.001, 50000);
   filter.pushMagHeading(1.0, 0.001, 30000);  // Out of order by timestamp.
+  for (uint64_t ts = kImuStepUs; ts <= kImuEndUs; ts += kImuStepUs) {
+    filter.pushImu(createImuFrame(ts), 0.001);
+  }
   filter.catchUp(60000, kNoBudget);
 
   TEST_ASSERT_EQUAL(1, filter.stats().out_of_order_events);
+  // The mag updates must actually have run, or the parity below is vacuous.
+  TEST_ASSERT_TRUE(std::abs(yawFromState(reference.state())) > 1e-3);
   TEST_ASSERT_DOUBLE_WITHIN(1e-6,
                             yawFromState(reference.state()),
                             yawFromState(filter.state()));
-  TEST_ASSERT_EQUAL(50000, filter.kalmanTimestamp());
+  TEST_ASSERT_EQUAL(kImuEndUs, filter.kalmanTimestamp());
 }
 
 static void test_yieldable_contract_11_trigger_complete_baro_pending_contract() {
