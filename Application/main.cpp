@@ -14,6 +14,7 @@
 #include "Application/Kalman/kalman_health.hpp"
 #include "Application/Config/config.hpp"
 #include "Application/FlightControl/fc_shell.hpp"
+#include "Application/FlightControl/prc_can.hpp"
 #include "Application/app_logger.hpp"
 #include "Application/app_perf.h"
 #include "Drivers/Camera/CameraPlatform.hpp"
@@ -844,6 +845,8 @@ extern "C" void app_super_loop_iterate(void) {
     perf_t0 = app_perf_begin();
     RUN_EVERY(100)
         config::internal::tick();
+    RUN_EVERY(50)
+        Fc_Can_SendHeartbeat();
 
     cameraTick();
 
