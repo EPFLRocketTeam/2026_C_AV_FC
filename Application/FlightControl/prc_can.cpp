@@ -5,6 +5,8 @@
 
 #include "Application/Data/data.hpp"
 #include "Application/app_printf.h"
+#include "Application/app_timebase.h"
+#include "Application/FlightControl/prc_link.hpp"
 #include "log_aggregator/reassembler.hpp"
 #include "prc_intranet/const.hpp"
 #include "prc_intranet/dispatch.hpp"
@@ -180,6 +182,72 @@ void OnDprEthBVState (void*, pi::payload::ball_valve_position bv_state) noexcept
   GOATStore::get_instance().valvesStore.set_ball_valve_fuel(bv_state.percent_open);
 }
 
+// The FC's view of the CAN connectivity matrix (intranet link_matrix.hpp).
+// Every now_ms given to it comes from app_timebase_now_ms().
+pi::link::LinkMatrix g_link(pi::constants::LINK_BIT_FC);
+static_assert(PrcLinkStore::BOARD_COUNT == pi::link::BOARD_COUNT,
+              "PrcLinkStore counts are indexed like the link matrix");
+
+void OnHeartbeatPrcEngine (void*, pi::payload::heartbeat hb) noexcept {
+  g_link.onHeartbeat(pi::constants::LINK_BIT_ENGINE, hb, app_timebase_now_ms());
+}
+void OnHeartbeatDprEth (void*, pi::payload::heartbeat hb) noexcept {
+  g_link.onHeartbeat(pi::constants::LINK_BIT_ETH, hb, app_timebase_now_ms());
+}
+void OnHeartbeatDprLox (void*, pi::payload::heartbeat hb) noexcept {
+  g_link.onHeartbeat(pi::constants::LINK_BIT_LOX, hb, app_timebase_now_ms());
+}
+
+// Prints the 4x4 matrix, one console line per row (see
+// fc_link::format_matrix_line), only when it changed since the last print,
+// at most once per second.
+void PrintLinkMatrix(uint16_t matrix) {
+  static bool     printed_once = false;
+  static uint16_t printed      = 0;
+  RUN_EVERY(1000) {
+    if (!printed_once || matrix != printed) {
+      printed_once = true;
+      printed      = matrix;
+      app_printf("[LINK MATRIX] 0x%04X, rows hear columns\r\n", static_cast<unsigned>(matrix));
+      char line[64];
+      for (uint8_t i = 0; i < fc_link::MATRIX_LINES; i++) {
+        if (fc_link::format_matrix_line(matrix, i, line, sizeof(line))) {
+          app_printf("[LINK MATRIX] %s\r\n", line);
+        }
+      }
+    }
+  }
+}
+
+// Publishes the matrix and the per-board counts to GOATStore, and prints:
+// each detected reboot of a PRC board, each alive/dead edge (plus one "dead"
+// for a board never heard from 2 s after the first call), and the matrix
+// when it changed.
+void PublishPrcLink(uint32_t now_ms) {
+  const uint8_t reboots = g_link.takeRebootReport();
+  const uint8_t edges   = g_link.takeReport(now_ms);
+  const uint16_t matrix = g_link.matrix(now_ms);
+  PrcLinkStore& store = GOATStore::get_instance().prcLinkStore;
+
+  for (uint8_t i = 0; i < pi::link::BOARD_COUNT; i++) {
+    if (i == pi::constants::LINK_BIT_FC) continue;
+    const pi::link::Peer& peer = g_link.peer(i);
+    store.set_counts(i, peer.received, peer.missed, peer.reboots);
+    if (reboots & (1u << i)) {
+      app_printf("[PRC LINK] %s rebooted (reboots %lu)\r\n", fc_link::board_name(i),
+                 static_cast<unsigned long>(peer.reboots));
+    }
+    if (edges & (1u << i)) {
+      app_printf("[PRC LINK] %s %s (rx %lu, missed %lu)\r\n", fc_link::board_name(i),
+                 g_link.alive(i, now_ms) ? "alive" : "dead",
+                 static_cast<unsigned long>(peer.received),
+                 static_cast<unsigned long>(peer.missed));
+    }
+  }
+  store.set_link_matrix(matrix);
+  PrintLinkMatrix(matrix);
+}
+
 pi::context& Ctx() {
   static pi::context ctx = [] {
     pi::prc_driver driver{};
@@ -206,6 +274,9 @@ pi::context& Ctx() {
     driver.on_dpr_lox_publish_cable = OnDprLoxPublishCable;
     driver.on_dpr_lox_bv_state = OnDprLoxBVState;
     driver.on_dpr_eth_bv_state = OnDprEthBVState;
+    driver.on_heartbeat_prc_engine = OnHeartbeatPrcEngine;
+    driver.on_heartbeat_dpr_eth    = OnHeartbeatDprEth;
+    driver.on_heartbeat_dpr_lox    = OnHeartbeatDprLox;
     return pi::create_context(driver);
   }();
   return ctx;
@@ -219,6 +290,25 @@ void Fc_Can_ProcessRxMessage(uint32_t can_id, const uint8_t *data, uint32_t dlc)
 
 void Fc_Can_Init(FDCAN_HandleTypeDef *hfdcan) {
   g_hfdcan = hfdcan;
+}
+
+void Fc_Can_SendHeartbeat(void) {
+  const uint32_t now_ms = app_timebase_now_ms();
+  PublishPrcLink(now_ms);
+
+  if (g_hfdcan == nullptr) return;
+  // uptime_ms stays HAL_GetTick(), the sender uptime the intranet README
+  // defines; it is only compared with itself by the receivers. alive_mask is
+  // the FC's row of the matrix: bit i set when it hears board i, FC bit set.
+  static uint16_t counter = 0;
+  pi::payload::heartbeat hb{};
+  hb.uptime_ms  = HAL_GetTick();
+  hb.counter    = counter++;
+  hb.alive_mask = g_link.ownRow(now_ms);
+  hb.reserved   = 0;
+  pi::context& ctx = Ctx();
+  ctx.driver.driver_ptr = g_hfdcan;
+  pi::send_heartbeat_fc(&ctx, hb);
 }
 
 // Targets the engine board's own MO/ME valves, not a DPR board.

@@ -274,6 +274,7 @@ GOATStore::GOATStore() {
   batteriesStore = BatteriesStore{};
   camsRecordingStore = CamsRecordingStore{};
   uplinkCmdStore = UplinkCmdStore{};
+  prcLinkStore = PrcLinkStore{};
 }
 
 const DataDump &GOATStore::get() const {
@@ -298,6 +299,7 @@ const DataDump &GOATStore::get() const {
   data_.batteries = batteriesStore.get();
   data_.camsRecording = camsRecordingStore.get();
   data_.uplinkCmd = uplinkCmdStore.get();
+  data_.prcLink = prcLinkStore.get();
   return data_;
 }
 
@@ -321,6 +323,7 @@ void GOATStore::set(const DataDump &value) {
   batteriesStore.set(value.batteries);
   camsRecordingStore.set(value.camsRecording);
   uplinkCmdStore.set(value.uplinkCmd);
+  prcLinkStore.set(value.prcLink);
 }
 
 DataDump *GOATStore::get_ref() { return &data_; }

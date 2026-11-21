@@ -3,6 +3,7 @@
 #define APP_DATA_H
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 #include "Application/Data/fsm.hpp"
@@ -755,6 +756,42 @@ public:
   StateStore();
 };
 
+// CAN connectivity matrix, published by prc_can.cpp from the FC's
+// prc_intranet::link::LinkMatrix (see prc_link.hpp). Row i at bits
+// 4i..4i+3, bit j of row i = "board i hears board j", boards 0 FC,
+// 1 engine, 2 ethanol, 3 LOX; a silent board's row is 0. Kept free of
+// intranet includes: the SD decoder (Client/PostFlightV2) builds this
+// header with the repo root as its only include path.
+struct PrcLink {
+  uint16_t link_matrix = 0;
+};
+static_assert(sizeof(PrcLink) == 2);
+
+class PrcLinkStore : public IStore<PrcLink> {
+public:
+  uint16_t get_link_matrix() const { return data_.link_matrix; }
+  void set_link_matrix(uint16_t value) { data_.link_matrix = value; }
+
+  // Heartbeats received, missed and reboots detected per board, same
+  // indices as the matrix (0 FC, unused on the FC itself). Held here only:
+  // DataDump carries the matrix, not these counts.
+  static constexpr uint8_t BOARD_COUNT = 4;
+  uint32_t get_received(uint8_t board) const { return board < BOARD_COUNT ? received_[board] : 0; }
+  uint32_t get_missed(uint8_t board) const { return board < BOARD_COUNT ? missed_[board] : 0; }
+  uint32_t get_reboots(uint8_t board) const { return board < BOARD_COUNT ? reboots_[board] : 0; }
+  void set_counts(uint8_t board, uint32_t received, uint32_t missed, uint32_t reboots) {
+    if (board >= BOARD_COUNT) return;
+    received_[board] = received;
+    missed_[board]   = missed;
+    reboots_[board]  = reboots;
+  }
+
+private:
+  uint32_t received_[BOARD_COUNT] = {};
+  uint32_t missed_[BOARD_COUNT]   = {};
+  uint32_t reboots_[BOARD_COUNT]  = {};
+};
+
 struct DataDump {
   State av_state; // Y
   // Timestamp contract: GOATStore::get() stamps this field from the shared
@@ -774,7 +811,16 @@ struct DataDump {
   Batteries batteries; // X
   CamsRecording camsRecording; // X
   UplinkCmd uplinkCmd; // X
+  PrcLink prcLink; // X
 };
+// Pins the SD record length that Client/PostFlightV2/container.hpp checks
+// at decode time. prcLink sits in what was tail padding: uplinkCmd takes
+// offsets 799-800, prcLink (2-byte aligned) takes 802-803, and the struct
+// still rounds up to 808 on host x86-64 and arm-none-eabi alike. Logs
+// written before the matrix hold a 1-byte mask at offset 801 in the same
+// 808 bytes: decode them with the matching decoder build.
+static_assert(offsetof(DataDump, prcLink) == 802);
+static_assert(sizeof(DataDump) == 808);
 
 class GpsStore : public IStore<GpsBasicFixData> {
 public:
@@ -819,6 +865,7 @@ public:
   BatteriesStore batteriesStore;
   CamsRecordingStore camsRecordingStore;
   UplinkCmdStore uplinkCmdStore;
+  PrcLinkStore prcLinkStore;
 
   void set(const DataDump &value);
   const DataDump &get() const;
